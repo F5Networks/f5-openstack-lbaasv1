@@ -1,10 +1,8 @@
 import os
-import netaddr.ip as ip
-import time
+import logging
 
 from f5.pycontrol import pycontrol as pc
-from common import constants as const
-from common.logger import Log
+from f5.common import constants as const
 
 from f5.bigip_interfaces.cluster import Cluster
 from f5.bigip_interfaces.device import Device
@@ -16,6 +14,8 @@ from f5.bigip_interfaces.stat import Stat
 from f5.bigip_interfaces.system import System
 from f5.bigip_interfaces.virtual_server import VirtualServer
 from f5.bigip_interfaces.vlan import Vlan
+
+LOG = logging.getLogger(__name__)
 
 
 class BigIP(object):
@@ -141,7 +141,7 @@ class BigIP(object):
         if timeout:
             icontrol.set_timeout(timeout)
         else:
-            icontrol.set_timeout(const.IFC_SCRIPT_TIMEOUT)
+            icontrol.set_timeout(const.CONNECTION_TIMEOUT)
 
         return icontrol
 

@@ -1,10 +1,13 @@
 # System
+
+
 class System(object):
     def __init__(self, bigip):
         self.bigip = bigip
 
         # add iControl interfaces if they don't exist yet
-        self.bigip.icontrol.add_interfaces(['System.Inet', 'System.SystemInfo'])
+        self.bigip.icontrol.add_interfaces(['System.Inet',
+                                            'System.SystemInfo'])
 
         # iControl helper objects
         self.sys_inet = self.bigip.icontrol.System.Inet

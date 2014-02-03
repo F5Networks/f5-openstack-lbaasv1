@@ -1,4 +1,6 @@
 # Local Traffic - Monitor
+
+
 class Monitor(object):
     def __init__(self, bigip):
         self.bigip = bigip
@@ -31,7 +33,7 @@ class Monitor(object):
 
             template_attributes = self.lb_monitor.typefactory.create(
                                     'LocalLB.Monitor.CommonAttributes')
-            template_attributes.parent_template = str.lower(mon_type    )
+            template_attributes.parent_template = str.lower(mon_type)
             template_attributes.interval = interval
             template_attributes.timeout = timeout
             template_attributes.dest_ipport = monitor_ipport
@@ -150,6 +152,3 @@ class Monitor(object):
         for template in self.lb_monitor.get_template_list():
             if template.template_name == name:
                 return True
-
-
-

@@ -1,8 +1,9 @@
 from netaddr import IPAddress
 import os
 
-
 # Local Traffic - Virtual Server
+
+
 class VirtualServer(object):
     def __init__(self, bigip):
         self.bigip = bigip
@@ -14,7 +15,8 @@ class VirtualServer(object):
     def create(self, name, addr, mask, port, protocol, vlan_name):
         if IPAddress(addr) and not self.exists(name):
             # virtual server definition
-            vs_def = self.lb_vs.typefactory.create('Common.VirtualServerDefinition')
+            vs_def = self.lb_vs.typefactory.create(
+                                        'Common.VirtualServerDefinition')
             vs_def.name = name
             vs_def.address = addr
 
@@ -27,13 +29,16 @@ class VirtualServer(object):
             vs_defs = [vs_def]
 
             # virtual server resources
-            res = self.lb_vs.typefactory.create('LocalLB.VirtualServer.VirtualServerResource')
-            vs_vs_type = self.lb_vs.typefactory.create('LocalLB.VirtualServer.VirtualServerType')
+            res = self.lb_vs.typefactory.create(
+                            'LocalLB.VirtualServer.VirtualServerResource')
+            vs_vs_type = self.lb_vs.typefactory.create(
+                                'LocalLB.VirtualServer.VirtualServerType')
             res.type = vs_vs_type.RESOURCE_TYPE_POOL
             resources = [res]
 
             # virtual server profiles
-            prof_seq = self.lb_vs.typefactory.create('LocalLB.VirtualServer.VirtualServerProfileSequence')
+            prof_seq = self.lb_vs.typefactory.create(
+                      'LocalLB.VirtualServer.VirtualServerProfileSequence')
             profiles = [prof_seq]
 
             # virtual server creation
@@ -43,8 +48,10 @@ class VirtualServer(object):
             self.lb_vs.set_snat_automap([name])
 
             # add enabled VLANs
-            enabled_state = self.lb_vs.typefactory.create('Common.EnabledState').STATE_ENABLED
-            filter_list = self.lb_vs.typefactory.create('Common.VLANFilterList')
+            enabled_state = self.lb_vs.typefactory.create(
+                                        'Common.EnabledState').STATE_ENABLED
+            filter_list = self.lb_vs.typefactory.create(
+                                           'Common.VLANFilterList')
             filter_list.state = enabled_state
             filter_list.vlans = [vlan_name]
 

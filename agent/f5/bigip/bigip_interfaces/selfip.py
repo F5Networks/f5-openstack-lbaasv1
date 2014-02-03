@@ -1,5 +1,5 @@
 import os
-from common import constants as const
+from f5.common import constants as const
 
 
 # Networking - Self-IP
@@ -15,10 +15,12 @@ class SelfIP(object):
 
     def create(self, name, addr, mask, vlan_name, floating):
         if not self.exists(name) and self.bigip.vlan.exists(vlan_name):
-            enabled_state = self.net_self.typefactory.create('Common.EnabledState').STATE_ENABLED
+            enabled_state = self.net_self.typefactory.create(
+                                        'Common.EnabledState').STATE_ENABLED
             traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
             if floating:
-                traffic_group = const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+                traffic_group = \
+                    const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
 
             self.net_self.create([name],
                                  [vlan_name],
@@ -66,8 +68,10 @@ class SelfIP(object):
         floats = []
 
         if names:
-            for i, traffic_group in enumerate(self.net_self.get_traffic_group(names)):
-                if traffic_group == const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP:
+            for i, traffic_group in enumerate(
+                                    self.net_self.get_traffic_group(names)):
+                if traffic_group == \
+                    const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP:
                     floats.append(names[i])
 
             return map(os.path.basename, self.net_self.get_address(floats))
@@ -78,7 +82,8 @@ class SelfIP(object):
         # remove any existing access lists
         self._reset_port_lockdown_allow_list(name)
 
-        access_list = self.net_self.typefactory.create('Networking.SelfIPV2.ProtocolPortAccess')
+        access_list = self.net_self.typefactory.create(
+                                    'Networking.SelfIPV2.ProtocolPortAccess')
         access_list.mode = mode
         access_list.protocol_ports = []
 

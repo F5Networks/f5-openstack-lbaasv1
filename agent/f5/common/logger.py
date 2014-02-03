@@ -1,8 +1,7 @@
 import logging
 import sys
 
-from common import constants as const
-#from Insieme.Logger import Logger
+from f5.common import constants as const
 
 
 class Log(object):
@@ -46,12 +45,16 @@ class Log(object):
             log.removeHandler(out_hdlr)
 
             logging.getLogger('suds.client').setLevel(logging.DEBUG)
-        #else:
-        #    if level == 'debug':
-        #        Logger.log(Logger.DEBUG, log_string)
-        #    elif level == 'error':
-        #        Logger.log(Logger.ERROR, log_string)
-        #    elif level == 'crit':
-        #        Logger.log(Logger.CRIT, log_string)
-        #    else:
-        #        Logger.log(Logger.INFO, log_string)
+        else:
+            try:
+                from Insieme.Logger import Logger
+                if level == 'debug':
+                    Logger.log(Logger.DEBUG, log_string)
+                elif level == 'error':
+                    Logger.log(Logger.ERROR, log_string)
+                elif level == 'crit':
+                    Logger.log(Logger.CRIT, log_string)
+                else:
+                    Logger.log(Logger.INFO, log_string)
+            except ImportError:
+                pass

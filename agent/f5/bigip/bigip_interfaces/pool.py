@@ -1,7 +1,8 @@
 import os
 
-
 # Local Traffic - Pool
+
+
 class Pool(object):
     def __init__(self, bigip):
         self.bigip = bigip
@@ -16,7 +17,8 @@ class Pool(object):
         lb_methods = [self._get_lb_method_type(lb_method)]
 
         # create an empty pool
-        addr_port_seq = self.lb_pool.typefactory.create('Common.AddressPortSequence')
+        addr_port_seq = self.lb_pool.typefactory.create(
+                                           'Common.AddressPortSequence')
         pool_members_seq = [addr_port_seq]
         self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
 
@@ -35,22 +37,29 @@ class Pool(object):
             self.lb_pool.remove_member_v2([name], [addr_port_seq])
 
     def get_service_down_action(self, name):
-        service_down_action_type = self.lb_pool.typefactory.create('LocalLB.ServiceDownAction')
-        service_down_action = self.lb_pool.get_action_on_service_down([name])[0]
+        service_down_action_type = self.lb_pool.typefactory.create(
+                                                'LocalLB.ServiceDownAction')
+        service_down_action = self.lb_pool.get_action_on_service_down(
+                                                                  [name])[0]
 
-        if service_down_action == service_down_action_type.SERVICE_DOWN_ACTION_RESET:
+        if service_down_action == \
+            service_down_action_type.SERVICE_DOWN_ACTION_RESET:
             return 'SERVICE_DOWN_ACTION_RESET'
-        elif service_down_action == service_down_action_type.SERVICE_DOWN_ACTION_DROP:
+        elif service_down_action == \
+            service_down_action_type.SERVICE_DOWN_ACTION_DROP:
             return 'SERVICE_DOWN_ACTION_DROP'
-        elif service_down_action == service_down_action_type.SERVICE_DOWN_ACTION_RESELECT:
+        elif service_down_action == \
+            service_down_action_type.SERVICE_DOWN_ACTION_RESELECT:
             return 'SERVICE_DOWN_ACTION_RESELECT'
         else:
             return 'SERVICE_DOWN_ACTION_NONE'
 
     def set_service_down_action(self, name, service_down_action):
         if self.exists(name):
-            service_down_action_type = self._get_service_down_action_type(service_down_action)
-            self.lb_pool.set_action_on_service_down([name], [service_down_action_type])
+            service_down_action_type = self._get_service_down_action_type(
+                                                           service_down_action)
+            self.lb_pool.set_action_on_service_down([name],
+                                                    [service_down_action_type])
 
     def set_lb_method(self, name, lb_method):
         if self.exists(name):
@@ -59,7 +68,8 @@ class Pool(object):
 
     def get_lb_method(self, name):
         if self.exists(name):
-            lb_method_type = self.lb_pool.typefactory.create('LocalLB.LBMethod')
+            lb_method_type = self.lb_pool.typefactory.create(
+                                                           'LocalLB.LBMethod')
             lb_method = self.lb_pool.get_lb_method([name])[0]
 
             if lb_method == lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER:
@@ -95,16 +105,20 @@ class Pool(object):
 
     def _set_monitor_assoc(self, name, monitors):
         if self.exists(name):
-            monitor_rule_type = self.lb_pool.typefactory.create('LocalLB.MonitorRuleType')
+            monitor_rule_type = self.lb_pool.typefactory.create(
+                                                    'LocalLB.MonitorRuleType')
             if len(monitors) == 0:
                 monitor_rule_type = monitor_rule_type.MONITOR_RULE_TYPE_NONE
             elif len(monitors) == 1:
                 monitor_rule_type = monitor_rule_type.MONITOR_RULE_TYPE_SINGLE
             else:
-                monitor_rule_type = monitor_rule_type.MONITOR_RULE_TYPE_AND_LIST
+                monitor_rule_type = \
+                 monitor_rule_type.MONITOR_RULE_TYPE_AND_LIST
 
-            monitor_assoc = self.lb_pool.typefactory.create('LocalLB.Pool.MonitorAssociation')
-            monitor_rule = self.lb_pool.typefactory.create('LocalLB.MonitorRule')
+            monitor_assoc = self.lb_pool.typefactory.create(
+                                            'LocalLB.Pool.MonitorAssociation')
+            monitor_rule = self.lb_pool.typefactory.create(
+                                                        'LocalLB.MonitorRule')
             monitor_rule.monitor_templates = monitors
             monitor_rule.type = monitor_rule_type
             monitor_rule.quorum = 0
@@ -113,7 +127,8 @@ class Pool(object):
             self.lb_pool.set_monitor_association([monitor_assoc])
 
     def _get_addr_port_seq(self, addr, port):
-        addr_port_seq = self.lb_pool.typefactory.create('Common.AddressPortSequence')
+        addr_port_seq = self.lb_pool.typefactory.create(
+                                                'Common.AddressPortSequence')
         addr_port = self.lb_pool.typefactory.create('Common.AddressPort')
         addr_port.address = addr
         addr_port.port = port
@@ -133,7 +148,8 @@ class Pool(object):
             return lb_method_type.LB_METHOD_ROUND_ROBIN
 
     def _get_service_down_action_type(self, service_down_action):
-        service_down_action_type = self.lb_pool.typefactory.create('LocalLB.ServiceDownAction')
+        service_down_action_type = self.lb_pool.typefactory.create(
+                                                'LocalLB.ServiceDownAction')
 
         if service_down_action == 'SERVICE_DOWN_ACTION_RESET':
             return service_down_action_type.SERVICE_DOWN_ACTION_RESET
@@ -152,5 +168,6 @@ class Pool(object):
         members = self.lb_pool.get_member_v2([name])
 
         for member in members[0]:
-            if os.path.basename(member.address) == addr and int(member.port) == port:
+            if os.path.basename(member.address) == addr and \
+               int(member.port) == port:
                 return True

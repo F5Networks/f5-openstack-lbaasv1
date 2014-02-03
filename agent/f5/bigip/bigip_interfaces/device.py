@@ -1,10 +1,10 @@
 import os
 import time
-import json 
+import json
 
 from suds import WebFault
-from common.logger import Log
-from common import constants as const
+from f5.common.logger import Log
+from f5.common import constants as const
 
 
 # Management - Device
