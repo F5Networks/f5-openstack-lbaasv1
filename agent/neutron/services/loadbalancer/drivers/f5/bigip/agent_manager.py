@@ -38,7 +38,7 @@ __VERSION__ = "0.1.1"
 
 OPTS = [
     cfg.StrOpt(
-        'device_driver',
+        'f5_bigip_lbaas_device_driver',
         default=('neutron.services.loadbalancer.drivers'
                  '.f5.bigip.icontrol_driver.iControlDriver'),
         help=_('The driver used to provision BigIPs'),
@@ -126,7 +126,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.conf = conf
         try:
             self.driver = importutils.import_object(
-                conf.device_driver, self.conf)
+                conf.f5_bigip_lbaas_device_driver, self.conf)
             self.agent_host = conf.host + ":" + self.driver.hostname
         except ImportError:
             msg = _('Error importing loadbalancer device driver: %s')
