@@ -6,6 +6,9 @@
 .idea/*
 *.py[cod]
 
+### added with RM's Makefile
+**/deb_dist/**
+
 ### auto-added by Github
 
 # C extensions
