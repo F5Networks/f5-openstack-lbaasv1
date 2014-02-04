@@ -127,13 +127,14 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver = importutils.import_object(
                 conf.device_driver, self.conf)
+            self.agent_host = conf.host + ":" + self.driver.hostname
         except ImportError:
             msg = _('Error importing loadbalancer device driver: %s')
             raise SystemExit(msg % conf.device_driver)
 
         self.agent_state = {
             'binary': 'neutron-loadbalancer-agent',
-            'host': conf.host,
+            'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'configurations': {'device_driver': conf.device_driver},
             'agent_type': constants.AGENT_TYPE_LOADBALANCER,
@@ -151,7 +152,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.plugin_rpc = agent_api.LbaasAgentApi(
             plugin_driver.TOPIC_PROCESS_ON_HOST,
             self.context,
-            self.conf.host
+            self.agent_host
         )
 
         self.state_rpc = agent_rpc.PluginReportStateAPI(
@@ -253,8 +254,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     @log.log
     def reload_pool(self, context, pool_id=None, host=None):
         """Handle RPC cast from plugin to reload a pool."""
-        if pool_id:
-            self.refresh_service(pool_id)
+        if host and host == self.agent_host:
+            if pool_id:
+                self.refresh_service(pool_id)
 
     def create_vip(self, context, vip, network):
         """Handle RPC cast from plugin to create_vip"""
