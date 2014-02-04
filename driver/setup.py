@@ -11,4 +11,3 @@ setup(name='f5-bigip-lbaas-driver',
       packages=['neutron.services.loadbalancer.drivers.f5',
                 'neutron.services.loadbalancer.drivers.f5.bigip'],
      )
-

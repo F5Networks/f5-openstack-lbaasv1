@@ -1,0 +1,4 @@
+
+
+class InvalidNetworkType(Exception):
+    pass
