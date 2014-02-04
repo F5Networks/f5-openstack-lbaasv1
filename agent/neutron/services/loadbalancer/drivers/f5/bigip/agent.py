@@ -61,7 +61,7 @@ def main():
 
     mgr = manager.LbaasAgentManager(cfg.CONF)
     svc = LbaasAgentService(
-        host=cfg.CONF.host,
+        host=mgr.agent_host,
         topic=plugin_driver.TOPIC_LOADBALANCER_AGENT,
         manager=mgr
     )
