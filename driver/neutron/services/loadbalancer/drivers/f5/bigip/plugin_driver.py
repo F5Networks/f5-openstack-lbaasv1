@@ -125,6 +125,7 @@ class LoadBalancerCallbacks(object):
             qry = qry.filter_by(id=pool_id)
             pool = qry.one()
             LOG.debug(_('setting logical_service entry for %s' % pool))
+            LOG.debug(_('core_plugin is %s' % dir(self.plugin._core_plugin())))
             if activate:
                 # set all resources to active
                 if pool.status in ACTIVE_PENDING:
@@ -448,11 +449,6 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # create an instance reference to the agent scheduler
         self.pool_scheduler = importutils.import_object(
             cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
-
-        core_plugin = plugin._core_plugin
-        attributes = [attr for attr in dir(core_plugin)
-              if not attr.startswith('__')]
-        LOG.debug('core plugin has attributes %s' % attributes)
 
     def get_pool_agent(self, context, pool_id):
         # define which agent to communicate with to handle provision
