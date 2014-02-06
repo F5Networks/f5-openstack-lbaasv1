@@ -38,6 +38,11 @@ __VERSION__ = "0.1.1"
 
 OPTS = [
     cfg.StrOpt(
+        'f5_device_type',
+        default=('external'),
+        help=_('Type of BigIP Integration'),
+    ),
+    cfg.StrOpt(
         'f5_bigip_lbaas_device_driver',
         default=('neutron.services.loadbalancer.drivers'
                  '.f5.bigip.icontrol_driver.iControlDriver'),
@@ -122,9 +127,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     RPC_API_VERSION = '1.1'
 
     def __init__(self, conf):
-        LOG.debug(_('initializing LbaasAgentManager with conf %s' % conf))
+        LOG.debug(_('Initializing LbaasAgentManager with conf %s' % conf))
         self.conf = conf
         try:
+            self.device_type = conf.f5_device_type
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
             self.agent_host = conf.host + ":" + self.driver.hostname
@@ -136,7 +142,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'binary': 'neutron-loadbalancer-agent',
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
-            'configurations': {'device_driver': conf.device_driver},
+            'configurations': {'device_type': self.device_type,
+                               'device_driver': self.driver},
             'agent_type': constants.AGENT_TYPE_LOADBALANCER,
             'start_flag': True}
 

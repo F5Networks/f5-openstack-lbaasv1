@@ -2,6 +2,11 @@ from oslo.config import cfg
 from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
+from neutron.services.loadbalancer.drivers.f5.bigip import constants
+from neutron.services.loadbalancer.drivers.f5.bigip import exceptions
+from f5.bigip import bigip
+from f5.common import constants as f5const
+from f5.bigip import exceptions as f5ex
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
@@ -45,6 +50,22 @@ class iControlDriver(object):
         self.username = self.conf.icontrol_username
         self.password = self.conf.icontrol_password
 
+        self.bigip = bigip.BigIP(self.hostname, self.username, self.password)
+
+        # device validate
+        major_version = self.bigip.system.get_major_version()
+        if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+            raise f5ex.MajorVersionValidateFailed(
+                    'device must be at least TMOS %s.%s'
+                    % (f5const.MIN_TMOS_MAJOR_VERSION,
+                       f5const.MIN_TMOS_MINOR_VERSION))
+        minor_version = self.bigip.system.get_minor_version()
+        if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+            raise f5ex.MinorVersionValidateFailed(
+                    'device must be at least TMOS %s.%s'
+                    % (f5const.MIN_TMOS_MAJOR_VERSION,
+                       f5const.MIN_TMOS_MINOR_VERSION))
+
         LOG.debug(_('iControlDriver initialized: hostname:%s username:%s'
                     % (self.hostname, self.username)))
 
@@ -66,6 +87,21 @@ class iControlDriver(object):
 
     @log.log
     def create_pool(self, pool, network):
+        #pool_id = pool['id']
+        #pool_name = pool['name']
+        #pool_tenant_id = pool['tenant_id']
+
+        #l2_tenant_id = network['tenant_id']
+        #l2_type = network['network_type']
+        #l2_segmentation_id = network['segmentation_id']
+        #l2_name = network['name']
+
+        #if not l2_type in constants.VALID_L2_TYPES:
+        #    raise exceptions.InvalidNetworkType(
+        #            'network type was %s, must be in %s'
+        #            % (l2_type, constants.VALID_L2_TYPES))
+        #if l2_type == 'local':
+        #    if self.bigip.vlan.exists(l2_name):
         pass
 
     @log.log
