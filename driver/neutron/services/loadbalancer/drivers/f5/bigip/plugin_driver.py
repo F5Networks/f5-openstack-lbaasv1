@@ -276,6 +276,7 @@ class LoadBalancerCallbacks(object):
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
                         if 'vxlan' in agent['configurations']['tunnel_types']:
+                            LOG.debug(_("found vxlan agent %s add %s" % (agent,agent['configurations']['tenneling_ip'])))
                             endpoints.append(
                                      agent['configurations']['tunneling_ip'])
         return endpoints
