@@ -175,6 +175,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             service_count = len(self.cache.services)
             self.agent_state['configurations']['services'] = service_count
+            LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)
         except Exception:

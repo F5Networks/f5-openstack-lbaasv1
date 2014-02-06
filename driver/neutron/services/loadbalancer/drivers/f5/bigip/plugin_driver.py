@@ -276,7 +276,7 @@ class LoadBalancerCallbacks(object):
                     if 'tunnel_types' in agent['configurations']:
                         if 'vxlan' in agent['configurations']['tunnel_types']:
                             endpoints.append(
-                                    agent['configurations']['tunneling_ip'])
+                                     agent['configurations']['tunneling_ip'])
         return endpoints
 
     def _get_gre_endpoints(self, context):
@@ -289,7 +289,7 @@ class LoadBalancerCallbacks(object):
                     if 'tunnel_types' in agent['configurations']:
                         if 'gre' in agent['configurations']['tunnel_types']:
                             endpoints.append(
-                                    agent['configurations']['tunneling_ip'])
+                                     agent['configurations']['tunneling_ip'])
         return endpoints
 
 
@@ -844,7 +844,7 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                     if 'tunnel_types' in agent['configurations']:
                         if 'vxlan' in agent['configurations']['tunnel_types']:
                             endpoints.append(
-                                    agent['configurations']['tunneling_ip'])
+                                     agent['configurations']['tunneling_ip'])
         return endpoints
 
     def _get_gre_endpoints(self, context):
@@ -857,5 +857,5 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                     if 'tunnel_types' in agent['configurations']:
                         if 'gre' in agent['configurations']['tunnel_types']:
                             endpoints.append(
-                                    agent['configurations']['tunneling_ip'])
+                                     agent['configurations']['tunneling_ip'])
         return endpoints
