@@ -180,7 +180,9 @@ class LoadBalancerCallbacks(object):
                 for hm in pool.monitors
                 if hm.status == constants.ACTIVE
             ]
-            retval['vxlan_endpoints'] = self._get_gre_endpoints(context)
+            vxlan_endpoints = self._get_gre_endpoints(context)
+            retval['vxlan_endpoints'] = vxlan_endpoints
+            LOG.debug(_('vxlan_endpoints: %s' % vxlan_endpoints))
             retval['gre_endpoints'] = self._get_gre_endpoints(context)
             return retval
 
@@ -270,7 +272,6 @@ class LoadBalancerCallbacks(object):
         endpoints = []
         if hasattr(self.plugin._core_plugin, 'get_agents'):
             agents = self.plugin._core_plugin.get_agents(context)
-            LOG.debug(_("found agents %s" % agents))
             for agent in agents:
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
@@ -283,7 +284,6 @@ class LoadBalancerCallbacks(object):
         endpoints = []
         if hasattr(self.plugin._core_plugin, 'get_agents'):
             agents = self.plugin._core_plugin.get_agents(context)
-            LOG.debug(_("found agents %s" % agents))
             for agent in agents:
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
@@ -838,7 +838,6 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         endpoints = []
         if hasattr(self.plugin._core_plugin, 'get_agents'):
             agents = self.plugin._core_plugin.get_agents(context)
-            LOG.debug(_("found agents %s" % agents))
             for agent in agents:
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
@@ -851,7 +850,6 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         endpoints = []
         if hasattr(self.plugin._core_plugin, 'get_agents'):
             agents = self.plugin._core_plugin.get_agents(context)
-            LOG.debug(_("found agents %s" % agents))
             for agent in agents:
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:

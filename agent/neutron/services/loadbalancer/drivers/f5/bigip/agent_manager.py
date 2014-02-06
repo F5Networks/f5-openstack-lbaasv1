@@ -139,12 +139,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
 
         self.agent_state = {
-            'binary': 'neutron-loadbalancer-agent',
+            'binary': 'f5-bigip-loadbalancer-agent',
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'configurations': {'device_type': self.device_type,
-                               'device_driver': self.driver,
-                               'services': 0},
+                               'device_driver': self.driver},
             'agent_type': constants.AGENT_TYPE_LOADBALANCER,
             'start_flag': True}
 
