@@ -136,7 +136,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             self.agent_host = conf.host + ":" + self.driver.hostname
         except ImportError:
             msg = _('Error importing loadbalancer device driver: %s')
-            raise SystemExit(msg % conf.device_driver)
+            raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
 
         self.agent_state = {
             'binary': 'neutron-loadbalancer-agent',
