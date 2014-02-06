@@ -143,7 +143,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'configurations': {'device_type': self.device_type,
-                               'device_driver': self.driver},
+                               'device_driver': self.driver,
+                               'services': 0},
             'agent_type': constants.AGENT_TYPE_LOADBALANCER,
             'start_flag': True}
 

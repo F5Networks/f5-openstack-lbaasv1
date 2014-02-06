@@ -125,7 +125,6 @@ class LoadBalancerCallbacks(object):
             qry = qry.filter_by(id=pool_id)
             pool = qry.one()
             LOG.debug(_('setting logical_service entry for %s' % pool))
-            LOG.debug(_('core_plugin is %s' % dir(self.plugin._core_plugin())))
             if activate:
                 # set all resources to active
                 if pool.status in ACTIVE_PENDING:
@@ -181,6 +180,8 @@ class LoadBalancerCallbacks(object):
                 for hm in pool.monitors
                 if hm.status == constants.ACTIVE
             ]
+            retval['vxlan_endpoints'] = self._get_gre_endpoints(context)
+            retval['gre_endpoints'] = self._get_gre_endpoints(context)
             return retval
 
     @log.log
@@ -264,6 +265,34 @@ class LoadBalancerCallbacks(object):
 
         """
         pass
+
+    def _get_vxlan_endpoints(self, context):
+        vxlan_endpoints = []
+        if hasattr(self.plugin._core_plugin, 'get_agents'):
+            agents = self.plugin._core_plugin.get_agents(context)
+            for agent in agents:
+                if 'configurations' in agent:
+                    if 'tunnel_types' in agent['configurations']:
+                        tt = agent['configurations']['tunnel_types']
+                        for t in tt:
+                            if t == 'vxlan':
+                                vxlan_endpoints.append(
+                                    agent['configurations']['tunneling_ip'])
+        return vxlan_endpoints
+
+    def _get_gre_endpoints(self, context):
+        gre_endpoints = []
+        if hasattr(self.plugin._core_plugin, 'get_agents'):
+            agents = self.plugin._core_plugin.get_agents(context)
+            for agent in agents:
+                if 'configurations' in agent:
+                    if 'tunnel_types' in agent['configurations']:
+                        tt = agent['configurations']['tunnel_types']
+                        for t in tt:
+                            if t == 'gre':
+                                gre_endpoints.append(
+                                    agent['configurations']['tunneling_ip'])
+        return gre_endpoints
 
 
 class LoadBalancerAgentApi(proxy.RpcProxy):
@@ -710,6 +739,8 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 network_dict['provider:segmentation_id']
         network_dict['subnet'] = subnet_dict
         network_dict['port'] = port_dict
+        network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
+        network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
         return network_dict
 
     def _get_pool_network(self, context, pool):
@@ -732,6 +763,8 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                                 subnet_dict['tenant_id'],
                                 subnet_dict['id'])
         network_dict['snats'] = snats_dict
+        network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
+        network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
         return network_dict
 
     def _get_pools(self, context, tenant_id, subnet_id):
@@ -802,3 +835,31 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 else:
                     self.plugin._core_plugin.delete_port(context,
                                                              snat['id'])
+
+    def _get_vxlan_endpoints(self, context):
+        vxlan_endpoints = []
+        if hasattr(self.plugin._core_plugin, 'get_agents'):
+            agents = self.plugin._core_plugin.get_agents(context)
+            for agent in agents:
+                if 'configurations' in agent:
+                    if 'tunnel_types' in agent['configurations']:
+                        tt = agent['configurations']['tunnel_types']
+                        for t in tt:
+                            if t == 'vxlan':
+                                vxlan_endpoints.append(
+                                    agent['configurations']['tunneling_ip'])
+        return vxlan_endpoints
+
+    def _get_gre_endpoints(self, context):
+        gre_endpoints = []
+        if hasattr(self.plugin._core_plugin, 'get_agents'):
+            agents = self.plugin._core_plugin.get_agents(context)
+            for agent in agents:
+                if 'configurations' in agent:
+                    if 'tunnel_types' in agent['configurations']:
+                        tt = agent['configurations']['tunnel_types']
+                        for t in tt:
+                            if t == 'gre':
+                                gre_endpoints.append(
+                                    agent['configurations']['tunneling_ip'])
+        return gre_endpoints
