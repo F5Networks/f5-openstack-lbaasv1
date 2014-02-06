@@ -180,7 +180,7 @@ class LoadBalancerCallbacks(object):
                 for hm in pool.monitors
                 if hm.status == constants.ACTIVE
             ]
-            vxlan_endpoints = self._get_gre_endpoints(context)
+            vxlan_endpoints = self._get_vxlan_endpoints(context)
             retval['vxlan_endpoints'] = vxlan_endpoints
             LOG.debug(_('vxlan_endpoints: %s' % vxlan_endpoints))
             retval['gre_endpoints'] = self._get_gre_endpoints(context)
