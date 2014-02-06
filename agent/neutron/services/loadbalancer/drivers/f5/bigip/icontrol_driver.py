@@ -2,8 +2,8 @@ from oslo.config import cfg
 from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
-from neutron.services.loadbalancer.drivers.f5.bigip import constants
-from neutron.services.loadbalancer.drivers.f5.bigip import exceptions
+#from neutron.services.loadbalancer.drivers.f5.bigip import constants
+#from neutron.services.loadbalancer.drivers.f5.bigip import exceptions
 from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex

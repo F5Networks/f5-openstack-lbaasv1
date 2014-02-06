@@ -1,19 +1,19 @@
 import os
 import logging
 
-from f5.pycontrol import pycontrol as pc
+from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
 
-from f5.bigip_interfaces.cluster import Cluster
-from f5.bigip_interfaces.device import Device
-from f5.bigip_interfaces.monitor import Monitor
-from f5.bigip_interfaces.pool import Pool
-from f5.bigip_interfaces.route import Route
-from f5.bigip_interfaces.selfip import SelfIP
-from f5.bigip_interfaces.stat import Stat
-from f5.bigip_interfaces.system import System
-from f5.bigip_interfaces.virtual_server import VirtualServer
-from f5.bigip_interfaces.vlan import Vlan
+from f5.bigip.bigip_interfaces.cluster import Cluster
+from f5.bigip.bigip_interfaces.device import Device
+from f5.bigip.bigip_interfaces.monitor import Monitor
+from f5.bigip.bigip_interfaces.pool import Pool
+from f5.bigip.bigip_interfaces.route import Route
+from f5.bigip.bigip_interfaces.selfip import SelfIP
+from f5.bigip.bigip_interfaces.stat import Stat
+from f5.bigip.bigip_interfaces.system import System
+from f5.bigip.bigip_interfaces.virtual_server import VirtualServer
+from f5.bigip.bigip_interfaces.vlan import Vlan
 
 LOG = logging.getLogger(__name__)
 
@@ -119,6 +119,31 @@ class BigIP(object):
     def set_timeout(self, timeout):
         self.icontrol.set_timeout(timeout)
 
+    def set_folder(self, name, folder='/Common'):
+        if not folder.startswith("/"):
+            folder += "/"
+        if not hasattr(self, 'folder'):
+            self.system.set_active_folder(folder)
+            self.folder = folder
+        else:
+            if not self.folder == folder:
+                self.system.set_active_folder(folder)
+                self.folder = folder
+        if name:
+            if not name.startswith(folder + "/"):
+                return "/" + folder + "/" + name
+            else:
+                return name
+        else:
+            return None
+
+    def get_route_domain_index_for_folder(self, folder='/Common'):
+        if folder == '/Common':
+            return 0
+        else:
+            #TO DO: add the call to get route domain for a folder
+            return 1
+
     @staticmethod
     def _get_icontrol(hostname, username, password, timeout=None):
         #Logger.log(Logger.DEBUG,
@@ -164,3 +189,30 @@ class BigIP(object):
             return "/" + folder + "/" + name
         else:
             return name
+
+
+def icontrol_folder(method):
+    """Decorator to put the right folder on iControl object."""
+    def wrapper(*args, **kwargs):
+        instance = args[0]
+        if ('name' in kwargs) and ('folder' in kwargs):
+            kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
+                                                       kwargs['folder'])
+        return method(*args, **kwargs)
+    return wrapper
+
+
+def route_domain_address_decorate(method):
+    """Decorator to put the right route domain decoration an address."""
+    def wrapper(*args, **kwargs):
+        instance = args[0]
+        if 'folder' in kwargs:
+            folder = kwargs['folder']
+            for name in kwargs:
+                if str(name).find('ip_address') > 0:
+                    rid = instance.bigip.get_route_domain_index_for_folder(
+                                                                        folder)
+                if rid > 0:
+                    kwargs[name] += "%" + rid
+        return method(*args, **kwargs)
+    return wrapper

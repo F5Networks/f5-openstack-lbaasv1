@@ -1,4 +1,4 @@
-from common import constants as const
+from f5.common import constants as const
 
 
 # Networking - VLAN
@@ -14,7 +14,8 @@ class Vlan(object):
         self.net_vlan = self.bigip.icontrol.Networking.VLAN
         self.net_self = self.bigip.icontrol.Networking.SelfIPV2
 
-    def create(self, name, vlanid, interface):
+    def create(self, name=None, vlanid=None, interface=None, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if not self.exists(name):
             mem_seq = self.net_vlan.typefactory.create(
                                     'Networking.VLAN.MemberSequence')
@@ -44,29 +45,35 @@ class Vlan(object):
                                     [fs_state],
                                     [90])
 
-    def delete(self, name):
+    def delete(self, name, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if not self._in_use(name) and self.exists(name):
             self.net_vlan.delete_vlan([name])
 
-    def get_all(self):
+    def get_all(self, folder='/Common'):
+        self.bigip.set_folder(None, folder)
         return self.net_vlan.get_list()
 
-    def get_id(self, name):
+    def get_id(self, name, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if self.exists(name):
             return int(self.net_vlan.get_vlan_id([name])[0])
 
-    def set_id(self, name, vlanid):
+    def set_id(self, name, vlanid, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if self.exists(name):
             self.net_vlan.set_vlan_id([name], [int(vlanid)])
 
-    def get_interface(self, name):
+    def get_interface(self, name, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if self.exists(name):
             members = self.net_vlan.get_member([name])
 
             if len(members[0]) > 0:
                 return self.net_vlan.get_member([name])[0][0].member_name
 
-    def set_interface(self, name, interface):
+    def set_interface(self, name, interface, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if self.exists(name):
             self.net_vlan.remove_all_members([name])
             if interface:
@@ -92,11 +99,13 @@ class Vlan(object):
                 member_seq.item = member_entry
                 self.net_vlan.add_member([name], [member_seq])
 
-    def exists(self, name):
+    def exists(self, name, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         if name in self.net_vlan.get_list():
             return True
 
-    def _in_use(self, name):
+    def _in_use(self, name, folder='/Common'):
+        name = self.bigip.set_folder(name, folder)
         self_ips = self.net_self.get_list()
         if len(self_ips) > 0:
             if name in self.net_self.get_vlan(self_ips):

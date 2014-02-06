@@ -1,8 +1,8 @@
 from f5.common import constants as const
 from f5.common.logger import Log
-from f5.exceptions import BigIPClusterPeerAddFailure
-from f5.exceptions import BigIPDeviceLockAcquireFailed
-from f5.exceptions import BigIPClusterSyncFailure
+from f5.bigip.exceptions import BigIPClusterPeerAddFailure
+from f5.bigip.exceptions import BigIPDeviceLockAcquireFailed
+from f5.bigip.exceptions import BigIPClusterSyncFailure
 
 import time
 import os

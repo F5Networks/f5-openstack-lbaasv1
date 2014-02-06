@@ -7,7 +7,8 @@ class Route(object):
     def __init__(self, bigip):
         self.bigip = bigip
         # add iControl interfaces if they don't exist yet
-        self.bigip.icontrol.add_interface('Networking.RouteTableV2')
+        self.bigip.icontrol.add_interface('Networking.RouteTableV2',
+                                          'Networking.RouteDomainV2')
         # iControl helper objects
         self.net_route = self.bigip.icontrol.Networking.RouteTableV2
 

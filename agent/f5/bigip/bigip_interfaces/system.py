@@ -6,16 +6,21 @@ class System(object):
         self.bigip = bigip
 
         # add iControl interfaces if they don't exist yet
-        self.bigip.icontrol.add_interfaces(['System.Inet',
+        self.bigip.icontrol.add_interfaces(['System.Session',
+                                            'System.Inet',
                                             'System.SystemInfo'])
 
         # iControl helper objects
+        self.sys_session = self.bigip.icontrol.System.Session
         self.sys_inet = self.bigip.icontrol.System.Inet
         self.sys_info = self.bigip.icontrol.System.SystemInfo
 
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
         self.platform = None
+
+    def set_folder(self, folder):
+        self.sys_session.set_active_folder(folder)
 
     def get_hostname(self):
         return self.sys_inet.get_hostname()
