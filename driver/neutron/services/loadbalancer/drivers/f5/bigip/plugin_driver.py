@@ -62,8 +62,8 @@ OPTS = [
 cfg.CONF.register_opts(OPTS)
 
 # topic name for this particular agent implementation
-TOPIC_PROCESS_ON_HOST = 'q-lbaas-bigip'
-TOPIC_LOADBALANCER_AGENT = 'lbaas_bigip_agent'
+TOPIC_PROCESS_ON_HOST = 'q-lbaas-process-on-host'
+TOPIC_LOADBALANCER_AGENT = 'lbaas_process_on_host_agent'
 
 SNAT_PORT_NAME = 'lb-snat-'
 
