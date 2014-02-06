@@ -142,7 +142,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'binary': 'f5-bigip-lbaas-agent',
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
-            'configurations': {'device_driver': self.driver},
+            'configurations': {'device_driver': self.driver.__class__.__name__,
+                               'device_type': self.device_type},
             'agent_type': constants.AGENT_TYPE_LOADBALANCER,
             'start_flag': True}
 
