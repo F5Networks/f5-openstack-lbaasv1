@@ -425,7 +425,7 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         send the RPC messages.
     """
     def __init__(self, plugin):
-        LOG.debug('BigIPPluginDriver constructor called')
+        LOG.debug('Initializing BigIPPluginDriver')
 
         # create the RPC message casting class - publisher
         self.agent_rpc = LoadBalancerAgentApi(TOPIC_LOADBALANCER_AGENT)
@@ -448,9 +448,11 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # create an instance reference to the agent scheduler
         self.pool_scheduler = importutils.import_object(
             cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
+
         core_plugin = plugin._core_plugin
-        if hasattr(core_plugin, 'type_manager'):
-            LOG.debug('core types are %s' % core_plugin.type_manager.drivers)
+        attributes = [attr for attr in dir(core_plugin)
+              if not attr.startswith('__')]
+        LOG.debug('core plugin has attributes %s' % attributes)
 
     def get_pool_agent(self, context, pool_id):
         # define which agent to communicate with to handle provision
