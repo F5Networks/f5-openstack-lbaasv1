@@ -34,22 +34,23 @@ from xml.sax import SAXParseException
 
 # Project info
 
+
 class F5Error(Exception):
     def __init__(self, e):
-        self.exception=e
-        self.msg=str(e)
-        
-        if isinstance(e,suds.WebFault):
+        self.exception = e
+        self.msg = str(e)
+
+        if isinstance(e, suds.WebFault):
             try:
-                parts=e.fault.faultstring.split('\n')
-                e_source=parts[0].replace("Exception caught in ","")
-                e_type=parts[1].replace("Exception: ","")
-                e_msg=re.sub("\serror_string\s*:\s*","",parts[4])
-                self.msg="%s: %s"%(e_type,e_msg)
+                parts = e.fault.faultstring.split('\n')
+                e_source = parts[0].replace("Exception caught in ", "")
+                e_type = parts[1].replace("Exception: ", "")
+                e_msg = re.sub("\serror_string\s*:\s*", "", parts[4])
+                self.msg = "%s: %s" % (e_type, e_msg)
             except IndexError:
-                self.msg=e.fault.faultstring
-        if isinstance(e,SAXParseException):
-            self.msg="Unexpected server response. %s"%e.message
+                self.msg = e.fault.faultstring
+        if isinstance(e, SAXParseException):
+            self.msg = "Unexpected server response. %s" % e.message
+
     def __str__(self):
         return self.msg
- 

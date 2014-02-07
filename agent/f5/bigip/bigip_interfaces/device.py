@@ -6,6 +6,9 @@ from suds import WebFault
 from f5.common.logger import Log
 from f5.common import constants as const
 
+from f5.bigip.bigip_interfaces import domain_address
+from f5.bigip.bigip_interfaces import icontrol_folder
+
 
 # Management - Device
 class Device(object):
@@ -87,56 +90,57 @@ class Device(object):
                                                 [self.get_device_name()]
                                                     )[0]
 
-    def set_configsync_addr(self, addr):
-        if not addr:
-            addr = 'none'
+    @domain_address
+    def set_configsync_addr(self, ip_address=None, Folder='/Common'):
+        if not ip_address:
+            ip_address = 'none'
 
         self.mgmt_dev.set_configsync_address([self.get_device_name()],
-                                             [addr])
+                                             [ip_address])
 
     def get_primary_mirror_addr(self):
         return self.mgmt_dev.get_primary_mirror_address(
                                                 [self.get_device_name()]
                                                         )[0]
 
-    def set_primary_mirror_addr(self, addr):
-        if not addr:
-            addr = 'none'
-
+    @domain_address
+    def set_primary_mirror_addr(self, ip_address=None, Folder='/Common'):
+        if not ip_address:
+            ip_address = 'none'
         self.mgmt_dev.set_primary_mirror_address([self.get_device_name()],
-                                                 [addr])
+                                                 [ip_address])
 
     def get_failover_addrs(self):
         return self.mgmt_dev.get_unicast_addresses(
                                                    [self.get_device_name()]
+
                                                    )[0]
 
-    def set_failover_addrs(self, addrs):
-        if not addrs:
-            addrs = ['none']
+    def set_failover_addrs(self, ip_address=None, folder='/Common'):
+        if not ip_address:
+            ip_address = ['none']
+        if not isinstance(ip_address, list):
+            ip_address = [ip_address]
+        seq = self.mgmt_dev.typefactory.create('Common.StringSequence')
+        unicast_defs = []
+        for addr in ip_address:
+            ipport_def = self.mgmt_dev.typefactory.create(
+                                            'Common.IPPortDefinition')
+            ipport_def.address = self._wash_address(ip_address=addr,
+                                                    folder=folder)
+            ipport_def.port = 1026
+            unicast_def = self.mgmt_dev.typefactory.create(
+                                   'Management.Device.UnicastAddress')
+            unicast_def.effective = ipport_def
+            unicast_def.source = ipport_def
+            unicast_defs.append(unicast_def)
+        seq.item = unicast_defs
+        self.mgmt_dev.set_unicast_addresses([self.get_device_name()],
+                                            [seq])
 
-        if isinstance(addrs, list):
-            seq = self.mgmt_dev.typefactory.create('Common.StringSequence')
-            unicast_defs = []
-
-            for addr in addrs:
-                ipport_def = self.mgmt_dev.typefactory.create(
-                                                'Common.IPPortDefinition')
-                ipport_def.address = addr
-                ipport_def.port = 1026
-                unicast_def = self.mgmt_dev.typefactory.create(
-                                       'Management.Device.UnicastAddress')
-                unicast_def.effective = ipport_def
-                unicast_def.source = ipport_def
-
-                unicast_defs.append(unicast_def)
-
-            seq.item = unicast_defs
-
-            self.mgmt_dev.set_unicast_addresses([self.get_device_name()],
-                                                [seq])
-        else:
-            raise TypeError()
+    @domain_address
+    def _wash_address(self, ip_address=None, folder=None):
+        return ip_address
 
     def get_failover_state(self):
         current_dev_name = self.get_device_name()
@@ -151,11 +155,12 @@ class Device(object):
                 return os.path.basename(device_groups[i])
         return None
 
-    def remove_from_device_group(self, device_group_name=None):
-        if not device_group_name:
-            device_group_name = self.get_device_group()
+    @icontrol_folder
+    def remove_from_device_group(self, name=None, folder='/Common'):
+        if not name:
+            name = self.get_device_group()
 
-        if device_group_name:
+        if name:
             device_entry_seq = self.mgmt_dev.typefactory.create(
                                         'Common.StringSequence')
             device_entry_seq.values = [self.bigip.add_folder(
@@ -166,7 +171,7 @@ class Device(object):
             device_entry_seq_seq.values = [device_entry_seq]
             try:
                 self.bigip.cluster.mgmt_dg.remove_device(
-                                        [device_group_name],
+                                        [name],
                                         device_entry_seq_seq)
             except WebFault as wf:
                 if not "was not found" in str(wf.message):

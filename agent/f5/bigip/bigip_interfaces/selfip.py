@@ -1,8 +1,12 @@
 import os
 from f5.common import constants as const
 
+from f5.bigip.bigip_interfaces import domain_address
+from f5.bigip.bigip_interfaces import icontrol_folder
 
 # Networking - Self-IP
+
+
 class SelfIP(object):
     def __init__(self, bigip):
         self.bigip = bigip
@@ -13,57 +17,69 @@ class SelfIP(object):
         # iControl helper objects
         self.net_self = self.bigip.icontrol.Networking.SelfIPV2
 
-    def create(self, name, addr, mask, vlan_name, floating):
-        if not self.exists(name) and self.bigip.vlan.exists(vlan_name):
+    @domain_address
+    def create(self, name=None, ip_address=None, netmask=None,
+               vlan_name=None, floating=False, folder='/Common'):
+        if not self.exists(name=name, folder=folder) and \
+               self.bigip.vlan.exists(name=vlan_name, folder=folder):
             enabled_state = self.net_self.typefactory.create(
                                         'Common.EnabledState').STATE_ENABLED
             traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
             if floating:
                 traffic_group = \
                     const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-
             self.net_self.create([name],
                                  [vlan_name],
-                                 [addr],
-                                 [mask],
+                                 [ip_address],
+                                 [netmask],
                                  [traffic_group],
                                  [enabled_state])
 
-    def delete(self, name):
-        if self.exists(name):
+    def delete(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             self.net_self.delete_self_ip([name])
 
-    def get_all(self):
+    @icontrol_folder
+    def get_all(self, folder='/Common'):
         return self.net_self.get_list()
 
-    def get_addrs(self):
-        return map(os.path.basename, self.net_self.get_address(self.get_all()))
+    @icontrol_folder
+    def get_addrs(self, folder='/Common'):
+        return map(os.path.basename,
+                   self.net_self.get_address(
+                            self.get_all(folder=folder)))
 
-    def get_addr(self, name):
-        if self.exists(name):
+    def get_addr(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             return self.net_self.get_address([name])[0]
 
-    def get_mask(self, name):
-        if self.exists(name):
+    def get_mask(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             return self.net_self.get_netmask([name])[0]
 
-    def set_mask(self, name, mask):
-        if self.exists(name):
-            self.net_self.set_netmask([name], [mask])
+    @domain_address
+    def set_mask(self, name=None, netmask=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
+            self.net_self.set_netmask([name], [netmask])
 
-    def get_vlan(self, name):
+    @icontrol_folder
+    def get_vlan(self, name=None, folder='/Common'):
         self.net_self.get_vlan([name])[0]
 
-    def set_port_lockdown_allow_all(self, name):
-        self._set_port_lockdown_mode(name, "ALLOW_MODE_ALL")
+    def set_port_lockdown_allow_all(self, name=None, folder='/Commmon'):
+        if self.exists(name=name, folder=folder):
+            self._set_port_lockdown_mode(name, "ALLOW_MODE_ALL")
 
-    def set_port_lockdown_allow_default(self, name):
-        self._set_port_lockdown_mode(name, "ALLOW_MODE_DEFAULTS")
+    def set_port_lockdown_allow_default(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
+            self._set_port_lockdown_mode(name, "ALLOW_MODE_DEFAULTS")
 
-    def set_port_lockdown_allow_none(self, name):
-        self._set_port_lockdown_mode(name, "ALLOW_MODE_NONE")
+    def set_port_lockdown_allow_none(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
+            self._set_port_lockdown_mode(name, "ALLOW_MODE_NONE")
 
-    def get_floating_addrs(self, prefix):
+    @icontrol_folder
+    def get_floating_addrs(self, prefix=None, folder='/Common'):
         names = [x for x in self.net_self.get_list() if x.startswith(prefix)]
         floats = []
 
@@ -78,7 +94,7 @@ class SelfIP(object):
         else:
             return []
 
-    def _set_port_lockdown_mode(self, name, mode):
+    def _set_port_lockdown_mode(self, name=None, mode=None, folder='/Common'):
         # remove any existing access lists
         self._reset_port_lockdown_allow_list(name)
 
@@ -90,11 +106,12 @@ class SelfIP(object):
         # set new access list
         self.net_self.add_allow_access_list([name], [access_list])
 
-    def _reset_port_lockdown_allow_list(self, name):
+    def _reset_port_lockdown_allow_list(self, name=None, folder='/Common'):
         access_list = self.net_self.get_allow_access_list([name])
         self.net_self.remove_allow_access_list([name], access_list)
 
-    def exists(self, name):
+    @icontrol_folder
+    def exists(self, name=None, folder='/Common'):
         #if name in map(os.path.basename, self.net_self.get_list()):
         if name in self.net_self.get_list():
             return True

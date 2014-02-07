@@ -1,5 +1,8 @@
 import os
 
+from f5.bigip.bigip_interfaces import domain_address
+from f5.bigip.bigip_interfaces import icontrol_folder
+
 # Local Traffic - Pool
 
 
@@ -11,37 +14,48 @@ class Pool(object):
         # iControl helper objects
         self.lb_pool = self.bigip.icontrol.LocalLB.Pool
 
-    def create(self, name, lb_method):
+    @icontrol_folder
+    def create(self, name=None, lb_method=None, folder='/Common'):
         # pool definition
         pool_names = [name]
         lb_methods = [self._get_lb_method_type(lb_method)]
-
         # create an empty pool
         addr_port_seq = self.lb_pool.typefactory.create(
                                            'Common.AddressPortSequence')
         pool_members_seq = [addr_port_seq]
         self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
 
-    def delete(self, name):
-        if self.exists(name):
+    @icontrol_folder
+    def delete(self, name=None, folder='/Common'):
+        if self.exists(name=name, foler=folder):
             self.lb_pool.delete_pool([name])
 
-    def add_member(self, name, addr, port):
-        if self.exists(name) and not self.member_exists(name, addr, port):
+    @icontrol_folder
+    @domain_address
+    def add_member(self, name=None, ip_address=None,
+                   port=None, folder='/Common'):
+        if self.exists(name=name, folder=folder) and \
+           not self.member_exists(name=name, ip_address=ip_address,
+                                  port=None, folder=folder):
             addr_port_seq = self._get_addr_port_seq()
             self.lb_pool.add_member_v2([name], [addr_port_seq])
 
-    def remove_member(self, name, addr, port):
-        if not self.exists(name) and self.member_exists(name, addr, port):
+    @icontrol_folder
+    @domain_address
+    def remove_member(self, name=None, ip_address=None,
+                      port=None, folder='/Common'):
+        if not self.exists(name=name, folder=folder) and \
+           self.member_exists(name=name, ip_address=None,
+                              port=None, folder=folder):
             addr_port_seq = self._get_addr_port_seq()
             self.lb_pool.remove_member_v2([name], [addr_port_seq])
 
-    def get_service_down_action(self, name):
+    @icontrol_folder
+    def get_service_down_action(self, name=None, folder='/Common'):
         service_down_action_type = self.lb_pool.typefactory.create(
                                                 'LocalLB.ServiceDownAction')
         service_down_action = self.lb_pool.get_action_on_service_down(
                                                                   [name])[0]
-
         if service_down_action == \
             service_down_action_type.SERVICE_DOWN_ACTION_RESET:
             return 'SERVICE_DOWN_ACTION_RESET'
@@ -54,20 +68,24 @@ class Pool(object):
         else:
             return 'SERVICE_DOWN_ACTION_NONE'
 
-    def set_service_down_action(self, name, service_down_action):
-        if self.exists(name):
+    @icontrol_folder
+    def set_service_down_action(self, name=None,
+                                service_down_action=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             service_down_action_type = self._get_service_down_action_type(
                                                            service_down_action)
             self.lb_pool.set_action_on_service_down([name],
                                                     [service_down_action_type])
 
-    def set_lb_method(self, name, lb_method):
-        if self.exists(name):
+    @icontrol_folder
+    def set_lb_method(self, name=None, lb_method=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             lb_method_type = self._get_lb_method_type(lb_method)
             self.lb_pool.set_lb_method([name], [lb_method_type])
 
-    def get_lb_method(self, name):
-        if self.exists(name):
+    @icontrol_folder
+    def get_lb_method(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             lb_method_type = self.lb_pool.typefactory.create(
                                                            'LocalLB.LBMethod')
             lb_method = self.lb_pool.get_lb_method([name])[0]
@@ -84,27 +102,31 @@ class Pool(object):
                 # TODO: raise unsupported LB method
                 pass
 
-    def get_monitors(self, name):
-        if self.exists(name):
+    @icontrol_folder
+    def get_monitors(self, name=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             monitor_assoc = self.lb_pool.get_monitor_association([name])[0]
             return monitor_assoc.monitor_rule.monitor_templates
 
-    def add_monitor(self, name, monitor_name):
+    @icontrol_folder
+    def add_monitor(self, name=None, monitor_name=None, folder='/Common'):
         monitors = self.get_monitors(name)
 
         if not monitor_name in monitors:
             monitors.append(monitor_name)
             self._set_monitor_assoc(name, monitors)
 
-    def remove_monitor(self, name, monitor_name):
+    @icontrol_folder
+    def remove_monitor(self, name=None, monitor_name=None, folder='/Common'):
         monitors = self.get_monitors(name)
 
         if monitor_name in monitors:
             monitors.remove(monitor_name)
             self._set_monitor_assoc(name, monitors)
 
-    def _set_monitor_assoc(self, name, monitors):
-        if self.exists(name):
+    @icontrol_folder
+    def _set_monitor_assoc(self, name=None, monitors=None, folder='/Common'):
+        if self.exists(name=name, folder=folder):
             monitor_rule_type = self.lb_pool.typefactory.create(
                                                     'LocalLB.MonitorRuleType')
             if len(monitors) == 0:
@@ -160,14 +182,17 @@ class Pool(object):
         else:
             return service_down_action_type.SERVICE_DOWN_ACTION_NONE
 
-    def exists(self, name):
+    @icontrol_folder
+    def exists(self, name=None, folder='/Common'):
         if name in self.lb_pool.get_list():
             return True
 
-    def member_exists(self, name, addr, port):
+    @icontrol_folder
+    @domain_address
+    def member_exists(self, name=None, ip_address=None,
+                      port=None, folder='/Common'):
         members = self.lb_pool.get_member_v2([name])
-
         for member in members[0]:
-            if os.path.basename(member.address) == addr and \
+            if os.path.basename(member.address) == ip_address and \
                int(member.port) == port:
                 return True

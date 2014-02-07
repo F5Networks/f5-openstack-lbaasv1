@@ -113,7 +113,7 @@ class Cluster(object):
         if dev_group_types[index] == 'DGT_FAILOVER':
             return True
 
-    def add_peer(self, name, addr, username, password):
+    def add_peer(self, name, mgmt_ip_address, username, password):
         if not self.peer_exists(name):
             if self.bigip.device.get_lock():
                 local_device = self.bigip.device.get_device_name()
@@ -137,7 +137,7 @@ class Cluster(object):
                 self.bigip.device.update_metadata(root_mgmt_dict)
                 Log.info('Cluster', 'Device %s - adding peer %s'
                                    % (local_device, name))
-                self.mgmt_trust.add_authority_device(addr,
+                self.mgmt_trust.add_authority_device(mgmt_ip_address,
                                                      username,
                                                      password,
                                                      name,
@@ -147,7 +147,7 @@ class Cluster(object):
                 while attempts < const.PEER_ADD_ATTEMPTS_MAX:
                     if self.get_sync_status() == "OFFLINE":
                         self.mgmt_trust.remove_device([name])
-                        self.mgmt_trust.add_authority_device(addr,
+                        self.mgmt_trust.add_authority_device(mgmt_ip_address,
                                                              username,
                                                              password,
                                                              name,

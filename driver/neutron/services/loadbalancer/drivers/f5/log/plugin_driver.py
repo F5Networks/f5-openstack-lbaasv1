@@ -56,7 +56,11 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def create_vip(self, context, vip):
         self.plug_vip_port(context, vip['port_id'])
-        super(F5LogDriver, self).delete_vip(context, id)
+        self.plugin.update_status(context,
+                                  ldb.Vip,
+                                  vip['id'],
+                                  constants.ACTIVE,
+                                  'Vip Created Successfully')
 
     @log.log
     def update_vip(self, context, old_vip, vip):

@@ -19,10 +19,13 @@ LOG = logging.getLogger(__name__)
 
 
 class BigIP(object):
-    def __init__(self, hostname, username, password, timeout=None):
+    def __init__(self, hostname, username, password,
+                 timeout=None, address_isolation=True):
         # get icontrol connection stub
         self.icontrol = self._get_icontrol(hostname, username, password)
 
+        if address_isolation:
+            self.route_domain_required = True
         # interface instance cache
         self.interfaces = {}
 
@@ -121,9 +124,9 @@ class BigIP(object):
 
     def set_folder(self, name, folder='/Common'):
         if not folder.startswith("/"):
-            folder += "/"
+            folder = "/" + folder
         if not hasattr(self, 'folder'):
-            self.system.set_active_folder(folder)
+            self.system.set_folder(folder)
             self.folder = folder
         else:
             if not self.folder == folder:
@@ -131,18 +134,17 @@ class BigIP(object):
                 self.folder = folder
         if name:
             if not name.startswith(folder + "/"):
-                return "/" + folder + "/" + name
+                return folder + "/" + name
             else:
                 return name
         else:
             return None
 
-    def get_route_domain_index_for_folder(self, folder='/Common'):
+    def get_domain_index(self, folder='/Common'):
         if folder == '/Common':
             return 0
         else:
-            #TO DO: add the call to get route domain for a folder
-            return 1
+            return self.route.get_domain(folder)
 
     @staticmethod
     def _get_icontrol(hostname, username, password, timeout=None):
@@ -189,30 +191,3 @@ class BigIP(object):
             return "/" + folder + "/" + name
         else:
             return name
-
-
-def icontrol_folder(method):
-    """Decorator to put the right folder on iControl object."""
-    def wrapper(*args, **kwargs):
-        instance = args[0]
-        if ('name' in kwargs) and ('folder' in kwargs):
-            kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
-                                                       kwargs['folder'])
-        return method(*args, **kwargs)
-    return wrapper
-
-
-def route_domain_address_decorate(method):
-    """Decorator to put the right route domain decoration an address."""
-    def wrapper(*args, **kwargs):
-        instance = args[0]
-        if 'folder' in kwargs:
-            folder = kwargs['folder']
-            for name in kwargs:
-                if str(name).find('ip_address') > 0:
-                    rid = instance.bigip.get_route_domain_index_for_folder(
-                                                                        folder)
-                if rid > 0:
-                    kwargs[name] += "%" + rid
-        return method(*args, **kwargs)
-    return wrapper

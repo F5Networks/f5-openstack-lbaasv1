@@ -1,4 +1,5 @@
 # System
+from suds import WebFault
 
 
 class System(object):
@@ -8,19 +9,48 @@ class System(object):
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(['System.Session',
                                             'System.Inet',
-                                            'System.SystemInfo'])
+                                            'System.SystemInfo',
+                                            'Management.Folder'])
 
         # iControl helper objects
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_inet = self.bigip.icontrol.System.Inet
         self.sys_info = self.bigip.icontrol.System.SystemInfo
+        self.mgmt_folder = self.bigip.icontrol.Management.Folder
 
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
         self.platform = None
 
+    def create_folder(self, folder, change_to=False):
+        self.set_folder('/')
+        if not folder.startswith('/'):
+            folder = '/' + folder
+        self.mgmt_folder.create([folder])
+        if change_to:
+            self.sys_session.set_active_folder(folder)
+        else:
+            self.set_folder('/Common')
+
+    def delete_folder(self, folder):
+        self.set_folder('/')
+        self.mgmt_folder.delete_folder([folder])
+        self.set_folder('/Common')
+
+    def get_folders(self):
+        self.set_folder('/')
+        folders = self.mgmt_folder.get_list()
+        self.set_folder('/Common')
+        return folders
+
     def set_folder(self, folder):
-        self.sys_session.set_active_folder(folder)
+        try:
+            self.sys_session.set_active_folder(folder)
+        except WebFault as wf:
+            if "was not found" in str(wf.message):
+                self.create_folder(folder, change_to=True)
+                if self.bigip.route_domain_required:
+                    self.bigip.route.create_domain(folder=folder)
 
     def get_hostname(self):
         return self.sys_inet.get_hostname()
@@ -33,9 +63,6 @@ class System(object):
 
     def set_ntp_server(self, addr):
         self.sys_inet.set_ntp_server_address([addr])
-
-    def set_active_folder(self, folder):
-        self.sys_session.set_active_folder(folder)
 
     def get_platform(self):
         if not self.platform:
