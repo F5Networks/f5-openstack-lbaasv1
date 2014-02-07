@@ -2,7 +2,7 @@
 
 from distutils.core import setup
 
-setup(name='f5-bigip-lbaas-driver',
+setup(name='f5-lbaas-driver',
       version='1.0',
       description='F5 LBaaS Driver for OpenStack',
       author='John Gruber',
