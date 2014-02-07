@@ -27,10 +27,8 @@ from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
-from neutron.services.loadbalancer.drivers.f5.bigip import (
-    agent_api,
-    plugin_driver
-)
+from neutron.services.loadbalancer.drivers.f5.bigip import agent_api
+from neutron.services.loadbalancer.drivers.f5 import plugin_driver
 
 LOG = logging.getLogger(__name__)
 
