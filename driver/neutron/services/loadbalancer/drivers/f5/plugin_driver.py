@@ -48,7 +48,7 @@ ACTIVE_PENDING = (
 OPTS = [
     cfg.StrOpt('f5_loadbalancer_pool_scheduler_driver',
                default=('neutron.services.loadbalancer'
-                       '.drivers.f5.bigip.agent_scheduler'
+                       '.drivers.f5.agent_scheduler'
                        '.TenantScheduler'),
                help=_('Driver to use for scheduling '
                       'pool to a default loadbalancer agent')),
