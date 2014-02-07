@@ -130,7 +130,7 @@ class BigIP(object):
             self.folder = folder
         else:
             if not self.folder == folder:
-                self.system.set_active_folder(folder)
+                self.system.set_folder(folder)
                 self.folder = folder
         if name:
             if not name.startswith(folder + "/"):
