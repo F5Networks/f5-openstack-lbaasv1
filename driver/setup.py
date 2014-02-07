@@ -9,5 +9,5 @@ setup(name='f5-bigip-lbaas-driver',
       author_email='j.gruber@f5.com',
       url='http://devcentral.f5.com/f5',
       packages=['neutron.services.loadbalancer.drivers.f5',
-                'neutron.services.loadbalancer.drivers.f5.bigip'],
+                'neutron.services.loadbalancer.drivers.f5.log'],
      )
