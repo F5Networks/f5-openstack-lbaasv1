@@ -62,8 +62,8 @@ OPTS = [
 cfg.CONF.register_opts(OPTS)
 
 # topic name for this particular agent implementation
-TOPIC_PROCESS_ON_HOST = 'q-lbaas-process-on-host'
-TOPIC_LOADBALANCER_AGENT = 'lbaas_process_on_host_agent'
+TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
+TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_host_agent'
 
 SNAT_PORT_NAME = 'lb-snat-'
 
@@ -257,16 +257,7 @@ class LoadBalancerCallbacks(object):
 
     @log.log
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
-        """Agent update of pool stats.
-
-           The stats structure should look like this example
-           stats = {"bytes_in": 0,
-                 "bytes_out": 0,
-                 "active_connections": 0,
-                 "total_connections": 0}
-
-        """
-        pass
+        self.plugin.update_pool_stats(self, context, pool_id, data=stats)
 
     def _get_vxlan_endpoints(self, context):
         endpoints = []
@@ -441,7 +432,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):
                          )
 
 
-class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
+class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     """ Plugin Driver for LBaaS.
 
         This class implements the methods found in the abstract
@@ -453,7 +444,7 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         send the RPC messages.
     """
     def __init__(self, plugin):
-        LOG.debug('Initializing BigIPPluginDriver')
+        LOG.debug('Initializing F5PluginDriver')
 
         # create the RPC message casting class - publisher
         self.agent_rpc = LoadBalancerAgentApi(TOPIC_LOADBALANCER_AGENT)
@@ -483,8 +474,6 @@ class BigIPPluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # It references the agent_scheduler and the scheduler class
         # will pick from the registered agents.
         agent = self.plugin.get_lbaas_agent_hosting_pool(context, pool_id)
-        LOG.debug('agent for call is %s' % agent)
-
         if not agent:
             raise lbaas_agentscheduler.NoActiveLbaasAgent(pool_id=pool_id)
         return agent['agent']
