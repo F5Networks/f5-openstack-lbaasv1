@@ -23,10 +23,9 @@ from neutron.agent.common import config
 from neutron.common import legacy
 from neutron.openstack.common.rpc import service as rpc_service
 from neutron.openstack.common import service
-from neutron.services.loadbalancer.drivers.f5.bigip import (
-    agent_manager as manager,
-    plugin_driver
-)
+from neutron.services.loadbalancer.drivers.f5.bigip import \
+     agent_manager as manager
+from neutron.services.loadbalancer.drivers.f5 import plugin_driver
 
 OPTS = [
     cfg.IntOpt(
