@@ -70,7 +70,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def delete_vip(self, context, vip):
         self.unplug_vip_port(context, vip['port_id'])
-        self.plugin.delete_vip(context, vip['id'])
+        self.plugin._delete_db_vip(context, vip['id'])
 
     @log.log
     def create_pool(self, context, pool):
@@ -92,7 +92,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_pool(self, context, pool):
-        self.plugin.delete_pool(context, pool['id'])
+        self.plugin._delete_db_pool(context, pool['id'])
 
     @log.log
     def create_member(self, context, member):
@@ -115,8 +115,9 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_member(self, context, member):
-        self.members.remove(member)
-        self.plugin.delete_member(context, member['id'])
+        if member in self.members:
+            self.members.remove(member)
+        self.plugin._delete_db_member(context, member['id'])
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
@@ -139,8 +140,9 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool_id):
-        self.plugin.delete_pool_health_monitor(context, health_monitor['id'],
-                                               pool_id)
+        self.plugin._delete_db_pool_health_monitor(context,
+                                                   health_monitor['id'],
+                                                   pool_id)
 
     @log.log
     def stats(self, context, pool_id):
