@@ -60,8 +60,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def update_vip(self, context, old_vip, vip):
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.Vip,
                                   vip['id'],
                                   constants.ACTIVE,
@@ -74,16 +73,15 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def create_pool(self, context, pool):
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.Pool,
                                   pool['id'],
-                                  constants.ACTIVE)
+                                  constants.ACTIVE,
+                                  'Pool Created Successfully')
 
     @log.log
     def update_pool(self, context, old_pool, pool):
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.Pool,
                                   pool['id'],
                                   constants.ACTIVE,
@@ -96,8 +94,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def create_member(self, context, member):
         self.members.append(member)
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.Member,
                                   member['id'],
                                   constants.ACTIVE,
@@ -105,8 +102,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def update_member(self, context, old_member, member):
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.Member,
                                   member['id'],
                                   constants.ACTIVE,
@@ -120,8 +116,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.HealthMonitor,
                                   health_monitor['id'],
                                   constants.ACTIVE,
@@ -130,8 +125,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool_id):
-        self.plugin.update_status(self,
-                                  context,
+        self.plugin.update_status(context,
                                   ldb.HealthMonitor,
                                   health_monitor['id'],
                                   constants.ACTIVE,
