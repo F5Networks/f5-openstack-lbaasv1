@@ -65,7 +65,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   ldb.Vip,
                                   vip['id'],
                                   constants.ACTIVE,
-                      status_description='Vip Updated Successfully')
+                                  'Vip Updated Successfully')
 
     @log.log
     def delete_vip(self, context, vip):
@@ -78,8 +78,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   context,
                                   ldb.Pool,
                                   pool['id'],
-                                  constants.ACTIVE,
-                      status_description='Pool Created Successfully')
+                                  constants.ACTIVE)
 
     @log.log
     def update_pool(self, context, old_pool, pool):
@@ -88,7 +87,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   ldb.Pool,
                                   pool['id'],
                                   constants.ACTIVE,
-                      status_description='Pool Updated Successfully')
+                                  'Pool Updated Successfully')
 
     @log.log
     def delete_pool(self, context, pool):
@@ -102,7 +101,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   ldb.Member,
                                   member['id'],
                                   constants.ACTIVE,
-                      status_description='Pool Member Created Successfully')
+                                  'Pool Member Created Successfully')
 
     @log.log
     def update_member(self, context, old_member, member):
@@ -111,7 +110,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   ldb.Member,
                                   member['id'],
                                   constants.ACTIVE,
-                      status_description='Pool Member Updated Successfully')
+                                  'Pool Member Updated Successfully')
 
     @log.log
     def delete_member(self, context, member):
@@ -126,7 +125,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   ldb.HealthMonitor,
                                   health_monitor['id'],
                                   constants.ACTIVE,
-                      status_description='Health Monitor Created Successfully')
+                                  'Health Monitor Created Successfully')
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
@@ -136,7 +135,7 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
                                   ldb.HealthMonitor,
                                   health_monitor['id'],
                                   constants.ACTIVE,
-                      status_description='Health Monitor Updated Successfully')
+                                  'Health Monitor Updated Successfully')
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool_id):
