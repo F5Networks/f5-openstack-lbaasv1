@@ -24,6 +24,7 @@ from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants
 from neutron.services.loadbalancer.drivers import abstract_driver
 from neutron.services.loadbalancer import constants as lb_const
+from neutron.db.loadbalancer import loadbalancer_db as ldb
 
 LOG = logging.getLogger(__name__)
 
@@ -55,51 +56,91 @@ class F5LogDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def create_vip(self, context, vip):
         self.plug_vip_port(context, vip['port_id'])
+        super(F5LogDriver, self).delete_vip(context, id)
 
     @log.log
     def update_vip(self, context, old_vip, vip):
-        pass
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.Vip,
+                                  vip['id'],
+                                  constants.ACTIVE,
+                      status_description='Vip Updated Successfully')
 
     @log.log
     def delete_vip(self, context, vip):
         self.unplug_vip_port(context, vip['port_id'])
+        self.plugin.delete_vip(context, vip['id'])
 
     @log.log
     def create_pool(self, context, pool):
-        pass
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.Pool,
+                                  pool['id'],
+                                  constants.ACTIVE,
+                      status_description='Pool Created Successfully')
 
     @log.log
     def update_pool(self, context, old_pool, pool):
-        pass
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.Pool,
+                                  pool['id'],
+                                  constants.ACTIVE,
+                      status_description='Pool Updated Successfully')
 
     @log.log
     def delete_pool(self, context, pool):
-        pass
+        self.plugin.delete_pool(context, pool['id'])
 
     @log.log
     def create_member(self, context, member):
         self.members.append(member)
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.Member,
+                                  member['id'],
+                                  constants.ACTIVE,
+                      status_description='Pool Member Created Successfully')
 
     @log.log
     def update_member(self, context, old_member, member):
-        pass
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.Member,
+                                  member['id'],
+                                  constants.ACTIVE,
+                      status_description='Pool Member Updated Successfully')
 
     @log.log
     def delete_member(self, context, member):
         self.members.remove(member)
+        self.plugin.delete_member(context, member['id'])
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
-        pass
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.HealthMonitor,
+                                  health_monitor['id'],
+                                  constants.ACTIVE,
+                      status_description='Health Monitor Created Successfully')
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool_id):
-        pass
+        self.plugin.update_status(self,
+                                  context,
+                                  ldb.HealthMonitor,
+                                  health_monitor['id'],
+                                  constants.ACTIVE,
+                      status_description='Health Monitor Updated Successfully')
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool_id):
-        pass
+        self.plugin.delete_pool_health_monitor(context, health_monitor['id'],
+                                               pool_id)
 
     @log.log
     def stats(self, context, pool_id):
