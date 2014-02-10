@@ -16,8 +16,6 @@
 #
 # @author: Mark McClain, DreamHost
 
-import uuid
-
 from oslo.config import cfg
 
 from neutron.api.v2 import attributes
@@ -187,6 +185,130 @@ class LoadBalancerCallbacks(object):
             return retval
 
     @log.log
+    def create_port(self, context, subnet_id=None,
+                    mac_address=None, name=None,
+                    fixed_address_count=1, host=None):
+        if subnet_id:
+            subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
+            if not mac_address:
+                mac_address = attributes.ATTR_NOT_SPECIFIED
+            fixed_ip = {'subnet_id': subnet['id']}
+            if fixed_address_count > 1:
+                fixed_ips = []
+                for _ in range(0, fixed_address_count):
+                    fixed_ips.append(fixed_ip)
+            else:
+                fixed_ips = [fixed_ip]
+            if not host:
+                host = ''
+            if not name:
+                name = SNAT_PORT_NAME
+            port_data = {
+                'tenant_id': subnet['tenant_id'],
+                'name': name,
+                'network_id': subnet['network_id'],
+                'mac_address': mac_address,
+                'admin_state_up': True,
+                'device_id': host,
+                'device_owner': self.plugin.__class__.__name__,
+                'fixed_ips': fixed_ips
+            }
+            port = self.plugin._core_plugin.create_port(context,
+                                                        {'port': port_data})
+            return port
+
+    @log.log
+    def delete_port(self, context, port_id=None, mac_address):
+        if port_id:
+            self.plugin._core_plugin.delete_port(context, port_id)
+        if mac_address:
+            filters = {'mac_address': [mac_address]}
+            ports = self.plugin._core_plugin.get_ports(context,
+                                                        filters=filters)
+            for port in ports:
+                self.plugin._core_plugin.delete_port(context, port['id'])
+
+    @log.log
+    def allocate_fixed_address(self, context, subnet_id=None,
+                               port_id=None, name=None,
+                               fixed_address_count=1, host=None):
+        if subnet_id:
+            subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
+            if not port_id:
+                port = self.create_port(context,
+                                 subnet_id=subnet_id,
+                                 mac_address=None,
+                                 name=name,
+                                 fixed_address_count=fixed_address_count,
+                                 host=host)
+            else:
+                port = self.plugin._core_plugin.get_port(context,
+                                                         port_id)
+                existing_fixed_ips = port['fixed_ips']
+                fixed_ip = {'subnet_id': subnet['id']}
+                if fixed_address_count > 1:
+                    fixed_ips = []
+                    for _ in range(0, fixed_address_count):
+                        fixed_ips.append(fixed_ip)
+                else:
+                    fixed_ips = [fixed_ip]
+            port['fixed_ips'] = existing_fixed_ips + fixed_ips
+            port = self.plugin._core_plugin.update_port(context,
+                                                        {'port': port})
+            new_fixed_ips = port['fixed_ips']
+            port['new_fixed_ips'] = []
+            for new_fixed_ip in new_fixed_ips:
+                ip_address = new_fixed_ip['ip_address']
+                is_new = True
+                for existing_fixed_ip in existing_fixed_ips:
+                    if ip_address == existing_fixed_ip['ip_address']:
+                        is_new = False
+                if is_new:
+                    port['new_fixed_ips'].append(new_fixed_ip)
+            return port
+
+    def deallocate_fixed_address(self, context, fixed_addresses=None,
+                             subnet_id=None, host=None,
+                             auto_delete_port=False):
+        if fixed_addresses:
+            if not isinstance(fixed_addresses, list):
+                fixed_addresses = [fixed_addresses]
+            # strip all route domain decorations if they exist
+            for i in range(len(fixed_addresses)):
+                try:
+                    decorator_index = str(fixed_addresses[i]).index('%')
+                    fixed_addresses[i] = fixed_addresses[i][:decorator_index]
+                except:
+                    pass
+            subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
+            # get all ports for this host on the subnet
+            filters = {'network_id': [subnet['network_id']],
+                       'tenant_id': [subnet['tenant_id']],
+                       'device_id': [host]}
+            ports = self.plugin._core_plugin.get_ports(context,
+                                                        filters=filters)
+            fixed_ips = {}
+            ok_to_delete_port = {}
+            for port in ports:
+                ok_to_delete_port[port['id']] = False
+                for fixed_ip in port['fixed_ips']:
+                    fixed_ips[fixed_ip['ip_address']] = port['id']
+            # only get rid of associated fixed_ips
+            for fixed_ip in fixed_ips:
+                if fixed_ip in fixed_addresses:
+                    self.plugin._core_plugin._delete_ip_allocation(context,
+                                                        subnet['network_id'],
+                                                        subnet_id,
+                                                        fixed_ip)
+                    ok_to_delete_port[fixed_ips[fixed_ip]] = True
+                else:
+                    ok_to_delete_port[fixed_ips[fixed_ip]] = False
+            if auto_delete_port:
+                for port in ok_to_delete_port:
+                    if ok_to_delete_port[port]:
+                        self.delete_port(context, port)
+
+    @log.log
     def update_vip_status(self, context, vip_id=None,
                            status=constants.ERROR, status_description=None,
                            host=None):
@@ -259,7 +381,7 @@ class LoadBalancerCallbacks(object):
 
     @log.log
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
-        self.plugin.update_pool_stats(self, context, pool_id, data=stats)
+        self.plugin.update_pool_stats(context, pool_id, data=stats)
 
     def _get_vxlan_endpoints(self, context):
         endpoints = []
@@ -486,7 +608,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, vip['pool_id'])
 
         # populate a network structure for the rpc message
-        network = self._get_vip_network(context, vip)
+        network = self._get_vip_network(context, vip, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_vip(context, vip, network, agent['host'])
@@ -497,10 +619,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, vip['pool_id'])
 
         # populate a 'was' network structure for the rpc message
-        old_network = self._get_vip_network(context, old_vip)
+        old_network = self._get_vip_network(context, old_vip, agent)
 
         # populate a 'to be' network structure for the rpc message
-        network = self._get_vip_network(context, vip)
+        network = self._get_vip_network(context, vip, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.update_vip(context, old_vip, vip, old_network,
@@ -512,7 +634,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, vip['pool_id'])
 
         # populate a network structure for the rpc message
-        network = self._get_vip_network(context, vip)
+        network = self._get_vip_network(context, vip, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_vip(context, vip, network, agent['host'])
@@ -525,7 +647,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             raise lbaas_agentscheduler.NoEligibleLbaasAgent(pool_id=pool['id'])
 
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_pool(context, pool, network, agent['host'])
@@ -536,10 +658,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool['id'])
 
         # populate a 'was' network structure for the rpc message
-        old_network = self._get_pool_network(context, old_pool)
+        old_network = self._get_pool_network(context, old_pool, agent)
 
         # populate a 'to be' network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         if pool['subnet_id'] != old_pool['subnet_id']:
             # see if there are pools on this subnet
@@ -562,7 +684,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool['id'])
 
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # see if there are any other pools on this subnet
         existing_pools = self._get_pools(context, pool['tenant_id'],
@@ -586,7 +708,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         pool = self.plugin.get_pool(context, member['pool_id'])
         member['pool'] = pool
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_member(context, member, network, agent['host'])
@@ -605,9 +727,9 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         member['pool'] = pool
 
         # populate a 'was' network structure for the rpc message
-        old_network = self._get_pool_network(context, old_pool)
+        old_network = self._get_pool_network(context, old_pool, agent)
         # populate a 'to be' network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.update_member(context, old_member, member,
@@ -623,7 +745,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         member['pool'] = pool
 
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_member(context, member,
@@ -639,7 +761,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         pool_dict = pool
 
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_pool_health_monitor(context, health_monitor,
@@ -657,7 +779,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         pool_dict = pool
 
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.update_health_monitor(context, old_health_monitor,
@@ -674,7 +796,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         pool_dict = pool
 
         # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool)
+        network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_pool_health_monitor(context, health_monitor,
@@ -696,7 +818,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     # utility methods for this class
     ################################
 
-    def _get_vip_network(self, context, vip):
+    def _get_vip_network(self, context, vip, agent):
         subnet_dict = self.plugin._core_plugin.get_subnet(
                                                     context, vip['subnet_id'])
         port_dict = self.plugin._core_plugin.get_port(context, vip['port_id'])
@@ -713,12 +835,16 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             network_dict['segmentation_id'] = \
                 network_dict['provider:segmentation_id']
         network_dict['subnet'] = subnet_dict
+        fixed_ip_dict = self._get_fixed_ips(context,
+                                subnet_dict['tenant_id'],
+                                subnet_dict['id'])
+        network_dict['fixed_ips'] = fixed_ip_dict
         network_dict['port'] = port_dict
         network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
         network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
         return network_dict
 
-    def _get_pool_network(self, context, pool):
+    def _get_pool_network(self, context, pool, agent):
         subnet_dict = self.plugin._core_plugin.get_subnet(
                                         context, pool['subnet_id'])
         network_id = subnet_dict['network_id']
@@ -734,10 +860,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         if 'provider:segmentation_id' in network_dict:
             network_dict['segmentation_id'] = \
                 network_dict['provider:segmentation_id']
-        snats_dict = self._get_snats(context,
+        fixed_ip_dict = self._get_fixed_ips(context,
                                 subnet_dict['tenant_id'],
                                 subnet_dict['id'])
-        network_dict['snats'] = snats_dict
+        network_dict['fixed_ips'] = fixed_ip_dict
         network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
         network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
         return network_dict
@@ -755,61 +881,16 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                                         context, port_id)
         return self.plugin._core_plugin._make_port_dict(port)
 
-    def _get_snats(self, context, tenant_id, subnet_id):
+    def _get_fixed_ips(self, context, tenant_id, subnet_id, agent):
         subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
         filters = {'network_id': [subnet['network_id']],
                   'tenant_id': [tenant_id],
-                  'name': [SNAT_PORT_NAME + subnet_id]}
+                  'device_id': [agent.host]}
         snats = self.plugin._core_plugin.get_ports(context,
                                                         filters=filters)
         if snats:
             return snats
         return None
-
-    def _create_snat(self, context, tenant_id,
-                     subnet_id, ip_address=None):
-            subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
-            fixed_ip = {'subnet_id': subnet['id']}
-            if ip_address and ip_address != attributes.ATTR_NOT_SPECIFIED:
-                fixed_ip['ip_address'] = ip_address
-            else:
-                count = cfg.CONF.f5_loadbalancer_min_snat_addresses
-                if count > 1:
-                    fixed_ips = []
-                    for _ in range(0, count):
-                        fixed_ips.append(fixed_ip)
-                else:
-                    fixed_ips = [fixed_ip]
-            port_data = {
-                'tenant_id': tenant_id,
-                'name': SNAT_PORT_NAME + subnet_id,
-                'network_id': subnet['network_id'],
-                'mac_address': attributes.ATTR_NOT_SPECIFIED,
-                'admin_state_up': False,
-                'device_id': '',
-                'device_owner': '',
-                'fixed_ips': fixed_ips
-            }
-            port = self.plugin._core_plugin.create_port(context,
-                                                        {'port': port_data})
-            return port
-
-    def _remove_snat(self, context, tenant_id,
-                     subnet_id, ip_address=None):
-        snats = self._get_snats(context, tenant_id, subnet_id)
-        if snats:
-            for snat in snats:
-                if ip_address:
-                    if 'fixed_ips' in snat:
-                        for fixed_ip in snat['fixed_ips']:
-                            if fixed_ip == ip_address:
-                                self.plugin._core_plugin.delete_port(
-                                                                     context,
-                                                                     snat['id']
-                                                                     )
-                else:
-                    self.plugin._core_plugin.delete_port(context,
-                                                             snat['id'])
 
     def _get_vxlan_endpoints(self, context):
         endpoints = []
