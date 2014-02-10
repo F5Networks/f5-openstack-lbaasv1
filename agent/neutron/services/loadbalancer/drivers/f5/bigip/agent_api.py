@@ -54,6 +54,98 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
+    def create_port(self, subnet_id=None,
+                    mac_address=None, name=None,
+                    fixed_address_count=1):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'create_port',
+                                       subnet_id=subnet_id,
+                                       mac_address=mac_address,
+                                       name=name,
+                                       fixed_address_count=fixed_address_count,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    def delete_port(self, port_id=None, mac_address):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'delete_port',
+                                       port_id=port_id,
+                                       mac_address=mac_address
+                                      ),
+                         topic=self.topic
+                )
+
+    def allocate_fixed_address(self, subnet_id=None,
+                               port_id=None, name=None,
+                               fixed_address_count=1):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'allocate_fixed_address',
+                                       subnet_id=subnet_id,
+                                       port_id=port_id,
+                                       name=name,
+                                       fixed_address_count=fixed_address_count,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    def deallocate_fixed_address(self, fixed_addresses=None,
+                             subnet_id=None, auto_delete_port=False):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'deallocate_fixed_address',
+                                       fixed_addresses=fixed_addresses,
+                                       subnet_id=subnet_id,
+                                       host=self.host,
+                                       auto_delete_port=auto_delete_port
+                                      ),
+                         topic=self.topic
+                )
+
+    def update_vip_status(self, vip_id=None,
+                           status=None, status_description=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'update_vip_status',
+                                       vip_id=vip_id,
+                                       status=status,
+                                       status_description=status_description,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    def vip_destroyed(self, vip_id=None):
+        return self.call(
+            self.context,
+            self.make_msg('vip_destroyed', vip_id=vip_id, host=self.host),
+            topic=self.topic
+        )
+
+    def update_pool_status(self, pool_id=None,
+                           status=None, status_description=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'update_pool_status',
+                                       pool_id=pool_id,
+                                       status=status,
+                                       status_description=status_description,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
     def pool_destroyed(self, pool_id):
         return self.call(
             self.context,
@@ -61,17 +153,48 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
-    def plug_vip_port(self, port_id):
+    def update_member_status(self, member_id=None,
+                           status=None, status_description=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'update_vip_status',
+                                       member_id=member_id,
+                                       status=status,
+                                       status_description=status_description,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    def member_destroyed(self, member_id):
         return self.call(
             self.context,
-            self.make_msg('plug_vip_port', port_id=port_id, host=self.host),
+            self.make_msg('member_destroyed', member_id=member_id,
+                          host=self.host),
             topic=self.topic
         )
 
-    def unplug_vip_port(self, port_id):
+    def update_health_monitor_status(self, health_monitor_id=None,
+                           status=None, status_description=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'update_health_monitor_status',
+                                       health_monitor_id=health_monitor_id,
+                                       status=status,
+                                       status_description=status_description,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    def health_monitor_destroyed(self, health_monitor_id=None,
+                                 pool_id=None):
         return self.call(
             self.context,
-            self.make_msg('unplug_vip_port', port_id=port_id, host=self.host),
+            self.make_msg('health_monitor_destroyed',
+                          health_monitor_id=health_monitor_id, host=self.host),
             topic=self.topic
         )
 

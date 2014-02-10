@@ -21,6 +21,7 @@ import weakref
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants
+from neutron.plugins.common import constants as plugin_const
 from neutron import context
 from neutron.openstack.common import importutils
 from neutron.common import log
@@ -149,6 +150,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
         self.context = context.get_admin_context_without_session()
         self._setup_rpc()
+        # add the reference to the rpc callbacks
+        # to allow the driver to allocate ports
+        # and fixed_ips in neutron.
+        self.driver.plugin_rpc = self.plugin_rpc
         self.needs_resync = False
         self.cache = LogicalServiceCache()
 
@@ -242,7 +247,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         if not service:
             return
         try:
-            self.driver.destroy(self.cache.get_by_pool_id(pool_id))
+            self.driver.delete_pool(self.cache.get_by_pool_id(pool_id), None)
             self.plugin_rpc.pool_destroyed(pool_id)
         except Exception:
             LOG.exception(_('Unable to destroy service for pool: %s'), pool_id)
@@ -265,57 +270,168 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     def create_vip(self, context, vip, network):
         """Handle RPC cast from plugin to create_vip"""
-        self.driver.create_vip(vip, network)
+        try:
+            if self.driver.create_vip(vip, network):
+                self.plugin_rpc.update_vip_status(vip['id'],
+                                                  plugin_const.ACTIVE,
+                                                  'VIP created')
+        except Exception as e:
+            message = 'could not create VIP:' + e.message
+            self.plugin_rpc.update_vip_status(vip['id'],
+                                              plugin_const.ERROR,
+                                              plugin=message)
 
     def update_vip(self, context, old_vip, vip, old_network, network):
         """Handle RPC cast from plugin to update_vip"""
-        self.driver.update_vip(old_vip, vip, old_network, network)
+        try:
+            if self.driver.update_vip(old_vip, vip, old_network, network):
+                # TODO: jgruber - check vip admin_status to change status
+                self.plugin_rpc.update_vip_status(vip['id'],
+                                                  plugin_const.ACTIVE,
+                                                  'VIP updated successfully')
+        except Exception as e:
+            message = 'could not update VIP: ' + e.message
+            self.plugin_rpc.update_vip_status(vip['id'],
+                                              plugin_const.ERROR,
+                                              plugin=message)
 
     def delete_vip(self, context, vip, network):
         """Handle RPC cast from plugin to delete_vip"""
-        self.driver.delete_vip(vip, network)
+        try:
+            if self.driver.delete_vip(vip, network):
+                self.plugin_rpc.vip_destroyed(vip['id'])
+        except Exception as e:
+            message = 'could not delete VIP:' + e.message
+            self.plugin_rpc.update_vip_status(vip['id'],
+                                              plugin_const.ERROR,
+                                              plugin=message)
 
     def create_pool(self, context, pool, network):
         """Handle RPC cast from plugin to create_pool"""
-        self.driver.create_pool(pool, network)
+        try:
+            if self.driver.create_pool(pool, network):
+                self.plugin_rpc.update_pool_status(pool['id'],
+                                                  plugin_const.ACTIVE,
+                                                  plugin='pool created')
+        except Exception as e:
+            message = 'could not create pool:' + e.message
+            self.plugin_rpc.update_pool_status(pool['id'],
+                                               plugin_const.ERROR,
+                                               plugin=message)
 
     def update_pool(self, context, old_pool, pool, old_network, network):
         """Handle RPC cast from plugin to update_pool"""
-        self.driver.update_pool(old_pool, pool, old_network, network)
+        try:
+            if self.driver.update_pool(old_pool, pool, old_network, network):
+                # TODO: check admin state
+                self.plugin_rpc.update_pool_status(pool['id'],
+                                                  plugin_const.ACTIVE,
+                                                  plugin='pool updated')
+        except Exception as e:
+            message = 'could not update pool:' + e.message
+            self.plugin_rpc.update_pool_status(old_pool['id'],
+                                               plugin_const.ERROR,
+                                               plugin=message)
 
     def delete_pool(self, context, pool, network):
         """Handle RPC cast from plugin to delete_pool"""
-        self.driver.delete_pool(pool, network)
+        try:
+            if self.driver.delete_pool(pool, network):
+                self.plugin_rpc.pool_destroyed(pool['id'])
+        except Exception as e:
+            message = 'could not delete pool:' + e.message
+            self.plugin_rpc.update_pool_status(pool['id'],
+                                              plugin_const.ERROR,
+                                              plugin=message)
 
     def create_member(self, context, member, network):
         """Handle RPC cast from plugin to create_member"""
-        self.driver.create_member(member, network)
+        try:
+            if self.driver.create_member(member, network):
+                self.plugin_rpc.update_member_status(member['id'],
+                                                     plugin_const.ACTIVE,
+                                                     plugin='member created')
+        except Exception as e:
+            message = 'could not create member:' + e.message
+            self.plugin_rpc.update_member_status(member['id'],
+                                               plugin_const.ERROR,
+                                               plugin=message)
 
     def update_member(self, context, old_member, member, old_network, network):
         """Handle RPC cast from plugin to update_member"""
-        self.driver.update_member(old_member, member, old_network, network)
+        try:
+            if self.driver.update_member(old_member, member,
+                                         old_network, network):
+                # TODO: check admin state
+                self.plugin_rpc.update_member_status(member['id'],
+                                                     plugin_const.ACTIVE,
+                                                     plugin='member updated')
+        except Exception as e:
+            message = 'could not update member:' + e.message
+            self.plugin_rpc.update_member_status(old_member['id'],
+                                               plugin_const.ERROR,
+                                               plugin=message)
 
     def delete_member(self, context, member, network):
         """Handle RPC cast from plugin to delete_member"""
-        self.driver.delete_member(member, network)
+        try:
+            if self.driver.delete_member(member, network):
+                self.plugin_rpc.member_destroyed(member['id'])
+        except Exception as e:
+            message = 'could not delete member:' + e.message
+            self.plugin_rpc.update_member_status(member['id'],
+                                               plugin_const.ERROR,
+                                               plugin=message)
 
     def create_pool_health_monitor(self, context, health_monitor,
                                    pool, network):
         """Handle RPC cast from plugin to create_pool_health_monitor"""
-        self.driver.create_pool_health_monitor(health_monitor,
-                                               pool, network)
+        try:
+            if self.driver.create_pool_health_monitor(health_monitor,
+                                               pool, network):
+                self.plugin_rpc.update_health_monitor_status(
+                                               health_monitor['id'],
+                                               plugin_const.ACTIVE,
+                                               'health monitor created.')
+        except Exception as e:
+            message = 'could not create health monitor:' + e.message
+            self.plugin_rpc.update_health_monitor_status(
+                                               health_monitor['id'],
+                                               plugin_const.ERROR,
+                                               plugin=message)
 
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool, network):
         """Handle RPC cast from plugin to update_health_monitor"""
-        self.driver.update_health_monitor(old_health_monitor, health_monitor,
-                                          pool, network)
+        try:
+            if self.driver.update_health_monitor(old_health_monitor,
+                                                 health_monitor,
+                                                 pool, network):
+                #TODO: check admin state
+                self.plugin_rpc.update_health_monitor_status(
+                                                health_monitor['id'],
+                                                plugin_const.ACTIVE,
+                                                'updated health monitor')
+        except Exception as e:
+            message = 'could not update health monitor:' + e.message
+            self.plugin_rpc.update_health_monitor_status(
+                                                    old_health_monitor['id'],
+                                                    plugin_const.ERROR,
+                                                    plugin=message)
 
     def delete_pool_health_monitor(self, context, health_monitor,
                                    pool, network):
         """Handle RPC cast from plugin to delete_pool_health_monitor"""
-        self.driver.delete_pool_health_monitor(health_monitor,
-                                               pool, network)
+        try:
+            if self.driver.delete_pool_health_monitor(health_monitor,
+                                                      pool, network):
+                self.plugin_rpc.health_monitor_destroyed(health_monitor['id'],
+                                                         pool['id'])
+        except Exception as e:
+            message = 'could not delete health monitor:' + e.message
+            self.plugin_rpc.update_health_monitor_status(health_monitor['id'],
+                                                         plugin_const.ERROR,
+                                                         plugin=message)
 
     @log.log
     def agent_updated(self, context, payload):

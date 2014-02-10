@@ -2,8 +2,7 @@ from oslo.config import cfg
 from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
-#from neutron.services.loadbalancer.drivers.f5.bigip import constants
-#from neutron.services.loadbalancer.drivers.f5.bigip import exceptions
+from neutron.services.loadbalancer import constants as lb_const
 from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
@@ -75,15 +74,15 @@ class iControlDriver(object):
 
     @log.log
     def create_vip(self, vip, network):
-        pass
+        return True
 
     @log.log
     def update_vip(self, old_vip, vip, old_network, network):
-        pass
+        return True
 
     @log.log
     def delete_vip(self, vip, network):
-        pass
+        return True
 
     @log.log
     def create_pool(self, pool, network):
@@ -102,44 +101,57 @@ class iControlDriver(object):
         #            % (l2_type, constants.VALID_L2_TYPES))
         #if l2_type == 'local':
         #    if self.bigip.vlan.exists(l2_name):
-        pass
+        return True
 
     @log.log
     def update_pool(self, old_pool, pool, old_network, network):
-        pass
+        return True
 
     @log.log
     def delete_pool(self, pool, network):
-        pass
+        # WARNIG network might be NONE if
+        # pool deleted by periodic task
+        return True
 
     @log.log
     def create_member(self, member, network):
-        pass
+        return True
 
     @log.log
     def update_member(self, old_member, member, old_network, network):
-        pass
+        return True
 
     @log.log
     def delete_member(self, member, network):
-        pass
+        return True
 
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, network):
-        pass
+        return True
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool, network):
-        pass
+        return True
 
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, network):
-        pass
+        return True
 
     @log.log
     def get_stats(self, pool):
-        return None
+        bytecount = 0
+        connections = 0
+        stats = {}
+        stats[lb_const.STATS_IN_BYTES] = bytecount,
+        stats[lb_const.STATS_OUT_BYTES] = bytecount * 5
+        stats[lb_const.STATS_ACTIVE_CONNECTIONS] = connections
+        stats[lb_const.STATS_TOTAL_CONNECTIONS] = connections * 10
+        if len(self.members):
+            for member in self.members:
+                member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
+        stats['members'] = self.members
+        return stats
 
     @log.log
     def remove_orphans(self, known_pool_ids):
