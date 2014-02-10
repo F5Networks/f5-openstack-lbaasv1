@@ -49,12 +49,7 @@ OPTS = [
                         '.drivers.f5.agent_scheduler'
                         '.TenantScheduler'),
                help=_('Driver to use for scheduling '
-                      'pool to a default loadbalancer agent')),
-    cfg.StrOpt('f5_loadbalancer_min_snat_addresses',
-               default=1,
-               help=_('How many SNAT addresses should'
-                      'the loadbalancer allocate per'
-                      'pool subnet.'))
+                      'pool to a default loadbalancer agent'))
 ]
 
 cfg.CONF.register_opts(OPTS)
