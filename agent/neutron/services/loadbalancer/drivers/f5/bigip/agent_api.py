@@ -70,7 +70,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
-    def delete_port(self, port_id=None, mac_address):
+    def delete_port(self, port_id=None, mac_address=None):
         return self.call(
                          self.context,
                          self.make_msg(
