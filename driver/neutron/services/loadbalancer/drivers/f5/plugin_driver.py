@@ -25,7 +25,7 @@ from neutron.common import constants as q_const
 from neutron.common import exceptions as q_exc
 from neutron.common import rpc as q_rpc
 from neutron.db import agents_db
-from neutron.db.loadbalancer import loadbalancer_db
+from neutron.db.loadbalancer import loadbalancer_db as ldb
 from neutron.extensions import lbaas_agentscheduler
 from neutron.openstack.common import importutils
 from neutron.common import log
@@ -47,9 +47,9 @@ ACTIVE_PENDING = (
 
 OPTS = [
     cfg.StrOpt('f5_loadbalancer_pool_scheduler_driver',
-               default=('neutron.services.loadbalancer'
-                       '.drivers.f5.agent_scheduler'
-                       '.TenantScheduler'),
+               default=('import neutron.services.loadbalancer'
+                        '.drivers.f5.agent_scheduler'
+                        '.TenantScheduler'),
                help=_('Driver to use for scheduling '
                       'pool to a default loadbalancer agent')),
     cfg.StrOpt('f5_loadbalancer_min_snat_addresses',
@@ -83,13 +83,13 @@ class LoadBalancerCallbacks(object):
     @log.log
     def get_ready_services(self, context, tenant_ids=None):
         with context.session.begin(subtransactions=True):
-            qry = (context.session.query(loadbalancer_db.Pool.id).
-                   join(loadbalancer_db.Vip))
-            qry = qry.filter(loadbalancer_db.Vip.status.in_(ACTIVE_PENDING))
-            qry = qry.filter(loadbalancer_db.Pool.status.in_(ACTIVE_PENDING))
+            qry = (context.session.query(ldb.Pool.id).
+                   join(ldb.Vip))
+            qry = qry.filter(ldb.Vip.status.in_(ACTIVE_PENDING))
+            qry = qry.filter(ldb.Pool.status.in_(ACTIVE_PENDING))
             up = True  # makes pep8 and sqlalchemy happy
-            qry = qry.filter(loadbalancer_db.Vip.admin_state_up == up)
-            qry = qry.filter(loadbalancer_db.Pool.admin_state_up == up)
+            qry = qry.filter(ldb.Vip.admin_state_up == up)
+            qry = qry.filter(ldb.Pool.admin_state_up == up)
             agents = self.plugin.get_lbaas_agents(context)
             if not agents:
                 return []
@@ -112,7 +112,7 @@ class LoadBalancerCallbacks(object):
                         return pool_ids
 
             if len(pool_ids) > 0:
-                qry = qry.filter(loadbalancer_db.Pool.id.in_(pool_ids))
+                qry = qry.filter(ldb.Pool.id.in_(pool_ids))
                 return [pool_id for pool_id, in qry]
             else:
                 return []
@@ -121,7 +121,7 @@ class LoadBalancerCallbacks(object):
     def get_logical_service(self, context, pool_id=None, activate=True,
                            **kwargs):
         with context.session.begin(subtransactions=True):
-            qry = context.session.query(loadbalancer_db.Pool)
+            qry = context.session.query(ldb.Pool)
             qry = qry.filter_by(id=pool_id)
             pool = qry.one()
             LOG.debug(_('setting logical_service entry for %s' % pool))
@@ -187,73 +187,75 @@ class LoadBalancerCallbacks(object):
             return retval
 
     @log.log
+    def update_vip_status(self, context, vip_id=None,
+                           status=constants.ERROR, status_description=None,
+                           host=None):
+        """Agent confirmation hook to update VIP status."""
+        self.plugin.update_status(context,
+                                  ldb.Vip,
+                                  vip_id,
+                                  status,
+                                  status_description)
+
+    @log.log
+    def vip_destroyed(self, context, vip_id=None, host=None):
+        """Agent confirmation hook that a pool has been destroyed."""
+        # delete the vip from the data model
+        self.plugin._delete_db_vip(context, vip_id)
+
+    @log.log
+    def update_pool_status(self, context, pool_id=None,
+                           status=constants.ERROR, status_description=None,
+                           host=None):
+        """Agent confirmation hook to update pool status."""
+        self.plugin.update_status(context,
+                                  ldb.Pool,
+                                  pool_id,
+                                  status,
+                                  status_description)
+
+    @log.log
     def pool_destroyed(self, context, pool_id=None, host=None):
-        """Agent confirmation hook that a pool has been destroyed.
-
-        This method exists for subclasses to change the deletion
-        behavior.
-        """
-        # TODO: jgruber - 01-29-2014 data model validation.
-        pass
+        """Agent confirmation hook that a pool has been destroyed."""
+        # delete the pool from the data model
+        self.plugin._delete_db_pool(context, pool_id)
 
     @log.log
-    def plug_vip_port(self, context, port_id=None, host=None):
-        """Agent confirmation hook that vip has been provisioned."""
-        if not port_id:
-            return
-
-        try:
-            port = self.plugin._core_plugin.get_port(
-                context,
-                port_id
-            )
-        except q_exc.PortNotFound:
-            msg = _('Unable to find port %s to plug.')
-            LOG.debug(msg, port_id)
-            return
-
-        port['admin_state_up'] = True
-        port['device_owner'] = 'neutron:' + constants.LOADBALANCER
-        port['device_id'] = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(host)))
-
-        self.plugin._core_plugin.update_port(
-            context,
-            port_id,
-            {'port': port}
-        )
+    def update_member_status(self, context, member_id=None,
+                           status=constants.ERROR, status_description=None,
+                           host=None):
+        """Agent confirmation hook to update member status."""
+        self.plugin.update_status(context,
+                                  ldb.Member,
+                                  member_id,
+                                  status,
+                                  status_description)
 
     @log.log
-    def unplug_vip_port(self, context, port_id=None, host=None):
-        """"Agent confirmation that a vip has been deprovisioned"""
-        if not port_id:
-            return
+    def member_destroyed(self, context, member_id=None, host=None):
+        """Agent confirmation hook that a member has been destroyed."""
+        # delete the pool member from the data model
+        self.plugin._delete_db_member(context, member_id)
 
-        try:
-            port = self.plugin._core_plugin.get_port(
-                context,
-                port_id
-            )
-        except q_exc.PortNotFound:
-            msg = _('Unable to find port %s to unplug.  This can occur when '
-                    'the Vip has been deleted first.')
-            LOG.debug(msg, port_id)
-            return
+    @log.log
+    def update_health_monitor_status(self, context, health_monitor_id=None,
+                           status=constants.ERROR, status_description=None,
+                           host=None):
+        """Agent confirmation hook to update healthmonitor status."""
+        self.plugin.update_status(context,
+                                  ldb.HealthMonitor,
+                                  health_monitor_id,
+                                  status,
+                                  status_description)
 
-        port['admin_state_up'] = False
-        port['device_owner'] = ''
-        port['device_id'] = ''
-
-        try:
-            self.plugin._core_plugin.update_port(
-                context,
-                port_id,
-                {'port': port}
-            )
-
-        except q_exc.PortNotFound:
-            msg = _('Unable to find port %s to unplug.  This can occur when '
-                    'the Vip has been deleted first.')
-            LOG.debug(msg, port_id)
+    @log.log
+    def health_monitor_destroyed(self, context, health_monitor_id=None,
+                                 pool_id=None, host=None):
+        """Agent confirmation hook that a health has been destroyed."""
+        # delete the health monitor from the data model
+        self.plugin._delete_db_pool_health_monitor(context,
+                                                   health_monitor_id,
+                                                   pool_id)
 
     @log.log
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
@@ -515,9 +517,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_vip(context, vip, network, agent['host'])
 
-        # delete the vip from the data model
-        self.plugin._delete_db_vip(context, vip['id'])
-
     @log.log
     def create_pool(self, context, pool):
         # which agent should handle provisioning
@@ -564,9 +563,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool)
-
-        # delete the pool from the data model
-        self.plugin._delete_db_pool(context, pool['id'])
 
         # see if there are any other pools on this subnet
         existing_pools = self._get_pools(context, pool['tenant_id'],
@@ -633,9 +629,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         self.agent_rpc.delete_member(context, member,
                                      network, agent['host'])
 
-        # delete the pool member from the data model
-        self.plugin._delete_db_member(context, member['id'])
-
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
         # which agent should handle provisioning
@@ -687,11 +680,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         self.agent_rpc.delete_pool_health_monitor(context, health_monitor,
                                                   pool_dict, network,
                                                   agent['host'])
-
-        # delete the health monitor from the data model
-        self.plugin._delete_db_pool_health_monitor(context,
-                                                   health_monitor['id'],
-                                                   pool_id)
 
     @log.log
     def stats(self, context, pool_id):
