@@ -322,7 +322,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             if self.driver.create_pool(pool, network):
                 self.plugin_rpc.update_pool_status(pool['id'],
-                                                  plugin_const.ACTIVE,
+                                                   plugin_const.ACTIVE,
                                                   'pool created')
                 self.refresh_service(pool['id'])
         except Exception as e:

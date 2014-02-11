@@ -56,17 +56,15 @@ cfg.CONF.register_opts(OPTS)
 
 # topic name for this particular agent implementation
 TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
-TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_host_agent'
-
-SNAT_PORT_NAME = 'lb-snat-'
+TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'
 
 
 class LoadBalancerCallbacks(object):
-    """Callback made by the agent to update the data model."""
+    """Callbacks made by the agent to update the data model."""
     RPC_API_VERSION = '1.0'
 
     def __init__(self, plugin):
-        LOG.debug('LoadBalancerCallbacks RPC subscriber called')
+        LOG.debug('LoadBalancerCallbacks RPC subscriber initialized')
         self.plugin = plugin
 
     def create_rpc_dispatcher(self):
@@ -111,7 +109,8 @@ class LoadBalancerCallbacks(object):
                 return []
 
     @log.log
-    def get_logical_service(self, context, pool_id=None, activate=True,
+    def get_logical_service(self, context, pool_id=None,
+                            activate=True, host=None,
                            **kwargs):
         with context.session.begin(subtransactions=True):
             qry = context.session.query(ldb.Pool)
@@ -141,13 +140,12 @@ class LoadBalancerCallbacks(object):
             subnet_dict = self.plugin._core_plugin.get_subnet(context,
                                             retval['pool']['subnet_id'])
             retval['pool']['subnet'] = subnet_dict
-            snat_subnet_id = retval['pool']['subnet_id']
-            snat_filters = {'network_id': [subnet_dict['network_id']],
+            pool_fixed_ip_filters = {'network_id': [subnet_dict['network_id']],
                              'tenant_id': [subnet_dict['tenant_id']],
-                             'name': [SNAT_PORT_NAME + snat_subnet_id]}
-            snats_dict = self.plugin._core_plugin.get_ports(context,
-                                                    filters=snat_filters)
-            retval['snats'] = snats_dict
+                             'device_id': [host]}
+            pool_fixed_ip_dict = self.plugin._core_plugin.get_ports(context,
+                                                filters=pool_fixed_ip_filters)
+            retval['pool_fixed_ips'] = pool_fixed_ip_dict
             if pool.vip:
                 retval['vip'] = self.plugin._make_vip_dict(pool.vip)
                 retval['vip']['port'] = (
@@ -159,10 +157,18 @@ class LoadBalancerCallbacks(object):
                         fixed_ip['subnet_id']
                     )
                     fixed_ip['subnet'] = vip_subnet_dict
+                vip_fixed_ip_filters = {'network_id':
+                                         [vip_subnet_dict['network_id']],
+                             'tenant_id': [vip_subnet_dict['tenant_id']],
+                             'device_id': [host]}
+                vip_fixed_ip_dict = self.plugin._core_plugin.get_ports(context,
+                                                  filters=vip_fixed_ip_filters)
+                retval['vip_fixed_ips'] = vip_fixed_ip_dict
             else:
                 retval['vip'] = {}
                 retval['vip']['port'] = {}
                 retval['vip']['port']['subnet'] = {}
+                retval['vip_fixed_ips'] = []
             retval['members'] = [
                 self.plugin._make_member_dict(m)
                 for m in pool.members if m.status in (constants.ACTIVE,
@@ -197,7 +203,7 @@ class LoadBalancerCallbacks(object):
             if not host:
                 host = ''
             if not name:
-                name = SNAT_PORT_NAME
+                name = ''
             port_data = {
                 'tenant_id': subnet['tenant_id'],
                 'name': name,

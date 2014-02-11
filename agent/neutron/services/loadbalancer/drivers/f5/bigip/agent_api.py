@@ -170,7 +170,7 @@ class LbaasAgentApi(proxy.RpcProxy):
         return self.call(
                          self.context,
                          self.make_msg(
-                                       'update_vip_status',
+                                       'update_member_status',
                                        member_id=member_id,
                                        status=status,
                                        status_description=status_description,
