@@ -153,11 +153,20 @@ class iControlDriver(object):
         stats[lb_const.STATS_ACTIVE_CONNECTIONS] = connections
         stats[lb_const.STATS_TOTAL_CONNECTIONS] = connections * 10
 
+        #example
+        # stats['members'] = {'members':
+        #                     {
+        #                      member['uuid']:{'status':member['status']},
+        #                      member['uuid']:{'status': member['status']}
+        #                     }          }
+        #                    }
+
         # need to get members for this pool and update their status
+        members = {'members': {}}
         if hasattr(logical_service, 'members'):
             for member in logical_service['members']:
-                member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
-        stats['members'] = logical_service['members']
+                members['members'][member['uuid']:{'status':member['status']}]
+        stats['members'] = members
         return stats
 
     @log.log
