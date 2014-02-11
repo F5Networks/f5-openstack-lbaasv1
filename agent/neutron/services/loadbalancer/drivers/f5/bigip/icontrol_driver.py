@@ -49,6 +49,10 @@ class iControlDriver(object):
         self.username = self.conf.icontrol_username
         self.password = self.conf.icontrol_password
 
+        LOG.debug(_('opening iControl connection to %s @ %s' % (self.username,
+                                                                self.hostname)
+                    ))
+
         self.bigip = bigip.BigIP(self.hostname, self.username, self.password)
 
         # device validate
