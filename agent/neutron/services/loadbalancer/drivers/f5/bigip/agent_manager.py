@@ -299,7 +299,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 # TODO: jgruber - check vip admin_status to change status
                 self.plugin_rpc.update_vip_status(vip['id'],
                                                   plugin_const.ACTIVE,
-                                                  'VIP updated successfully')
+                                                  'VIP updated')
         except Exception as e:
             message = 'could not update VIP: ' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
@@ -323,7 +323,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if self.driver.create_pool(pool, network):
                 self.plugin_rpc.update_pool_status(pool['id'],
                                                   plugin_const.ACTIVE,
-                                                  plugin='pool created')
+                                                  'pool created')
                 self.refresh_service(pool['id'])
         except Exception as e:
             message = 'could not create pool:' + e.message
