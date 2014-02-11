@@ -90,21 +90,20 @@ class iControlDriver(object):
 
     @log.log
     def create_pool(self, pool, network):
-        #pool_id = pool['id']
-        #pool_name = pool['name']
-        #pool_tenant_id = pool['tenant_id']
-
-        #l2_tenant_id = network['tenant_id']
-        #l2_type = network['network_type']
-        #l2_segmentation_id = network['segmentation_id']
-        #l2_name = network['name']
-
-        #if not l2_type in constants.VALID_L2_TYPES:
-        #    raise exceptions.InvalidNetworkType(
-        #            'network type was %s, must be in %s'
-        #            % (l2_type, constants.VALID_L2_TYPES))
-        #if l2_type == 'local':
-        #    if self.bigip.vlan.exists(l2_name):
+        #pool_name = 'p_' + pool['id']
+        #folder = 't_' + pool['tenant_id']
+        #if not pool['description']:
+        #    pool['description'] = ''
+        #if not self.bigip.pool.exists(pool_name=pool_name, folder=folder):
+        #    self.bigip.pool.create(
+        #                            name=pool_name,
+        #                            lb_method=pool['lb_method'],
+        #                            description=pool['description'],
+        #                            folder=folder
+        #                      )
+        #if len(pool['members']) > 0:
+        #    pass
+            # setup network
         return True
 
     @log.log
@@ -134,7 +133,7 @@ class iControlDriver(object):
         return True
 
     @log.log
-    def update_health_monitor(self, context, old_health_monitor,
+    def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, network):
         return True
 

@@ -362,15 +362,15 @@ class LoadBalancerCallbacks(object):
         self.plugin._delete_db_member(context, member_id)
 
     @log.log
-    def update_health_monitor_status(self, context, health_monitor_id=None,
-                           status=constants.ERROR, status_description=None,
-                           host=None):
+    def update_health_monitor_status(self, context, pool_id=None,
+                                     health_monitor_id=None,
+                                     status=constants.ERROR,
+                                     status_description=None,
+                                     host=None):
         """Agent confirmation hook to update healthmonitor status."""
-        self.plugin.update_status(context,
-                                  ldb.HealthMonitor,
-                                  health_monitor_id,
-                                  status,
-                                  status_description)
+        self.plugin.update_pool_health_monitor(self, context,
+                                               health_monitor_id, pool_id,
+                                               status, status_description=None)
 
     @log.log
     def health_monitor_destroyed(self, context, health_monitor_id=None,

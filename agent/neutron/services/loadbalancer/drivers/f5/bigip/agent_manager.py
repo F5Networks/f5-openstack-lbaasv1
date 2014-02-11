@@ -217,7 +217,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                          tenant_ids=self.cache.get_tenant_ids()
                                                                             )
                                          )
-
+            LOG.debug(_('plugin produced the list of active services %s'
+                        % ready_logical_services))
+            LOG.debug(_('currently known services are: %s' % known_services))
             for deleted_id in known_services - ready_logical_services:
                 self.destroy_service(deleted_id)
 
@@ -402,12 +404,14 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if self.driver.create_pool_health_monitor(health_monitor,
                                                pool, network):
                 self.plugin_rpc.update_health_monitor_status(
+                                               pool['id'],
                                                health_monitor['id'],
                                                plugin_const.ACTIVE,
                                                'health monitor created.')
         except Exception as e:
             message = 'could not create health monitor:' + e.message
             self.plugin_rpc.update_health_monitor_status(
+                                               pool['id'],
                                                health_monitor['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -421,12 +425,14 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                  pool, network):
                 #TODO: check admin state
                 self.plugin_rpc.update_health_monitor_status(
+                                                pool['id'],
                                                 health_monitor['id'],
                                                 plugin_const.ACTIVE,
                                                 'updated health monitor')
         except Exception as e:
             message = 'could not update health monitor:' + e.message
             self.plugin_rpc.update_health_monitor_status(
+                                                    pool['id'],
                                                     old_health_monitor['id'],
                                                     plugin_const.ERROR,
                                                     message)
@@ -441,7 +447,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                          pool['id'])
         except Exception as e:
             message = 'could not delete health monitor:' + e.message
-            self.plugin_rpc.update_health_monitor_status(health_monitor['id'],
+            self.plugin_rpc.update_health_monitor_status(pool['id'],
+                                                         health_monitor['id'],
                                                          plugin_const.ERROR,
                                                          message)
 

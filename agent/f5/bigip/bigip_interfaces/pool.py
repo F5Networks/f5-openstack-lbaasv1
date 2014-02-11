@@ -15,7 +15,8 @@ class Pool(object):
         self.lb_pool = self.bigip.icontrol.LocalLB.Pool
 
     @icontrol_folder
-    def create(self, name=None, lb_method=None, folder='/Common'):
+    def create(self, name=None, lb_method=None,
+               description=None, folder='/Common'):
         # pool definition
         pool_names = [name]
         lb_methods = [self._get_lb_method_type(lb_method)]
@@ -24,6 +25,8 @@ class Pool(object):
                                            'Common.AddressPortSequence')
         pool_members_seq = [addr_port_seq]
         self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
+        if description:
+            self.lb_pool.set_description([pool_names], [description])
 
     @icontrol_folder
     def delete(self, name=None, folder='/Common'):

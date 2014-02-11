@@ -189,12 +189,15 @@ class LbaasAgentApi(proxy.RpcProxy):
         )
 
     @log.log
-    def update_health_monitor_status(self, health_monitor_id=None,
-                           status=None, status_description=None):
+    def update_health_monitor_status(self, pool_id=None,
+                                     health_monitor_id=None,
+                                     status=None,
+                                     status_description=None):
         return self.call(
                          self.context,
                          self.make_msg(
                                        'update_health_monitor_status',
+                                       pool_id=pool_id,
                                        health_monitor_id=health_monitor_id,
                                        status=status,
                                        status_description=status_description,
@@ -209,7 +212,9 @@ class LbaasAgentApi(proxy.RpcProxy):
         return self.call(
             self.context,
             self.make_msg('health_monitor_destroyed',
-                          health_monitor_id=health_monitor_id, host=self.host),
+                          health_monitor_id=health_monitor_id,
+                          pool_id=pool_id,
+                          host=self.host),
             topic=self.topic
         )
 
