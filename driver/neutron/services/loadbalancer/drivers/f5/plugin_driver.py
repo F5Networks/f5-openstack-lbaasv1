@@ -609,6 +609,8 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, vip['pool_id'])
 
+        vip['pool'] = self._get_pool(context, vip['pool_id'])
+
         # populate a network structure for the rpc message
         network = self._get_vip_network(context, vip, agent)
 
@@ -619,6 +621,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     def update_vip(self, context, old_vip, vip):
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, vip['pool_id'])
+
+        old_vip['pool'] = self._get_pool(context, old_vip['pool_id'])
+
+        vip['pool'] = self._get_pool(context, vip['pool_id'])
 
         # populate a 'was' network structure for the rpc message
         old_network = self._get_vip_network(context, old_vip, agent)
@@ -635,6 +641,8 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, vip['pool_id'])
 
+        vip['pool'] = self._get_pool(context, vip['pool_id'])
+
         # populate a network structure for the rpc message
         network = self._get_vip_network(context, vip, agent)
 
@@ -648,6 +656,19 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         if not agent:
             raise lbaas_agentscheduler.NoEligibleLbaasAgent(pool_id=pool['id'])
 
+        # populate members and monitors
+        for i in range(len(pool['members'])):
+            member_id = pool['members'][i]
+            pool['members'][i] = self.plugin.get_member(context, member_id)
+        for i in range(len(pool['health_monitors'])):
+            monitor_id = pool['health_monitors'][i]
+            pool['health_monitors'][i] = self.plugin.get_health_monitor(
+                                                     context, monitor_id)
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
+
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
 
@@ -659,11 +680,39 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool['id'])
 
+        # populate members and monitors
+        for i in range(len(pool['members'])):
+            member_id = pool['members'][i]
+            pool['members'][i] = self.plugin.get_member(context, member_id)
+        for i in range(len(pool['health_monitors'])):
+            monitor_id = pool['health_monitors'][i]
+            pool['health_monitors'][i] = self.plugin.get_health_monitor(
+                                                     context, monitor_id)
+
+        # populate members and monitors for old_pool
+        for i in range(len(old_pool['members'])):
+            member_id = old_pool['members'][i]
+            old_pool['members'][i] = self.plugin.get_member(context, member_id)
+        for i in range(len(old_pool['health_monitors'])):
+            monitor_id = old_pool['health_monitors'][i]
+            old_pool['health_monitors'][i] = self.plugin.get_health_monitor(
+                                                     context, monitor_id)
+
+        if 'vip_id' in old_pool and old_pool['vip_id']:
+            old_pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            old_pool['vip'] = None
+
         # populate a 'was' network structure for the rpc message
         old_network = self._get_pool_network(context, old_pool, agent)
 
         # populate a 'to be' network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
 
         if pool['subnet_id'] != old_pool['subnet_id']:
             # see if there are pools on this subnet
@@ -671,9 +720,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                                              pool['subnet_id'])
             if not existing_pools:
                 # signal the agent to remove a snat pool
-                # if no pools exist anymore in the data model
-                self._remove_snat(context, pool['tenant_id'],
-                                  pool['subnet_id'])
                 old_network['remove_snat_pool'] = pool['subnet_id']
 
         # call the RPC proxy with the constructed message
@@ -685,6 +731,20 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool['id'])
 
+        # populate members and monitors
+        for i in range(len(pool['members'])):
+            member_id = pool['members'][i]
+            pool['members'][i] = self.plugin.get_member(context, member_id)
+        for i in range(len(pool['health_monitors'])):
+            monitor_id = pool['health_monitors'][i]
+            pool['health_monitors'][i] = self.plugin.get_health_monitor(
+                                                     context, monitor_id)
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
+
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
 
@@ -693,9 +753,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                                              pool['subnet_id'])
         if not existing_pools:
             # signal the agent to remove a snat pool
-            # if no pools exist anymore in the data model
-            self._remove_snat(context, pool['tenant_id'],
-                              pool['subnet_id'])
             network['remove_snat_pool'] = pool['subnet_id']
 
         # call the RPC proxy with the constructed message
@@ -707,8 +764,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, member['pool_id'])
 
         # populate a pool structure for the rpc message
-        pool = self.plugin.get_pool(context, member['pool_id'])
+        pool = self._get_pool(context, member['pool_id'])
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
+
         member['pool'] = pool
+
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
 
@@ -721,11 +785,22 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, member['pool_id'])
 
         # populate a 'was' pool structure for the rpc message
-        old_pool = self.plugin.get_pool(context, old_member['pool_id'])
+        old_pool = self._get_pool(context, old_member['pool_id'])
+
+        if 'vip_id' in old_pool and old_pool['vip_id']:
+            old_pool['vip'] = self._get_vip(context, old_pool['vip_id'])
+        else:
+            old_pool['vip'] = None
         old_member['pool'] = old_pool
 
         # populate a 'to be' pool structure for the rpc message
-        pool = self.plugin.get_pool(context, member['pool_id'])
+        pool = self._get_pool(context, member['pool_id'])
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
+
         member['pool'] = pool
 
         # populate a 'was' network structure for the rpc message
@@ -743,7 +818,13 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, member['pool_id'])
 
         # populate a pool structure for the rpc message
-        pool = self.plugin.get_pool(context, member['pool_id'])
+        pool = self._get_pool(context, member['pool_id'])
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
+
         member['pool'] = pool
 
         # populate a network structure for the rpc message
@@ -759,15 +840,19 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool_id)
 
         # populate a pool strucutre for the rpc message
-        pool = self.plugin.get_pool(context, pool_id)
-        pool_dict = pool
+        pool = self._get_pool(context, pool_id)
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
 
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_pool_health_monitor(context, health_monitor,
-                                                  pool_dict, network,
+                                                  pool, network,
                                                   agent['host'])
 
     @log.log
@@ -777,15 +862,19 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool_id)
 
         # populate a pool structure for the rpc message
-        pool = self.plugin.get_pool(context, pool_id)
-        pool_dict = pool
+        pool = self._get_pool(context, pool_id)
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
 
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.update_health_monitor(context, old_health_monitor,
-                                             health_monitor, pool_dict,
+                                             health_monitor, pool,
                                              network, agent['host'])
 
     @log.log
@@ -794,15 +883,19 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool_id)
 
         # populate a pool structure for the rpc message
-        pool = self.plugin.get_pool(context, pool_id)
-        pool_dict = pool
+        pool = self._get_pool(context, pool_id)
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
 
         # populate a network structure for the rpc message
         network = self._get_pool_network(context, pool, agent)
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_pool_health_monitor(context, health_monitor,
-                                                  pool_dict, network,
+                                                  pool, network,
                                                   agent['host'])
 
     @log.log
@@ -811,10 +904,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool_id)
 
         # populate a pool structure for the rpc message
-        pool_dict = self.plugin.get_pool(context, pool_id)
+        pool = self._get_pool(context, pool_id)
+
+        if 'vip_id' in pool and pool['vip_id']:
+            pool['vip'] = self._get_vip(context, pool['vip_id'])
+        else:
+            pool['vip'] = None
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.get_pool_stats(context, pool_dict, agent['host'])
+        self.agent_rpc.get_pool_stats(context, pool, agent['host'])
 
     ################################
     # utility methods for this class
@@ -872,10 +970,46 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
         return network_dict
 
+    def _get_vip(self, context, vip_id):
+        vip = self.plugin.get_vip(context, vip_id)
+        if 'port_id' in vip:
+            vip['port'] = self.plugin._core_plugin.get_port(context,
+                                                            vip['port_id'])
+        if 'subnet_id' in vip:
+            vip['subnet'] = self.plugin._core_plugin.get_subnet(context,
+                                                            vip['subnet_id'])
+        vip['subnet']['network'] = \
+           self.plugin._core_plugin.get_network(context,
+                                                vip['subnet']['network_id'])
+        return vip
+
+    def _get_pool(self, context, pool_id):
+        pool = self.plugin.get_pool(context, pool_id)
+        for i in range(len(pool['members'])):
+            member_id = pool['members'][i]
+            pool['members'][i] = self.plugin.get_member(context, member_id)
+        for i in range(len(pool['health_monitors'])):
+            monitor_id = pool['health_monitors'][i]
+            pool['health_monitors'][i] = self.plugin.get_health_monitor(
+                                                     context, monitor_id)
+        if 'subnet_id' in pool:
+            pool['subnet'] = self.plugin._core_plugin.get_subnet(context,
+                                                            pool['subnet_id'])
+        pool['subnet']['network'] = \
+           self.plugin._core_plugin.get_network(context,
+                                                pool['subnet']['network_id'])
+
+        return pool
+
     def _get_pools(self, context, tenant_id, subnet_id):
         filters = {'subnet_id': [subnet_id], 'tenant_id': [tenant_id]}
         pools = self.plugin.get_pools(context, filters=filters)
         return pools
+
+    def _get_members(self, context, pool_id):
+        filters = {'pool_id': [pool_id]}
+        members = self.plugin.get_members(context, filters=filters)
+        return members
 
     def _get_pool_dict(self, pool):
         return self.plugin._make_pool_dict(pool)
@@ -890,10 +1024,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         filters = {'network_id': [subnet['network_id']],
                   'tenant_id': [tenant_id],
                   'device_id': [agent['host']]}
-        snats = self.plugin._core_plugin.get_ports(context,
+        fixed_ips = self.plugin._core_plugin.get_ports(context,
                                                         filters=filters)
-        if snats:
-            return snats
+        if fixed_ips:
+            return fixed_ips
         return None
 
     def _get_vxlan_endpoints(self, context):
