@@ -213,10 +213,10 @@ class LoadBalancerCallbacks(object):
             return port
 
     @log.log
-    def delete_port(self, context, port_id=None, mac_address):
+    def delete_port(self, context, port_id=None, mac_address=None):
         if port_id:
             self.plugin._core_plugin.delete_port(context, port_id)
-        if mac_address:
+        elif mac_address:
             filters = {'mac_address': [mac_address]}
             ports = self.plugin._core_plugin.get_ports(context,
                                                         filters=filters)

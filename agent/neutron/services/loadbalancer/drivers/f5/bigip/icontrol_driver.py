@@ -147,10 +147,11 @@ class iControlDriver(object):
         stats[lb_const.STATS_OUT_BYTES] = bytecount * 5
         stats[lb_const.STATS_ACTIVE_CONNECTIONS] = connections
         stats[lb_const.STATS_TOTAL_CONNECTIONS] = connections * 10
-        if len(pool.members):
-            for member in pool.members:
-                member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
-        stats['members'] = pool.members
+        # need to get members for this pool and update their status
+        #if len(pool.members):
+        #    for member in pool.members:
+        #        member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
+        #stats['members'] = pool.members
         return stats
 
     @log.log
