@@ -268,6 +268,17 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if pool_id:
                 self.refresh_service(pool_id)
 
+    def get_pool_stats(self, pool):
+        try:
+            stats = self.driver.get_stats(pool)
+            if stats:
+                    self.plugin_rpc.update_pool_stats(pool['id'], stats)
+        except Exception as e:
+            message = 'could not get pool stats:' + e.message
+            self.plugin_rpc.update_pool_status(pool['id'],
+                                               plugin_const.ERROR,
+                                               message)
+
     def create_vip(self, context, vip, network):
         """Handle RPC cast from plugin to create_vip"""
         try:
@@ -279,7 +290,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not create VIP:' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
                                               plugin_const.ERROR,
-                                              plugin=message)
+                                              message)
 
     def update_vip(self, context, old_vip, vip, old_network, network):
         """Handle RPC cast from plugin to update_vip"""
@@ -293,7 +304,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not update VIP: ' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
                                               plugin_const.ERROR,
-                                              plugin=message)
+                                              message)
 
     def delete_vip(self, context, vip, network):
         """Handle RPC cast from plugin to delete_vip"""
@@ -304,7 +315,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not delete VIP:' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
                                               plugin_const.ERROR,
-                                              plugin=message)
+                                              message)
 
     def create_pool(self, context, pool, network):
         """Handle RPC cast from plugin to create_pool"""
@@ -317,7 +328,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not create pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
                                                plugin_const.ERROR,
-                                               plugin=message)
+                                               message)
 
     def update_pool(self, context, old_pool, pool, old_network, network):
         """Handle RPC cast from plugin to update_pool"""
@@ -326,12 +337,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 # TODO: check admin state
                 self.plugin_rpc.update_pool_status(pool['id'],
                                                   plugin_const.ACTIVE,
-                                                  plugin='pool updated')
+                                                  'pool updated')
         except Exception as e:
             message = 'could not update pool:' + e.message
             self.plugin_rpc.update_pool_status(old_pool['id'],
                                                plugin_const.ERROR,
-                                               plugin=message)
+                                               message)
 
     def delete_pool(self, context, pool, network):
         """Handle RPC cast from plugin to delete_pool"""
@@ -342,7 +353,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not delete pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
                                               plugin_const.ERROR,
-                                              plugin=message)
+                                              message)
 
     def create_member(self, context, member, network):
         """Handle RPC cast from plugin to create_member"""
@@ -350,12 +361,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if self.driver.create_member(member, network):
                 self.plugin_rpc.update_member_status(member['id'],
                                                      plugin_const.ACTIVE,
-                                                     plugin='member created')
+                                                     'member created')
         except Exception as e:
             message = 'could not create member:' + e.message
             self.plugin_rpc.update_member_status(member['id'],
                                                plugin_const.ERROR,
-                                               plugin=message)
+                                               message)
 
     def update_member(self, context, old_member, member, old_network, network):
         """Handle RPC cast from plugin to update_member"""
@@ -365,12 +376,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 # TODO: check admin state
                 self.plugin_rpc.update_member_status(member['id'],
                                                      plugin_const.ACTIVE,
-                                                     plugin='member updated')
+                                                     'member updated')
         except Exception as e:
             message = 'could not update member:' + e.message
             self.plugin_rpc.update_member_status(old_member['id'],
                                                plugin_const.ERROR,
-                                               plugin=message)
+                                               message)
 
     def delete_member(self, context, member, network):
         """Handle RPC cast from plugin to delete_member"""
@@ -381,7 +392,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not delete member:' + e.message
             self.plugin_rpc.update_member_status(member['id'],
                                                plugin_const.ERROR,
-                                               plugin=message)
+                                               message)
 
     def create_pool_health_monitor(self, context, health_monitor,
                                    pool, network):
@@ -398,7 +409,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             self.plugin_rpc.update_health_monitor_status(
                                                health_monitor['id'],
                                                plugin_const.ERROR,
-                                               plugin=message)
+                                               message)
 
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool, network):
@@ -417,7 +428,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             self.plugin_rpc.update_health_monitor_status(
                                                     old_health_monitor['id'],
                                                     plugin_const.ERROR,
-                                                    plugin=message)
+                                                    message)
 
     def delete_pool_health_monitor(self, context, health_monitor,
                                    pool, network):
@@ -431,7 +442,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             message = 'could not delete health monitor:' + e.message
             self.plugin_rpc.update_health_monitor_status(health_monitor['id'],
                                                          plugin_const.ERROR,
-                                                         plugin=message)
+                                                         message)
 
     @log.log
     def agent_updated(self, context, payload):
