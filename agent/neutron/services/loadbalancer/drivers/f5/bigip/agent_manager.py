@@ -213,9 +213,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def sync_state(self):
         known_services = set(self.cache.get_pool_ids())
         try:
-            ready_logical_services = set(self.plugin_rpc.get_ready_services(
-                                         tenant_ids=self.cache.get_tenant_ids()
-                                                                            )
+            tenant_ids = self.cache.get_tenant_ids()
+            ready_logical_services = set(
+                                         self.plugin_rpc.get_ready_services(
+                                                                    tenant_ids)
                                          )
             LOG.debug(_('plugin produced the list of active services %s'
                         % ready_logical_services))
@@ -351,6 +352,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_pool"""
         try:
             if self.driver.delete_pool(pool, network):
+                self.destroy_service(pool['id'])
                 self.plugin_rpc.pool_destroyed(pool['id'])
         except Exception as e:
             message = 'could not delete pool:' + e.message
