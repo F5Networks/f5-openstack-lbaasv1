@@ -143,7 +143,7 @@ class iControlDriver(object):
         return True
 
     @log.log
-    def get_stats(self, pool):
+    def get_stats(self, logical_service):
 
         bytecount = 0
         connections = 0
@@ -154,10 +154,10 @@ class iControlDriver(object):
         stats[lb_const.STATS_TOTAL_CONNECTIONS] = connections * 10
 
         # need to get members for this pool and update their status
-        if hasattr(pool, 'members'):
-            for member in pool.members:
+        if hasattr(logical_service, 'members'):
+            for member in logical_service['members']:
                 member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
-        stats['members'] = pool.members
+        stats['members'] = logical_service['members']
         return stats
 
     @log.log
