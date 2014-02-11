@@ -262,6 +262,7 @@ class LoadBalancerCallbacks(object):
                     port['new_fixed_ips'].append(new_fixed_ip)
             return port
 
+    @log.log
     def deallocate_fixed_address(self, context, fixed_addresses=None,
                              subnet_id=None, host=None,
                              auto_delete_port=False):

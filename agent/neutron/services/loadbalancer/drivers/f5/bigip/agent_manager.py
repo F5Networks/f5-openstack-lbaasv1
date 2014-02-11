@@ -324,6 +324,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.plugin_rpc.update_pool_status(pool['id'],
                                                   plugin_const.ACTIVE,
                                                   plugin='pool created')
+                self.refresh_service(pool['id'])
         except Exception as e:
             message = 'could not create pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],

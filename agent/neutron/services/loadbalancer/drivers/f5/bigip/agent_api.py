@@ -17,6 +17,7 @@
 # @author: Mark McClain, DreamHost
 
 from neutron.openstack.common.rpc import proxy
+from neutron.common import log
 
 
 class LbaasAgentApi(proxy.RpcProxy):
@@ -29,6 +30,7 @@ class LbaasAgentApi(proxy.RpcProxy):
         self.context = context
         self.host = host
 
+    @log.log
     def get_ready_services(self, tenant_ids=None):
         if tenant_ids:
             return self.call(
@@ -43,6 +45,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                 topic=self.topic
             )
 
+    @log.log
     def get_logical_service(self, pool_id):
         return self.call(
             self.context,
@@ -54,6 +57,7 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
+    @log.log
     def create_port(self, subnet_id=None,
                     mac_address=None, name=None,
                     fixed_address_count=1):
@@ -70,6 +74,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def delete_port(self, port_id=None, mac_address=None):
         return self.call(
                          self.context,
@@ -81,6 +86,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def allocate_fixed_address(self, subnet_id=None,
                                port_id=None, name=None,
                                fixed_address_count=1):
@@ -97,6 +103,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def deallocate_fixed_address(self, fixed_addresses=None,
                              subnet_id=None, auto_delete_port=False):
         return self.call(
@@ -111,6 +118,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def update_vip_status(self, vip_id=None,
                            status=None, status_description=None):
         return self.call(
@@ -125,6 +133,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def vip_destroyed(self, vip_id=None):
         return self.call(
             self.context,
@@ -132,6 +141,7 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
+    @log.log
     def update_pool_status(self, pool_id=None,
                            status=None, status_description=None):
         return self.call(
@@ -146,6 +156,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def pool_destroyed(self, pool_id):
         return self.call(
             self.context,
@@ -153,6 +164,7 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
+    @log.log
     def update_member_status(self, member_id=None,
                            status=None, status_description=None):
         return self.call(
@@ -167,6 +179,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def member_destroyed(self, member_id):
         return self.call(
             self.context,
@@ -175,6 +188,7 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
+    @log.log
     def update_health_monitor_status(self, health_monitor_id=None,
                            status=None, status_description=None):
         return self.call(
@@ -189,6 +203,7 @@ class LbaasAgentApi(proxy.RpcProxy):
                          topic=self.topic
                 )
 
+    @log.log
     def health_monitor_destroyed(self, health_monitor_id=None,
                                  pool_id=None):
         return self.call(
@@ -198,6 +213,7 @@ class LbaasAgentApi(proxy.RpcProxy):
             topic=self.topic
         )
 
+    @log.log
     def update_pool_stats(self, pool_id, stats):
         return self.call(
             self.context,
