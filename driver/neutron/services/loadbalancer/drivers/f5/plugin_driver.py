@@ -839,7 +839,8 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         network_dict['subnet'] = subnet_dict
         fixed_ip_dict = self._get_fixed_ips(context,
                                 subnet_dict['tenant_id'],
-                                subnet_dict['id'])
+                                subnet_dict['id'],
+                                agent)
         network_dict['fixed_ips'] = fixed_ip_dict
         network_dict['port'] = port_dict
         network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
@@ -864,7 +865,8 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 network_dict['provider:segmentation_id']
         fixed_ip_dict = self._get_fixed_ips(context,
                                 subnet_dict['tenant_id'],
-                                subnet_dict['id'])
+                                subnet_dict['id'],
+                                agent)
         network_dict['fixed_ips'] = fixed_ip_dict
         network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
         network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
