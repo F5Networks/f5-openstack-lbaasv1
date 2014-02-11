@@ -144,6 +144,7 @@ class iControlDriver(object):
 
     @log.log
     def get_stats(self, pool):
+
         bytecount = 0
         connections = 0
         stats = {}
@@ -152,12 +153,11 @@ class iControlDriver(object):
         stats[lb_const.STATS_ACTIVE_CONNECTIONS] = connections
         stats[lb_const.STATS_TOTAL_CONNECTIONS] = connections * 10
 
-        LOG.debug(_("pool object is %s" % pool))
         # need to get members for this pool and update their status
-        #if len(pool.members):
-        #    for member in pool.members:
-        #        member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
-        #stats['members'] = pool.members
+        if hasattr(pool, 'members'):
+            for member in pool.members:
+                member[lb_const.STATS_STATUS] = lb_const.STATS_FAILED_CHECKS
+        stats['members'] = pool.members
         return stats
 
     @log.log

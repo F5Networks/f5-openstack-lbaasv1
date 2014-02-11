@@ -72,12 +72,12 @@ class LogicalServiceCache(object):
         self.port_lookup = weakref.WeakValueDictionary()
         self.pool_lookup = weakref.WeakValueDictionary()
 
-    def put(self, service):
-        if 'port_id' in service['vip']:
-            port_id = service['vip']['port_id']
+    def put(self, logical_config):
+        if 'port_id' in logical_config['vip']:
+            port_id = logical_config['vip']['port_id']
         else:
             port_id = None
-        pool_id = service['pool']['id']
+        pool_id = logical_config['pool']['id']
         s = self.Service(port_id, pool_id)
         if s not in self.services:
             self.services.add(s)
@@ -85,16 +85,16 @@ class LogicalServiceCache(object):
                 self.port_lookup[port_id] = s
             self.pool_lookup[pool_id] = s
 
-    def remove(self, service):
-        if not isinstance(service, self.Service):
-            if 'port_id' in service['vip']:
-                port_id = service['vip']['port_id']
+    def remove(self, logical_config):
+        if not isinstance(logical_config, self.Service):
+            if 'port_id' in logical_config['vip']:
+                port_id = logical_config['vip']['port_id']
             else:
                 port_id = None
             sevice = self.Service(
-                port_id, service['pool']['id']
+                port_id, logical_config['pool']['id']
             )
-        if service in self.services:
+        if logical_config in self.services:
             self.services.remove(sevice)
 
     def remove_by_pool_id(self, pool_id):
@@ -197,7 +197,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         for pool_id in self.cache.get_pool_ids():
             try:
                 stats = self.driver.get_stats(
-                                  self.cache.get_by_pool_id(pool_id))
+                        self.plugin_rpc.get_logical_service(pool_id))
                 if stats:
                     self.plugin_rpc.update_pool_stats(pool_id, stats)
             except Exception:
