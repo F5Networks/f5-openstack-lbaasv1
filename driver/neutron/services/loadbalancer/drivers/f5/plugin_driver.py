@@ -889,7 +889,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
         filters = {'network_id': [subnet['network_id']],
                   'tenant_id': [tenant_id],
-                  'device_id': [agent.host]}
+                  'device_id': [agent['host']]}
         snats = self.plugin._core_plugin.get_ports(context,
                                                         filters=filters)
         if snats:
