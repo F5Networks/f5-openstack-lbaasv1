@@ -376,7 +376,7 @@ class LoadBalancerCallbacks(object):
 
     @log.log
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
-        self.plugin.update_pool_stats(context, pool_id, data=stats)
+        self.plugin.update_pool_stats(context, pool_id, stats)
 
     def _get_vxlan_endpoints(self, context):
         endpoints = []
