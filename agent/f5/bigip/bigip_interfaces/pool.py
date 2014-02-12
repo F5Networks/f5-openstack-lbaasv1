@@ -22,7 +22,7 @@ class Pool(object):
         lb_methods = [self._get_lb_method_type(lb_method)]
         # create an empty pool
         addr_port_seq = self.lb_pool.typefactory.create(
-                                           'Common.AddressPortSequence')
+            'Common.AddressPortSequence')
         pool_members_seq = [addr_port_seq]
         self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
         if description:
@@ -34,13 +34,16 @@ class Pool(object):
             self.lb_pool.delete_pool([name])
 
     @icontrol_folder
+    def get_members(self, name=None, folder='/Common'):
+        return self.lb_pool.get_list([name])
+
+    @icontrol_folder
     @domain_address
-    def add_member(self, name=None, ip_address=None,
-                   port=None, folder='/Common'):
-        if self.exists(name=name, folder=folder) and \
-           not self.member_exists(name=name, ip_address=ip_address,
-                                  port=None, folder=folder):
-            addr_port_seq = self._get_addr_port_seq()
+    def add_member(self, name=None, ip_address=None, port=None,
+                   folder='/Common'):
+        if self.exists(name=name, folder=folder) and not self.member_exists(
+                name=name, ip_address=ip_address, port=port, folder=folder):
+            addr_port_seq = self._get_addr_port_seq(ip_address, port)
             self.lb_pool.add_member_v2([name], [addr_port_seq])
 
     @icontrol_folder
@@ -48,25 +51,26 @@ class Pool(object):
     def remove_member(self, name=None, ip_address=None,
                       port=None, folder='/Common'):
         if not self.exists(name=name, folder=folder) and \
-           self.member_exists(name=name, ip_address=None,
-                              port=None, folder=folder):
-            addr_port_seq = self._get_addr_port_seq()
+           self.member_exists(name=name, ip_address=ip_address,
+                              port=port, folder=folder):
+            addr_port_seq = self._get_addr_port_seq(ip_address, port)
             self.lb_pool.remove_member_v2([name], [addr_port_seq])
 
     @icontrol_folder
     def get_service_down_action(self, name=None, folder='/Common'):
         service_down_action_type = self.lb_pool.typefactory.create(
-                                                'LocalLB.ServiceDownAction')
+            'LocalLB.ServiceDownAction')
         service_down_action = self.lb_pool.get_action_on_service_down(
-                                                                  [name])[0]
+            [name])[0]
+
         if service_down_action == \
-            service_down_action_type.SERVICE_DOWN_ACTION_RESET:
+                service_down_action_type.SERVICE_DOWN_ACTION_RESET:
             return 'SERVICE_DOWN_ACTION_RESET'
         elif service_down_action == \
-            service_down_action_type.SERVICE_DOWN_ACTION_DROP:
+                service_down_action_type.SERVICE_DOWN_ACTION_DROP:
             return 'SERVICE_DOWN_ACTION_DROP'
         elif service_down_action == \
-            service_down_action_type.SERVICE_DOWN_ACTION_RESELECT:
+                service_down_action_type.SERVICE_DOWN_ACTION_RESELECT:
             return 'SERVICE_DOWN_ACTION_RESELECT'
         else:
             return 'SERVICE_DOWN_ACTION_NONE'
@@ -76,7 +80,7 @@ class Pool(object):
                                 service_down_action=None, folder='/Common'):
         if self.exists(name=name, folder=folder):
             service_down_action_type = self._get_service_down_action_type(
-                                                           service_down_action)
+                service_down_action)
             self.lb_pool.set_action_on_service_down([name],
                                                     [service_down_action_type])
 
@@ -90,7 +94,7 @@ class Pool(object):
     def get_lb_method(self, name=None, folder='/Common'):
         if self.exists(name=name, folder=folder):
             lb_method_type = self.lb_pool.typefactory.create(
-                                                           'LocalLB.LBMethod')
+                'LocalLB.LBMethod')
             lb_method = self.lb_pool.get_lb_method([name])[0]
 
             if lb_method == lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER:
@@ -130,20 +134,12 @@ class Pool(object):
     @icontrol_folder
     def _set_monitor_assoc(self, name=None, monitors=None, folder='/Common'):
         if self.exists(name=name, folder=folder):
-            monitor_rule_type = self.lb_pool.typefactory.create(
-                                                    'LocalLB.MonitorRuleType')
-            if len(monitors) == 0:
-                monitor_rule_type = monitor_rule_type.MONITOR_RULE_TYPE_NONE
-            elif len(monitors) == 1:
-                monitor_rule_type = monitor_rule_type.MONITOR_RULE_TYPE_SINGLE
-            else:
-                monitor_rule_type = \
-                 monitor_rule_type.MONITOR_RULE_TYPE_AND_LIST
+            monitor_rule_type = self._get_monitor_rule_type(len(monitors))
 
             monitor_assoc = self.lb_pool.typefactory.create(
-                                            'LocalLB.Pool.MonitorAssociation')
+                'LocalLB.Pool.MonitorAssociation')
             monitor_rule = self.lb_pool.typefactory.create(
-                                                        'LocalLB.MonitorRule')
+                'LocalLB.MonitorRule')
             monitor_rule.monitor_templates = monitors
             monitor_rule.type = monitor_rule_type
             monitor_rule.quorum = 0
@@ -153,13 +149,24 @@ class Pool(object):
 
     def _get_addr_port_seq(self, addr, port):
         addr_port_seq = self.lb_pool.typefactory.create(
-                                                'Common.AddressPortSequence')
+            'Common.AddressPortSequence')
         addr_port = self.lb_pool.typefactory.create('Common.AddressPort')
         addr_port.address = addr
         addr_port.port = port
         addr_port_seq.item = addr_port
 
         return addr_port_seq
+
+    def _get_monitor_rule_type(self, num_monitors):
+        monitor_rule_type = self.lb_pool.typefactory.create(
+            'LocalLB.MonitorRuleType')
+
+        if num_monitors == 0:
+            return monitor_rule_type.MONITOR_RULE_TYPE_NONE
+        elif num_monitors == 1:
+            return monitor_rule_type.MONITOR_RULE_TYPE_SINGLE
+        else:
+            return monitor_rule_type.MONITOR_RULE_TYPE_AND_LIST
 
     def _get_lb_method_type(self, lb_method):
         lb_method_type = self.lb_pool.typefactory.create('LocalLB.LBMethod')
