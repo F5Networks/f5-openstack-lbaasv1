@@ -175,6 +175,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     def _report_state(self):
         try:
+            # assure agent is connected:
+            if not self.driver.connected:
+                self.driver._init_connection()
+
             service_count = len(self.cache.services)
             self.agent_state['configurations']['services'] = service_count
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
