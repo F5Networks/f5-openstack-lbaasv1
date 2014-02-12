@@ -170,7 +170,13 @@ class Pool(object):
 
     def _get_lb_method_type(self, lb_method):
         lb_method_type = self.lb_pool.typefactory.create('LocalLB.LBMethod')
-        if lb_method == 'LB_METHOD_LEAST_CONNECTION_MEMBER':
+        if lb_method == 'LEAST_CONNECTIONS':
+            return lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER
+        elif lb_method == 'ROUND_ROBIN':
+            return lb_method_type.LB_METHOD_ROUND_ROBIN
+        elif lb_method == 'SOURCE_IP':
+            return lb_method_type.LB_METHOD_LEAST_CONNECTION_NODE
+        elif lb_method == 'LB_METHOD_LEAST_CONNECTION_MEMBER':
             return lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER
         elif lb_method == 'LB_METHOD_OBSERVED_MEMBER':
             return lb_method_type.LB_METHOD_OBSERVED_MEMBER

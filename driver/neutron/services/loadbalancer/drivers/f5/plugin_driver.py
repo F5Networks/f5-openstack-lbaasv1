@@ -371,7 +371,6 @@ class LoadBalancerCallbacks(object):
         self.plugin.update_pool_health_monitor(context,
                                                health_monitor_id, pool_id,
                                                status, status_description)
-
     @log.log
     def health_monitor_destroyed(self, context, health_monitor_id=None,
                                  pool_id=None, host=None):
