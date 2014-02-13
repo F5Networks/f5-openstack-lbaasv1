@@ -259,44 +259,52 @@ class iControlDriver(object):
 
     def _init_connection(self):
         try:
-            if not self.conf.icontrol_hostname:
-                raise InvalidConfigurationOption(opt_name='icontrol_hostname',
-                                     opt_value='valid hostname or IP address')
-            if not self.conf.icontrol_username:
-                raise InvalidConfigurationOption(opt_name='icontrol_username',
-                                                 opt_value='valid username')
-            if not self.conf.icontrol_password:
-                raise InvalidConfigurationOption(opt_name='icontrol_password',
-                                                 opt_value='valid password')
+            if not self.connected:
+                if not self.conf.icontrol_hostname:
+                    raise InvalidConfigurationOption(
+                                 opt_name='icontrol_hostname',
+                                 opt_value='valid hostname or IP address')
+                if not self.conf.icontrol_username:
+                    raise InvalidConfigurationOption(
+                                 opt_name='icontrol_username',
+                                 opt_value='valid username')
+                if not self.conf.icontrol_password:
+                    raise InvalidConfigurationOption(
+                                 opt_name='icontrol_password',
+                                 opt_value='valid password')
 
-            self.hostname = self.conf.icontrol_hostname
-            self.username = self.conf.icontrol_username
-            self.password = self.conf.icontrol_password
+                self.hostname = self.conf.icontrol_hostname
+                self.username = self.conf.icontrol_username
+                self.password = self.conf.icontrol_password
 
-            LOG.debug(_('opening iControl connection to %s @ %s' % (
-                                                            self.username,
-                                                            self.hostname)
-                        ))
-            bigip = bigip.BigIP(self.hostname,
-                                     self.username,
-                                     self.password)
+                LOG.debug(_('opening iControl connection to %s @ %s' % (
+                                                                self.username,
+                                                                self.hostname)
+                            ))
+                bigip = bigip.BigIP(self.hostname,
+                                         self.username,
+                                         self.password)
 
-            # device validate
-            major_version = bigip.system.get_major_version()
-            if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
-                raise f5ex.MajorVersionValidateFailed(
-                        'device must be at least TMOS %s.%s'
-                        % (f5const.MIN_TMOS_MAJOR_VERSION,
-                           f5const.MIN_TMOS_MINOR_VERSION))
-            minor_version = bigip.system.get_minor_version()
-            if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
-                raise f5ex.MinorVersionValidateFailed(
-                        'device must be at least TMOS %s.%s'
-                        % (f5const.MIN_TMOS_MAJOR_VERSION,
-                           f5const.MIN_TMOS_MINOR_VERSION))
+                # device validate
+                major_version = bigip.system.get_major_version()
+                if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+                    raise f5ex.MajorVersionValidateFailed(
+                            'device must be at least TMOS %s.%s'
+                            % (f5const.MIN_TMOS_MAJOR_VERSION,
+                               f5const.MIN_TMOS_MINOR_VERSION))
+                minor_version = bigip.system.get_minor_version()
+                if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+                    raise f5ex.MinorVersionValidateFailed(
+                            'device must be at least TMOS %s.%s'
+                            % (f5const.MIN_TMOS_MAJOR_VERSION,
+                               f5const.MIN_TMOS_MINOR_VERSION))
 
-            self.bigip = bigip
-            self.connected = True
+                LOG.debug(_('connected to iControl device %s @ %s ver %s.%s'
+                            % (self.username, self.hostname,
+                               major_version, minor_version)))
+
+                self.bigip = bigip
+                self.connected = True
 
         except Exception as e:
             LOG.error(_('Could not communicate with iControl device: %s'
