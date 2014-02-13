@@ -3,6 +3,8 @@ from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
+from neutron.services.loadbalancer.drivers.f5.bigip \
+                                     import agent_manager as am
 from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
@@ -45,12 +47,12 @@ class iControlDriver(object):
                     % (self.hostname, self.username)))
 
     @log.log
-    @is_connected
+    @am.is_connected
     def sync(self, logical_config):
         pass
 
     @log.log
-    @is_connected
+    @am.is_connected
     def create_vip(self, vip, network):
         self._assure_network(network)
         vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
@@ -71,12 +73,12 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def update_vip(self, old_vip, vip, old_network, network):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def delete_vip(self, vip, network):
         self.bigip.virtual_server.delete(name=vip['id'],
                                    folder=vip['tenant_id'])
@@ -87,7 +89,7 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def create_pool(self, pool, network):
 
         self._assure_network(network)
@@ -108,12 +110,12 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def update_pool(self, old_pool, pool, old_network, network):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def delete_pool(self, pool, network):
         # WARNIG network might be NONE if
         # pool deleted by periodic task
@@ -126,7 +128,7 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def create_member(self, member, network):
         self.bigip.pool.add_member(name=member['id'],
                                    ip_address=member['address'],
@@ -135,12 +137,12 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def update_member(self, old_member, member, old_network, network):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def delete_member(self, member, network):
         self.bigip.pool.remove_member(name=member['id'],
                                       ip_address=member['address'],
@@ -149,7 +151,7 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def create_pool_health_monitor(self, health_monitor, pool, network):
         timeout = int(health_monitor['timeout']) * \
                   int(health_monitor['max_retries'])
@@ -167,13 +169,13 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, network):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def delete_pool_health_monitor(self, health_monitor, pool, network):
         self.bigip.pool.remove_monitor(name=pool['id'],
                                        monitor_name=health_monitor['id'],
@@ -183,7 +185,7 @@ class iControlDriver(object):
         return True
 
     @log.log
-    @is_connected
+    @am.is_connected
     def get_stats(self, logical_service):
 
         bytecount = 0
@@ -250,7 +252,7 @@ class iControlDriver(object):
             if not self.bigip.vlan.exists(name=network['name'],
                                           folder=network_folder):
                 self.bigip.vlan.create(name=network['name'],
-                                       0,
+                                       vlanid=0,
                                        interface='1.1',
                                        folder=network_folder,
                                        description=network['name'])
@@ -299,15 +301,3 @@ class iControlDriver(object):
         except Exception as e:
             LOG.error(_('Could not communicate with iControl device: %s'
                            % e.message))
-
-
-def is_connected(method):
-    """Decorator to check we are connected before provisioning."""
-    def wrapper(*args, **kwargs):
-        instance = args[0]
-        if instance.connected:
-            return method(*args, **kwargs)
-        else:
-            LOG.error(_('Can not execute %s. Not connected.'
-                        % method.__name__))
-    return wrapper

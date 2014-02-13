@@ -469,3 +469,16 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 for pool_id in self.cache.get_pool_ids():
                     self.destroy_service(pool_id)
             LOG.info(_("agent_updated by server side %s!"), payload)
+
+
+def is_connected(method):
+    """Decorator to check we are connected before provisioning."""
+    def wrapper(*args, **kwargs):
+        instance = args[0]
+        if instance.connected:
+            return True
+            #return method(*args, **kwargs)
+        else:
+            LOG.error(_('Can not execute %s. Not connected.'
+                        % method.__name__))
+    return wrapper
