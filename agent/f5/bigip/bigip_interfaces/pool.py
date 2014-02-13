@@ -15,7 +15,6 @@ class Pool(object):
         # iControl helper objects
         self.lb_pool = self.bigip.icontrol.LocalLB.Pool
 
-    @log.log
     @icontrol_folder
     def create(self, name=None, lb_method=None,
                description=None, folder='Common'):
@@ -31,7 +30,6 @@ class Pool(object):
             if description:
                 self.lb_pool.set_description([pool_names], [description])
 
-    @log.log
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
@@ -41,6 +39,7 @@ class Pool(object):
     def get_members(self, name=None, folder='Common'):
         return self.lb_pool.get_list([name])
 
+    @log.log
     @icontrol_folder
     @domain_address
     def add_member(self, name=None, ip_address=None, port=None,
@@ -212,6 +211,7 @@ class Pool(object):
         if name in self.lb_pool.get_list():
             return True
 
+    @log.log
     @icontrol_folder
     @domain_address
     def member_exists(self, name=None, ip_address=None,
