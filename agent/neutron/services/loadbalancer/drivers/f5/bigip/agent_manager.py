@@ -93,11 +93,11 @@ class LogicalServiceCache(object):
                 port_id = logical_config['vip']['port_id']
             else:
                 port_id = None
-            sevice = self.Service(
+            service = self.Service(
                 port_id, logical_config['pool']['id']
             )
         if logical_config in self.services:
-            self.services.remove(sevice)
+            self.services.remove(service)
 
     def remove_by_pool_id(self, pool_id):
         s = self.pool_lookup.get(pool_id)

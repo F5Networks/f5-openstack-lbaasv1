@@ -56,7 +56,7 @@ class iControlDriver(object):
     def create_vip(self, vip, network):
         self._assure_network(network)
         #vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
-        #vip_netmask = str(vip_network.netmask())
+        #vip_netmask = str(vip_network.netmask
         self.bigip.virtual_server.create(name=vip['id'],
                                          ip_address=vip['address'],
                                          mask='255.255.255.255',
@@ -83,7 +83,8 @@ class iControlDriver(object):
         self.bigip.virtual_server.delete(name=vip['id'],
                                    folder=vip['tenant_id'])
         if network:
-            if network['type'] == 'vlan' or network['type'] == 'flat':
+            if network['network_type'] == 'vlan' or \
+               network['network_type'] == 'flat':
                 self.bigip.vlan.delete(name=network['id'],
                                        folder=network['tenant_id'])
         return True
@@ -106,7 +107,9 @@ class iControlDriver(object):
                       fixed_address_count=1)
         ip_address = port['fixed_ips'][0]['ip_address']
         pool_network = netaddr.IPNetwork(network['subnet']['cidr'])
-        pool_netmask = str(pool_network.netmask())
+        pool_netmask = str(pool_network.netmask)
+
+        LOG.debug(_('adding selfip %s/%s' % (ip_address, pool_netmask)))
 
         self.bigip.selfip.create(name=pool['subnet_id'],
                                  ip_address=ip_address,
@@ -141,7 +144,8 @@ class iControlDriver(object):
                                  folder=pool['tenant_id'])
 
         if network:
-            if network['type'] == 'vlan' or network['type'] == 'flat':
+            if network['network_type'] == 'vlan' or \
+               network['network_type'] == 'flat':
                 self.bigip.vlan.delete(name=network['id'],
                                        folder=network['tenant_id'])
         return True

@@ -30,7 +30,7 @@ class Pool(object):
 
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
-        if self.exists(name=name, foler=folder):
+        if self.exists(name=name, folder=folder):
             self.lb_pool.delete_pool([name])
 
     @icontrol_folder
