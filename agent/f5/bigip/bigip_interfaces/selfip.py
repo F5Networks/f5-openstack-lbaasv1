@@ -19,7 +19,6 @@ class SelfIP(object):
         self.net_self = self.bigip.icontrol.Networking.SelfIPV2
 
     @icontrol_folder
-    @log.log
     @domain_address
     def create(self, name=None, ip_address=None, netmask=None,
                vlan_name=None, floating=False, folder='Common'):

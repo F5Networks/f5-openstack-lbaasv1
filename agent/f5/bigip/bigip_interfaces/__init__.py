@@ -14,17 +14,25 @@ def icontrol_folder(method):
                 if not kwargs['folder'].startswith(OBJ_PREFIX):
                     kwargs['folder'] = OBJ_PREFIX + kwargs['folder']
             if ('name' in kwargs):
-                kwargs['name'] = os.path.basename(kwargs['name'])
-                if not kwargs['name'].startswith(OBJ_PREFIX):
-                    kwargs['name'] = OBJ_PREFIX + kwargs['name']
-                kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
+                if kwargs['name'].startswith('/Common/'):
+                    kwargs['name'] = '/Common/' + os.path.basename(
+                                                             kwargs['name'])
+                else:
+                    kwargs['name'] = os.path.basename(kwargs['name'])
+                    if not kwargs['name'].startswith(OBJ_PREFIX):
+                        kwargs['name'] = OBJ_PREFIX + kwargs['name']
+                    kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
             for name in kwargs:
                 if name.find('_name') > 0:
-                    kwargs[name] = os.path.basename(kwargs[name])
-                    if not kwargs[name].startswith(OBJ_PREFIX):
-                        kwargs[name] = OBJ_PREFIX + kwargs[name]
-                    kwargs[name] = instance.bigip.set_folder(kwargs[name],
+                    if kwargs[name].startswith('/Common/'):
+                        kwargs[name] = '/Common/' + os.path.basename(
+                                                             kwargs[name])
+                    else:
+                        kwargs[name] = os.path.basename(kwargs[name])
+                        if not kwargs[name].startswith(OBJ_PREFIX):
+                            kwargs[name] = OBJ_PREFIX + kwargs[name]
+                        kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                              kwargs['folder'])
         return method(*args, **kwargs)
     return wrapper
