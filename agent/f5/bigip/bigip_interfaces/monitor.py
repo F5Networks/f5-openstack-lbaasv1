@@ -152,7 +152,7 @@ class Monitor(object):
             self.lb_monitor.set_template_string_property([name], [value])
 
     def _get_monitor_type(self, type_str):
-        type_str = str.upper(type_str)
+        type_str = str(type_str).upper()
         monitor_temp_type = self.lb_monitor.typefactory.create(
                                         'LocalLB.Monitor.TemplateType')
         if type_str == 'TCP':
