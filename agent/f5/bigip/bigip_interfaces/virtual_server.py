@@ -135,7 +135,7 @@ class VirtualServer(object):
                 return 'TCP'
 
     def _get_protocol_type(self, protocol_str):
-        protocol_str = str(protocol_str).upper()
+        protocol_str = protocol_str.upper()
         protocol_type = self.lb_vs.typefactory.create('Common.ProtocolType')
 
         if protocol_str == 'ICMP':

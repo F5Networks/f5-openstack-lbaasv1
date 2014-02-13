@@ -358,7 +358,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_pool"""
         try:
             if self.driver.delete_pool(pool, network):
-                self.destroy_service(pool['id'])
+                self.cache.remove_by_pool_id(pool['id'])
                 self.plugin_rpc.pool_destroyed(pool['id'])
         except Exception as e:
             message = 'could not delete pool:' + e.message
