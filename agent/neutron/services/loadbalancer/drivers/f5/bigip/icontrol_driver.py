@@ -281,18 +281,18 @@ class iControlDriver(object):
                                                                 self.username,
                                                                 self.hostname)
                             ))
-                bigip = bigip.BigIP(self.hostname,
+                self.bigip = bigip.BigIP(self.hostname,
                                          self.username,
                                          self.password)
 
                 # device validate
-                major_version = bigip.system.get_major_version()
+                major_version = self.bigip.system.get_major_version()
                 if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
                     raise f5ex.MajorVersionValidateFailed(
                             'device must be at least TMOS %s.%s'
                             % (f5const.MIN_TMOS_MAJOR_VERSION,
                                f5const.MIN_TMOS_MINOR_VERSION))
-                minor_version = bigip.system.get_minor_version()
+                minor_version = self.bigip.system.get_minor_version()
                 if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
                     raise f5ex.MinorVersionValidateFailed(
                             'device must be at least TMOS %s.%s'
@@ -303,7 +303,6 @@ class iControlDriver(object):
                             % (self.username, self.hostname,
                                major_version, minor_version)))
 
-                self.bigip = bigip
                 self.connected = True
 
         except Exception as e:
