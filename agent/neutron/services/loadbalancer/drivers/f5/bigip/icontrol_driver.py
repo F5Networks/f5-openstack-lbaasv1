@@ -46,13 +46,13 @@ class iControlDriver(object):
         LOG.debug(_('iControlDriver initialized: hostname:%s username:%s'
                     % (self.hostname, self.username)))
 
-    @log.log
     @am.is_connected
+    @log.log
     def sync(self, logical_config):
         pass
 
-    @log.log
     @am.is_connected
+    @log.log
     def create_vip(self, vip, network):
         self._assure_network(network)
         vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
@@ -72,13 +72,13 @@ class iControlDriver(object):
                                         )
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def update_vip(self, old_vip, vip, old_network, network):
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def delete_vip(self, vip, network):
         self.bigip.virtual_server.delete(name=vip['id'],
                                    folder=vip['tenant_id'])
@@ -88,8 +88,8 @@ class iControlDriver(object):
                                        folder=network['tenant_id'])
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def create_pool(self, pool, network):
 
         self._assure_network(network)
@@ -109,13 +109,13 @@ class iControlDriver(object):
 
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def update_pool(self, old_pool, pool, old_network, network):
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def delete_pool(self, pool, network):
         # WARNIG network might be NONE if
         # pool deleted by periodic task
@@ -127,8 +127,8 @@ class iControlDriver(object):
                                        folder=network['tenant_id'])
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def create_member(self, member, network):
         self.bigip.pool.add_member(name=member['id'],
                                    ip_address=member['address'],
@@ -136,13 +136,13 @@ class iControlDriver(object):
                                    folder=member['tenant_id'])
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def update_member(self, old_member, member, old_network, network):
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def delete_member(self, member, network):
         self.bigip.pool.remove_member(name=member['id'],
                                       ip_address=member['address'],
@@ -150,8 +150,8 @@ class iControlDriver(object):
                                       folder=member['tenant_id'])
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def create_pool_health_monitor(self, health_monitor, pool, network):
         timeout = int(health_monitor['timeout']) * \
                   int(health_monitor['max_retries'])
@@ -168,14 +168,14 @@ class iControlDriver(object):
                                     folder=pool['tenant_id'])
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, network):
         return True
 
-    @log.log
     @am.is_connected
+    @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, network):
         self.bigip.pool.remove_monitor(name=pool['id'],
                                        monitor_name=health_monitor['id'],
@@ -184,8 +184,8 @@ class iControlDriver(object):
                                   folder=pool['tenant_id'])
         return True
 
+    # @am.is_connected
     @log.log
-    @am.is_connected
     def get_stats(self, logical_service):
 
         bytecount = 0
