@@ -61,11 +61,13 @@ class iControlDriver(object):
 
         if network['shared'] or network['network_type'] == 'local':
             vlan_name = '/Common/' + os.path.basename(network['id'])
+            ip_address = vip['address'] + "%0"
         else:
             vlan_name = network['id']
+            ip_address = vip['address']
 
         self.bigip.virtual_server.create(name=vip['id'],
-                                         ip_address=vip['address'],
+                                         ip_address=ip_address,
                                          mask='255.255.255.255',
                                          port=vip['protocol_port'],
                                          protocol='TCP',
@@ -120,8 +122,11 @@ class iControlDriver(object):
 
         if network['shared'] or network['network_type'] == 'local':
             vlan_name = '/Common/' + os.path.basename(network['id'])
+            ip_address = ip_address + "%0"
         else:
             vlan_name = network['id']
+
+        LOG.debug(_('vlan_name %s' % vlan_name))
 
         self.bigip.selfip.create(name=pool['subnet_id'],
                                  ip_address=ip_address,
