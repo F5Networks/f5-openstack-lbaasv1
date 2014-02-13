@@ -15,8 +15,10 @@ def icontrol_folder(method):
                     kwargs['folder'] = OBJ_PREFIX + kwargs['folder']
             if ('name' in kwargs):
                 if kwargs['name'].startswith('/Common/'):
-                    kwargs['name'] = '/Common/' + os.path.basename(
-                                                             kwargs['name'])
+                    kwargs['name'] = os.path.basename(kwargs['name'])
+                    if not kwargs['name'].startswith(OBJ_PREFIX):
+                        kwargs['name'] = OBJ_PREFIX + kwargs['name']
+                    kwargs['name'] = '/Common/' + kwargs['name']
                 else:
                     kwargs['name'] = os.path.basename(kwargs['name'])
                     if not kwargs['name'].startswith(OBJ_PREFIX):
@@ -26,8 +28,10 @@ def icontrol_folder(method):
             for name in kwargs:
                 if name.find('_name') > 0:
                     if kwargs[name].startswith('/Common/'):
-                        kwargs[name] = '/Common/' + os.path.basename(
-                                                             kwargs[name])
+                        kwargs[name] = os.path.basename(kwargs[name])
+                        if not kwargs[name].startswith(OBJ_PREFIX):
+                            kwargs[name] = OBJ_PREFIX + kwargs[name]
+                        kwargs[name] = '/Common/' + kwargs[name]
                     else:
                         kwargs[name] = os.path.basename(kwargs[name])
                         if not kwargs[name].startswith(OBJ_PREFIX):
