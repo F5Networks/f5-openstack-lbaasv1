@@ -10,6 +10,7 @@ from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 
 import netaddr
+import os
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
@@ -57,12 +58,18 @@ class iControlDriver(object):
         self._assure_network(network)
         #vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
         #vip_netmask = str(vip_network.netmask
+
+        if network['shared'] or network['network_type'] == 'local':
+            vlan_name = '/Common/' + os.path.basename(network['id'])
+        else:
+            vlan_name = network['id']
+
         self.bigip.virtual_server.create(name=vip['id'],
                                          ip_address=vip['address'],
                                          mask='255.255.255.255',
                                          port=vip['protocol_port'],
                                          protocol='TCP',
-                                         vlan_name=network['id'],
+                                         vlan_name=vlan_name,
                                          folder=vip['tenant_id'])
         if 'id' in vip['pool']:
             self.bigip.virtual_server.set_pool(
@@ -111,10 +118,15 @@ class iControlDriver(object):
 
         LOG.debug(_('adding selfip %s/%s' % (ip_address, pool_netmask)))
 
+        if network['shared'] or network['network_type'] == 'local':
+            vlan_name = '/Common/' + os.path.basename(network['id'])
+        else:
+            vlan_name = network['id']
+
         self.bigip.selfip.create(name=pool['subnet_id'],
                                  ip_address=ip_address,
                                  netmask=pool_netmask,
-                                 vlan_name=network['id'],
+                                 vlan_name=vlan_name,
                                  floating=False,
                                  folder=pool['tenant_id'])
 
