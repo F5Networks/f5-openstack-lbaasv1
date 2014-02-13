@@ -5,6 +5,7 @@ from f5.bigip.bigip_interfaces import icontrol_folder
 
 # Local Traffic - Pool
 
+from neutron.common import log
 
 class Pool(object):
     def __init__(self, bigip):
@@ -14,20 +15,23 @@ class Pool(object):
         # iControl helper objects
         self.lb_pool = self.bigip.icontrol.LocalLB.Pool
 
+    @log.log
     @icontrol_folder
     def create(self, name=None, lb_method=None,
                description=None, folder='Common'):
-        # pool definition
-        pool_names = [name]
-        lb_methods = [self._get_lb_method_type(lb_method)]
-        # create an empty pool
-        addr_port_seq = self.lb_pool.typefactory.create(
-            'Common.AddressPortSequence')
-        pool_members_seq = [addr_port_seq]
-        self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
-        if description:
-            self.lb_pool.set_description([pool_names], [description])
+        if not self.exists(name=name, folder=folder):
+            # pool definition
+            pool_names = [name]
+            lb_methods = [self._get_lb_method_type(lb_method)]
+            # create an empty pool
+            addr_port_seq = self.lb_pool.typefactory.create(
+                'Common.AddressPortSequence')
+            pool_members_seq = [addr_port_seq]
+            self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
+            if description:
+                self.lb_pool.set_description([pool_names], [description])
 
+    @log.log
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):

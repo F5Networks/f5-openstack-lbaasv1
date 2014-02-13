@@ -61,7 +61,7 @@ class iControlDriver(object):
                                          ip_address=vip['address'],
                                          mask='255.255.255.255',
                                          port=vip['protocol_port'],
-                                         protocol=['TCP'],
+                                         protocol='TCP',
                                          vlan_name=network['id'],
                                          folder=vip['tenant_id'])
         if 'id' in vip['pool']:

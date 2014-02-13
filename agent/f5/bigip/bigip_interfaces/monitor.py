@@ -37,7 +37,7 @@ class Monitor(object):
 
             template_attributes = self.lb_monitor.typefactory.create(
                                     'LocalLB.Monitor.CommonAttributes')
-            template_attributes.parent_template = str.lower(mon_type)
+            template_attributes.parent_template = mon_type.lower()
             template_attributes.interval = interval
             template_attributes.timeout = timeout
             template_attributes.dest_ipport = monitor_ipport
@@ -47,7 +47,7 @@ class Monitor(object):
             self.lb_monitor.create_template([template],
                                             [template_attributes])
 
-            if str.lower(mon_type) in ['tcp', 'http']:
+            if mon_type.lower() in ['tcp', 'http']:
                 self.set_send_string(name, send_text)
                 self.set_recv_string(name, recv_text)
 

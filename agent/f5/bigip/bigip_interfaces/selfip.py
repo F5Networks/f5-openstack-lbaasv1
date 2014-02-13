@@ -5,6 +5,7 @@ from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
 
 # Networking - Self-IP
+from neutron.common import log
 
 
 class SelfIP(object):
@@ -18,6 +19,7 @@ class SelfIP(object):
         self.net_self = self.bigip.icontrol.Networking.SelfIPV2
 
     @icontrol_folder
+    @log.log
     @domain_address
     def create(self, name=None, ip_address=None, netmask=None,
                vlan_name=None, floating=False, folder='Common'):
