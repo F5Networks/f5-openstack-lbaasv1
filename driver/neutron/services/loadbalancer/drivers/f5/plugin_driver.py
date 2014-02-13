@@ -211,7 +211,7 @@ class LoadBalancerCallbacks(object):
                 'mac_address': mac_address,
                 'admin_state_up': True,
                 'device_id': host,
-                'device_owner': self.plugin.__class__.__name__,
+                'device_owner': 'network:f5lbaas',
                 'fixed_ips': fixed_ips
             }
             port = self.plugin._core_plugin.create_port(context,
