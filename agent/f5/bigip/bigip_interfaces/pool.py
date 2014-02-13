@@ -39,9 +39,9 @@ class Pool(object):
     def get_members(self, name=None, folder='Common'):
         return self.lb_pool.get_list([name])
 
-    @log.log
     @icontrol_folder
     @domain_address
+    @log.log
     def add_member(self, name=None, ip_address=None, port=None,
                    folder='Common'):
         if self.exists(name=name, folder=folder) and \
@@ -211,9 +211,9 @@ class Pool(object):
         if name in self.lb_pool.get_list():
             return True
 
-    @log.log
     @icontrol_folder
     @domain_address
+    @log.log
     def member_exists(self, name=None, ip_address=None,
                       port=None, folder='Common'):
         members = self.lb_pool.get_member_v2([name])

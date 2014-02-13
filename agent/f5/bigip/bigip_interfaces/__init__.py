@@ -18,7 +18,8 @@ def icontrol_folder(method):
                     kwargs['name'] = os.path.basename(kwargs['name'])
                     if not kwargs['name'].startswith(OBJ_PREFIX):
                         kwargs['name'] = OBJ_PREFIX + kwargs['name']
-                    kwargs['name'] = '/Common/' + kwargs['name']
+                    kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
+                                                               'Common')
                 else:
                     kwargs['name'] = os.path.basename(kwargs['name'])
                     if not kwargs['name'].startswith(OBJ_PREFIX):
@@ -31,7 +32,8 @@ def icontrol_folder(method):
                         kwargs[name] = os.path.basename(kwargs[name])
                         if not kwargs[name].startswith(OBJ_PREFIX):
                             kwargs[name] = OBJ_PREFIX + kwargs[name]
-                        kwargs[name] = '/Common/' + kwargs[name]
+                        kwargs[name] = instance.bigip.set_folder(kwargs[name],
+                                                                 'Common')
                     else:
                         kwargs[name] = os.path.basename(kwargs[name])
                         if not kwargs[name].startswith(OBJ_PREFIX):
