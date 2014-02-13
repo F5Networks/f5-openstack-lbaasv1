@@ -19,7 +19,7 @@ class Vlan(object):
 
     @icontrol_folder
     def create(self, name=None, vlanid=None, interface=None,
-               folder='/Common', description=None):
+               folder='Common', description=None):
         if not self.exists(name=name, folder=folder):
             mem_seq = self.net_vlan.typefactory.create(
                                     'Networking.VLAN.MemberSequence')
@@ -50,28 +50,30 @@ class Vlan(object):
                                     [90])
             if description:
                 self.net_vlan.set_description([name], [description])
+            if not folder == 'Common':
+                self.bigip.route.add_vlan_to_domain(name=name, folder=folder)
 
     @icontrol_folder
-    def delete(self, name=None, folder='/Common'):
+    def delete(self, name=None, folder='Common'):
         if not self._in_use(name) and self.exists(name):
             self.net_vlan.delete_vlan([name])
 
     @icontrol_folder
-    def get_all(self, folder='/Common'):
+    def get_all(self, folder='Common'):
         return self.net_vlan.get_list()
 
     @icontrol_folder
-    def get_id(self, name=None, folder='/Common'):
+    def get_id(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             return int(self.net_vlan.get_vlan_id([name])[0])
 
     @icontrol_folder
-    def set_id(self, name=None, vlanid=0, folder='/Common'):
+    def set_id(self, name=None, vlanid=0, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.net_vlan.set_vlan_id([name], [int(vlanid)])
 
     @icontrol_folder
-    def get_interface(self, name=None, folder='/Common'):
+    def get_interface(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             members = self.net_vlan.get_member([name])
 
@@ -79,7 +81,7 @@ class Vlan(object):
                 return self.net_vlan.get_member([name])[0][0].member_name
 
     @icontrol_folder
-    def set_interface(self, name=None, interface='1.1', folder='/Common'):
+    def set_interface(self, name=None, interface='1.1', folder='Common'):
         if self.exists(name=name, folder=folder):
             self.net_vlan.remove_all_members([name])
             if interface:
@@ -106,12 +108,12 @@ class Vlan(object):
                 self.net_vlan.add_member([name], [member_seq])
 
     @icontrol_folder
-    def exists(self, name=None, folder='/Common'):
+    def exists(self, name=None, folder='Common'):
         if name in self.net_vlan.get_list():
             return True
 
     @icontrol_folder
-    def _in_use(self, name=None, folder='/Common'):
+    def _in_use(self, name=None, folder='Common'):
         self_ips = self.net_self.get_list()
         if len(self_ips) > 0:
             if name in self.net_self.get_vlan(self_ips):

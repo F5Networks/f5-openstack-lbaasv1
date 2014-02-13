@@ -55,11 +55,11 @@ class iControlDriver(object):
     @log.log
     def create_vip(self, vip, network):
         self._assure_network(network)
-        vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
-        vip_netmask = str(vip_network.netmask())
+        #vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
+        #vip_netmask = str(vip_network.netmask())
         self.bigip.virtual_server.create(name=vip['id'],
                                          ip_address=vip['address'],
-                                         mask=vip[vip_netmask],
+                                         mask='255.255.255.255',
                                          port=vip['protocol_port'],
                                          protocol=['TCP'],
                                          vlan_name=network['id'],
@@ -99,6 +99,22 @@ class iControlDriver(object):
                                description=pool['name'],
                                folder=pool['tenant_id']
                               )
+        # get port and fixe_ip on subnet
+        port = self.plugin_rpc.create_port(subnet_id=pool['subnet_id'],
+                      mac_address=None,
+                      name='non_floating_self_ip_' + pool['subnet_id'],
+                      fixed_address_count=1)
+        ip_address = port['fixed_ips'][0]['ip_address']
+        pool_network = netaddr.IPNetwork(network['subnet']['cidr'])
+        pool_netmask = str(pool_network.netmask())
+
+        self.bigip.selfip.create(name=pool['subnet_id'],
+                                 ip_address=ip_address,
+                                 netmask=pool_netmask,
+                                 vlan_name=network['id'],
+                                 floating=False,
+                                 folder=pool['tenant_id'])
+
         for member in pool['members']:
             # force tenancy on pool
             member['tenant_id'] = pool['tenant_id']
@@ -121,6 +137,9 @@ class iControlDriver(object):
         # pool deleted by periodic task
         self.bigip.pool.delete(name=pool['id'],
                                    folder=pool['tenant_id'])
+        self.bigip.selfip.delete(name=pool['subnet_id'],
+                                 folder=pool['tenant_id'])
+
         if network:
             if network['type'] == 'vlan' or network['type'] == 'flat':
                 self.bigip.vlan.delete(name=network['id'],
@@ -130,7 +149,7 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def create_member(self, member, network):
-        self.bigip.pool.add_member(name=member['id'],
+        self.bigip.pool.add_member(name=member['pool_id'],
                                    ip_address=member['address'],
                                    port=member['protocol_port'],
                                    folder=member['tenant_id'])
@@ -144,7 +163,7 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def delete_member(self, member, network):
-        self.bigip.pool.remove_member(name=member['id'],
+        self.bigip.pool.remove_member(name=member['pool_id'],
                                       ip_address=member['address'],
                                       port=member['protocol_port'],
                                       folder=member['tenant_id'])
@@ -223,9 +242,7 @@ class iControlDriver(object):
             else:
                 network_folder = network['id']
 
-            if not self.bigip.vlan.exists(name=network['id'],
-                                          folder=network_folder):
-                self.bigip.vlan.create(name=network['id'],
+            self.bigip.vlan.create(name=network['id'],
                                        vlanid=network['segmentation_id'],
                                        interface='1.1',
                                        folder=network_folder,
@@ -236,9 +253,7 @@ class iControlDriver(object):
             else:
                 network_folder = network['id']
 
-            if not self.bigip.vlan.exists(name=network['id'],
-                                          folder=network_folder):
-                self.bigip.vlan.create(name=network['id'],
+            self.bigip.vlan.create(name=network['id'],
                                        vlanid=0,
                                        interface='1.1',
                                        folder=network_folder,
@@ -249,9 +264,7 @@ class iControlDriver(object):
             else:
                 network_folder = network['id']
 
-            if not self.bigip.vlan.exists(name=network['name'],
-                                          folder=network_folder):
-                self.bigip.vlan.create(name=network['name'],
+            self.bigip.vlan.create(name=network['name'],
                                        vlanid=0,
                                        interface='1.1',
                                        folder=network_folder,

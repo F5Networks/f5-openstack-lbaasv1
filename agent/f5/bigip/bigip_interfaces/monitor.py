@@ -13,9 +13,10 @@ class Monitor(object):
         # iControl helper objects
         self.lb_monitor = self.bigip.icontrol.LocalLB.Monitor
 
+    @icontrol_folder
     def create(self, name=None, mon_type=None, interval=5,
                timeout=16, send_text=None, recv_text=None,
-               folder='/Common'):
+               folder='Common'):
         if not self.exists(name=name, folder=folder):
             monitor_type = self._get_monitor_type(mon_type)
             template = self.lb_monitor.typefactory.create(
@@ -50,11 +51,13 @@ class Monitor(object):
                 self.set_send_string(name, send_text)
                 self.set_recv_string(name, recv_text)
 
-    def delete(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.lb_monitor.delete_template([name])
 
-    def get_type(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_type(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             monitor_temp_type_type = self.lb_monitor.typefactory.create(
                                         'LocalLB.Monitor.TemplateType')
@@ -71,14 +74,16 @@ class Monitor(object):
                 # TODO: add exception for unsupported monitor type
                 pass
 
-    def get_interval(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_interval(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                     'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
             return self.lb_monitor.get_template_integer_property(
                                         [name], [prop_type])[0].value
 
-    def set_interval(self, name=None, interval=5, folder='/Common'):
+    @icontrol_folder
+    def set_interval(self, name=None, interval=5, folder='Common'):
         if self.exists(name=name, folder=folder):
             value = self.lb_monitor.typefactory.create(
                                 'LocalLB.Monitor.IntegerValue')
@@ -87,14 +92,16 @@ class Monitor(object):
             value.value = int(interval)
             self.lb_monitor.set_template_integer_property([name], [value])
 
-    def get_timeout(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_timeout(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                         'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
             return self.lb_monitor.get_template_integer_property(
                                             [name], [prop_type])[0].value
 
-    def set_timeout(self, name=None, timeout=16, folder='/Common'):
+    @icontrol_folder
+    def set_timeout(self, name=None, timeout=16, folder='Common'):
         if self.exists(name=name, folder=folder):
             value = self.lb_monitor.typefactory.create(
                                 'LocalLB.Monitor.IntegerValue')
@@ -103,7 +110,8 @@ class Monitor(object):
             value.value = int(timeout)
             self.lb_monitor.set_template_integer_property([name], [value])
 
-    def get_send_string(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_send_string(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder) and \
            self.get_type(name) in ['TCP', 'HTTP']:
             prop_type = self.lb_monitor.typefactory.create(
@@ -111,7 +119,8 @@ class Monitor(object):
             return self.lb_monitor.get_template_string_property(
                                         [name], [prop_type])[0].value
 
-    def set_send_string(self, name=None, send_text=None, folder='/Common'):
+    @icontrol_folder
+    def set_send_string(self, name=None, send_text=None, folder='Common'):
         if self.exists(name=name, folder=folder) and send_text and \
            self.get_type(name) in ['TCP', 'HTTP']:
             value = self.lb_monitor.typefactory.create(
@@ -121,7 +130,8 @@ class Monitor(object):
             value.value = send_text
             self.lb_monitor.set_template_string_property([name], [value])
 
-    def get_recv_string(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_recv_string(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder) and \
            self.get_type(name) in ['TCP', 'HTTP']:
             prop_type = self.lb_monitor.typefactory.create(
@@ -129,7 +139,8 @@ class Monitor(object):
             return self.lb_monitor.get_template_string_property(
                                             [name], [prop_type])[0].value
 
-    def set_recv_string(self, name=None, recv_text=None, folder='/Common'):
+    @icontrol_folder
+    def set_recv_string(self, name=None, recv_text=None, folder='Common'):
         if self.exists(name=name, folder=folder) and \
            recv_text and \
            self.get_type(name) in ['TCP', 'HTTP']:
@@ -155,7 +166,7 @@ class Monitor(object):
             pass
 
     @icontrol_folder
-    def exists(self, name=None, folder='/Common'):
+    def exists(self, name=None, folder='Common'):
         for template in self.lb_monitor.get_template_list():
             if template.template_name == name:
                 return True
