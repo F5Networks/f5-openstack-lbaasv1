@@ -1,11 +1,12 @@
 import os
 
-from f5.bigip.bigip_interfaces import domain_address
-from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
+    strip_folder_and_prefix
 
 # Local Traffic - Pool
 
 from neutron.common import log
+
 
 class Pool(object):
     def __init__(self, bigip):
@@ -37,7 +38,12 @@ class Pool(object):
 
     @icontrol_folder
     def get_members(self, name=None, folder='Common'):
-        return self.lb_pool.get_list([name])
+        members = []
+        for member in self.lb_pool.get_member_v2([name])[0]:
+            addr = os.path.basename(member.address).split('%')[0]
+            members.append({'addr': addr, 'port': member.port})
+
+        return members
 
     @icontrol_folder
     @domain_address
@@ -56,7 +62,7 @@ class Pool(object):
     @domain_address
     def remove_member(self, name=None, ip_address=None,
                       port=None, folder='Common'):
-        if not self.exists(name=name, folder=folder) and \
+        if self.exists(name=name, folder=folder) and \
            self.member_exists(name=name, ip_address=ip_address,
                               port=port, folder=folder):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
@@ -71,15 +77,15 @@ class Pool(object):
 
         if service_down_action == \
                 service_down_action_type.SERVICE_DOWN_ACTION_RESET:
-            return 'SERVICE_DOWN_ACTION_RESET'
+            return 'RESET'
         elif service_down_action == \
                 service_down_action_type.SERVICE_DOWN_ACTION_DROP:
-            return 'SERVICE_DOWN_ACTION_DROP'
+            return 'DROP'
         elif service_down_action == \
                 service_down_action_type.SERVICE_DOWN_ACTION_RESELECT:
-            return 'SERVICE_DOWN_ACTION_RESELECT'
+            return 'RESELECT'
         else:
-            return 'SERVICE_DOWN_ACTION_NONE'
+            return 'NONE'
 
     @icontrol_folder
     def set_service_down_action(self, name=None,
@@ -104,26 +110,24 @@ class Pool(object):
             lb_method = self.lb_pool.get_lb_method([name])[0]
 
             if lb_method == lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER:
-                return 'LB_METHOD_LEAST_CONNECTION_MEMBER'
+                return 'LEAST_CONNECTIONS'
             elif lb_method == lb_method_type.LB_METHOD_OBSERVED_MEMBER:
-                return 'LB_METHOD_OBSERVED_MEMBER'
+                return 'OBSERVED_MEMBER'
             elif lb_method == lb_method_type.LB_METHOD_PREDICTIVE_MEMBER:
-                return 'LB_METHOD_PREDICTIVE_MEMBER'
-            elif lb_method == lb_method_type.LB_METHOD_ROUND_ROBIN:
-                return 'LB_METHOD_ROUND_ROBIN'
+                return 'PREDICTIVE_MEMBER'
             else:
-                # TODO: raise unsupported LB method
-                pass
+                return 'ROUND_ROBIN'
 
     @icontrol_folder
     def get_monitors(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            monitor_assoc = self.lb_pool.get_monitor_association([name])[0]
-            return monitor_assoc.monitor_rule.monitor_templates
+            return strip_folder_and_prefix(self._get_monitors(name=name,
+                                                              folder=folder))
+
 
     @icontrol_folder
     def add_monitor(self, name=None, monitor_name=None, folder='Common'):
-        monitors = self.get_monitors(name=name, folder=folder)
+        monitors = self._get_monitors(name=name, folder=folder)
 
         if not monitor_name in monitors:
             monitors.append(monitor_name)
@@ -132,7 +136,7 @@ class Pool(object):
 
     @icontrol_folder
     def remove_monitor(self, name=None, monitor_name=None, folder='Common'):
-        monitors = self.get_monitors(name=name, folder=folder)
+        monitors = self._get_monitors(name=name, folder=folder)
 
         if monitor_name in monitors:
             monitors.remove(monitor_name)
@@ -154,6 +158,17 @@ class Pool(object):
             monitor_assoc.pool_name = name
             monitor_assoc.monitor_rule = monitor_rule
             self.lb_pool.set_monitor_association([monitor_assoc])
+
+    @icontrol_folder
+    def _get_monitors(self, name=None, folder='Common'):
+        if self.exists(name=name, folder=folder):
+            monitors = self.lb_pool.get_monitor_association([name])[
+                0].monitor_rule.monitor_templates
+
+            if '/Common/none' in monitors:
+                monitors.remove('/Common/none')
+
+            return monitors
 
     def _get_addr_port_seq(self, addr, port):
         addr_port_seq = self.lb_pool.typefactory.create(
@@ -178,30 +193,29 @@ class Pool(object):
 
     def _get_lb_method_type(self, lb_method):
         lb_method_type = self.lb_pool.typefactory.create('LocalLB.LBMethod')
+        lb_method = str(lb_method).upper()
+
         if lb_method == 'LEAST_CONNECTIONS':
             return lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER
-        elif lb_method == 'ROUND_ROBIN':
-            return lb_method_type.LB_METHOD_ROUND_ROBIN
         elif lb_method == 'SOURCE_IP':
             return lb_method_type.LB_METHOD_LEAST_CONNECTION_NODE
-        elif lb_method == 'LB_METHOD_LEAST_CONNECTION_MEMBER':
-            return lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER
-        elif lb_method == 'LB_METHOD_OBSERVED_MEMBER':
+        elif lb_method == 'OBSERVED_MEMBER':
             return lb_method_type.LB_METHOD_OBSERVED_MEMBER
-        elif lb_method == 'LB_METHOD_PREDICTIVE_MEMBER':
+        elif lb_method == 'PREDICTIVE_MEMBER':
             return lb_method_type.LB_METHOD_PREDICTIVE_MEMBER
         else:
             return lb_method_type.LB_METHOD_ROUND_ROBIN
 
     def _get_service_down_action_type(self, service_down_action):
         service_down_action_type = self.lb_pool.typefactory.create(
-                                                'LocalLB.ServiceDownAction')
+            'LocalLB.ServiceDownAction')
+        service_down_action = str(service_down_action).upper()
 
-        if service_down_action == 'SERVICE_DOWN_ACTION_RESET':
+        if service_down_action == 'RESET':
             return service_down_action_type.SERVICE_DOWN_ACTION_RESET
-        elif service_down_action == 'SERVICE_DOWN_ACTION_DROP':
+        elif service_down_action == 'DROP':
             return service_down_action_type.SERVICE_DOWN_ACTION_DROP
-        elif service_down_action == 'SERVICE_DOWN_ACTION_RESELECT':
+        elif service_down_action == 'RESELECT':
             return service_down_action_type.SERVICE_DOWN_ACTION_RESELECT
         else:
             return service_down_action_type.SERVICE_DOWN_ACTION_NONE

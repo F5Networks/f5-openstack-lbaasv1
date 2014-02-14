@@ -109,10 +109,11 @@ class Vlan(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        if name.startswith('/Common/'):
-            self.bigip.system.set_folder('/Common')
-        if name in self.net_vlan.get_list():
-            return True
+        if name:
+            if name.startswith('/Common/'):
+                self.bigip.system.set_folder('/Common')
+            if name in self.net_vlan.get_list():
+                return True
 
     @icontrol_folder
     def _in_use(self, name=None, folder='Common'):

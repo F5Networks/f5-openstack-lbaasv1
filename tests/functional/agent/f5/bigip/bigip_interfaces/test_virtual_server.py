@@ -1,13 +1,10 @@
 from tests.functional.agent.f5.bigip.bigip_base import BigIPTestBase
 from netaddr import IPAddress
 
-vlan = {'name': 'test-virtual-server-vlan',
-        'id': 1001,
-        'interface': 1.3}
-
+# test parameters
 virtual_server_http = {'folder': '/tenant1',
                        'name': 'test-virtual-server-http',
-                       'protocol': 'HTTP',
+                       'protocol': 'TCP',
                        'addr': '1.1.1.1',
                        'mask': '255.255.255.255',
                        'port': 80}
@@ -26,16 +23,20 @@ virtual_server_udp = {'folder': '/tenant3',
                       'mask': '255.255.255.255',
                       'port': 53}
 
-pool_http = {'pool_folder': '/Common',
-             'name': 'test-pool-1',
+virtual_servers = [virtual_server_http,
+                   virtual_server_tcp,
+                   virtual_server_udp]
+
+pool_http = {'folder': '/tenant1',
+             'name': 'test-pool-http',
              'lb_method': 'LEAST_CONNECTIONS'}
+
+pools = [pool_http]
 
 
 class TestBigIPInterfaceVirtualServer(BigIPTestBase):
     def setUp(self):
         super(TestBigIPInterfaceVirtualServer, self).setUp()
-
-        self.bigip.vlan.create(vlan['name'], vlan['id'], vlan['interface'])
 
     def test_create_virtual_server_http(self):
         self._create_virtual_server_and_assert(virtual_server_http)
@@ -68,6 +69,28 @@ class TestBigIPInterfaceVirtualServer(BigIPTestBase):
                              name=virtual_server_http['name'],
                              folder=virtual_server_http['folder']))
 
+    # def test_set_mask(self):
+    #     new_mask = '255.255.255.252'
+    #
+    #     self._create_virtual_server_and_assert(virtual_server_http)
+    #
+    #     self.bigip.virtual_server.set_mask(
+    #         name=virtual_server_http['name'],
+    #         netmask=new_mask,
+    #         folder=virtual_server_http['folder'])
+    #
+    #     self.assertEqual(new_mask, self.bigip.virtual_server.get_mask(
+    #         name=virtual_server_http['name'],
+    #         folder=virtual_server_http['folder']))
+
+    def test_get_mask(self):
+        self._create_virtual_server_and_assert(virtual_server_http)
+
+        self.assertEqual(virtual_server_http['mask'],
+                         self.bigip.virtual_server.get_mask(
+                             name=virtual_server_http['name'],
+                             folder=virtual_server_http['folder']))
+
     def test_set_port(self):
         new_port = virtual_server_http['port'] + 1
 
@@ -92,27 +115,29 @@ class TestBigIPInterfaceVirtualServer(BigIPTestBase):
 
     def test_set_pool(self):
         self._create_virtual_server_and_assert(virtual_server_http)
+        self._create_pool_and_assert(pool_http)
 
         self.bigip.virtual_server.set_pool(name=virtual_server_http['name'],
                                            pool_name=pool_http['name'],
-                                           folder=virtual_server_http[
-                                               'folder'])
+                                           folder=virtual_server_http['folder'])
 
-        self.assertEqual(pool_http['name'], self.bigip.virtual_server.get_pool(
+        pool_name = self.bigip.virtual_server.get_pool(
             name=virtual_server_http['name'],
-            virtual_server_folder=virtual_server_http['folder']))
+            folder=virtual_server_http['folder'])
+
+        self.assertEqual(pool_http['name'], pool_name)
 
     def test_get_pool(self):
         self._create_virtual_server_and_assert(virtual_server_http)
+        self._create_pool_and_assert(pool_http)
 
         self.bigip.virtual_server.set_pool(name=virtual_server_http['name'],
                                            pool_name=pool_http['name'],
-                                           folder=virtual_server_http[
-                                               'folder'])
+                                           folder=virtual_server_http['folder'])
 
         self.assertEqual(pool_http['name'], self.bigip.virtual_server.get_pool(
             name=virtual_server_http['name'],
-            virtual_server_folder=virtual_server_http['folder']))
+            folder=virtual_server_http['folder']))
 
     def test_delete_virtual_server_http(self):
         self._create_virtual_server_and_assert(virtual_server_http)
@@ -132,28 +157,28 @@ class TestBigIPInterfaceVirtualServer(BigIPTestBase):
                                          mask=virtual_server['mask'],
                                          port=virtual_server['port'],
                                          protocol=virtual_server['protocol'],
-                                         vlan_name=vlan['name'],
+                                         vlan_name=None,
                                          folder=virtual_server['folder'])
 
         # assertions
         self.assertTrue(
-            self.bigip.virtual_server.exists(virtual_server['name'],
+            self.bigip.virtual_server.exists(name=virtual_server['name'],
                                              folder=virtual_server['folder']))
         self.assertEqual(virtual_server['protocol'],
                          self.bigip.virtual_server.get_protocol(
-                             virtual_server['name'],
+                             name=virtual_server['name'],
                              folder=virtual_server['folder']))
         self.assertEqual(virtual_server['addr'],
                          self.bigip.virtual_server.get_addr(
-                             virtual_server['name'],
+                             name=virtual_server['name'],
                              folder=virtual_server['folder']))
         self.assertEqual(virtual_server['mask'],
                          self.bigip.virtual_server.get_mask(
-                             virtual_server['name'],
+                             name=virtual_server['name'],
                              folder=virtual_server['folder']))
         self.assertEqual(virtual_server['port'],
                          self.bigip.virtual_server.get_port(
-                             virtual_server['name'],
+                             name=virtual_server['name'],
                              folder=virtual_server['folder']))
 
     def _delete_virtual_server_and_assert(self, virtual_server):
@@ -164,24 +189,22 @@ class TestBigIPInterfaceVirtualServer(BigIPTestBase):
             self.bigip.virtual_server.exists(name=virtual_server['name'],
                                              folder=virtual_server['folder']))
 
-    def _create_pool_and_assert(self, virtual_server):
-        self.bigip.pool.create(name=virtual_server['name'],
-                               folder=virtual_server['folder'])
+    def _create_pool_and_assert(self, pool):
+        self.bigip.pool.create(name=pool['name'],
+                               lb_method=pool['lb_method'],
+                               folder=pool['folder'])
 
-        self.assertTrue(self.bigip.pool.exists(name=virtual_server['name'],
-                                               folder=virtual_server[
-                                                   'folder']))
+        self.assertTrue(self.bigip.pool.exists(name=pool['name'],
+                                               folder=pool['folder']))
 
     def _remove_all_test_artifacts(self):
-        for virtual_server in [virtual_server_http, virtual_server_tcp,
-                               virtual_server_udp]:
-
+        for virtual_server in virtual_servers:
             self.bigip.virtual_server.delete(name=virtual_server['name'],
                                              folder=virtual_server['folder'])
+
+        for pool in pools:
+            self.bigip.pool.delete(name=pool['name'], folder=pool['folder'])
 
     def tearDown(self):
         # remove all test artifacts
         self._remove_all_test_artifacts()
-
-        # remove test VLAN
-        self.bigip.vlan.delete(self.vlan_name)

@@ -30,14 +30,20 @@ class Monitor(object):
                                             'Common.IPPortDefinition')
             ipport_def.address = '0.0.0.0'
             ipport_def.port = 0
-            monitor_ipport.address_type = \
-                self.lb_monitor.typefactory.create(
+
+            monitor_ipport.address_type = self.lb_monitor.typefactory.create(
                 'LocalLB.AddressType').ATYPE_STAR_ADDRESS_STAR_PORT
+
             monitor_ipport.ipport = ipport_def
 
             template_attributes = self.lb_monitor.typefactory.create(
                                     'LocalLB.Monitor.CommonAttributes')
-            template_attributes.parent_template = mon_type.lower()
+
+            if str(mon_type) == 'ICMP':
+                template_attributes.parent_template = 'gateway_icmp'
+            else:
+                template_attributes.parent_template = mon_type.lower()
+
             template_attributes.interval = interval
             template_attributes.timeout = timeout
             template_attributes.dest_ipport = monitor_ipport
@@ -68,7 +74,8 @@ class Monitor(object):
                 return 'HTTP'
             elif monitor_temp_type == monitor_temp_type_type.TTYPE_TCP:
                 return 'TCP'
-            elif monitor_temp_type == monitor_temp_type_type.TTYPE_ICMP:
+            elif monitor_temp_type == \
+                    monitor_temp_type_type.TTYPE_GATEWAY_ICMP:
                 return 'ICMP'
             else:
                 # TODO: add exception for unsupported monitor type
@@ -160,7 +167,7 @@ class Monitor(object):
         elif type_str == 'HTTP':
             return monitor_temp_type.TTYPE_HTTP
         elif type_str == 'ICMP':
-            return monitor_temp_type.TTYPE_ICMP
+            return monitor_temp_type.TTYPE_GATEWAY_ICMP
         else:
             # TODO: raise exception for unsupported monitor type
             pass

@@ -4,6 +4,7 @@ import logging
 from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
 
+from f5.bigip.bigip_interfaces import OBJ_PREFIX
 from f5.bigip.bigip_interfaces.cluster import Cluster
 from f5.bigip.bigip_interfaces.device import Device
 from f5.bigip.bigip_interfaces.monitor import Monitor

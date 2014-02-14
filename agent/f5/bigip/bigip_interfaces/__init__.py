@@ -13,7 +13,7 @@ def icontrol_folder(method):
             if not kwargs['folder'] == 'Common':
                 if not kwargs['folder'].startswith(OBJ_PREFIX):
                     kwargs['folder'] = OBJ_PREFIX + kwargs['folder']
-            if ('name' in kwargs):
+            if 'name' in kwargs and kwargs['name']:
                 if kwargs['name'].startswith('/Common/'):
                     kwargs['name'] = os.path.basename(kwargs['name'])
                     if not kwargs['name'].startswith(OBJ_PREFIX):
@@ -27,7 +27,7 @@ def icontrol_folder(method):
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
             for name in kwargs:
-                if name.find('_name') > 0:
+                if name.find('_name') > 0 and kwargs[name]:
                     if kwargs[name].startswith('/Common/'):
                         kwargs[name] = os.path.basename(kwargs[name])
                         if not kwargs[name].startswith(OBJ_PREFIX):
@@ -73,3 +73,11 @@ def domain_address(method):
                         netaddr.IPAddress(kwargs[name])
         return method(*args, **kwargs)
     return wrapper
+
+
+def strip_folder_and_prefix(path):
+    if isinstance(path, list):
+        return map(lambda p: p.replace(OBJ_PREFIX, ''),
+                   map(os.path.basename, path))
+    else:
+        return os.path.basename(str(path)).replace(OBJ_PREFIX, '')

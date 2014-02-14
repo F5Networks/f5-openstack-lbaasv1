@@ -1,7 +1,7 @@
 import os
 
-from f5.bigip.bigip_interfaces import domain_address
-from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
+    strip_folder_and_prefix
 
 # Local Traffic - Virtual Server
 
@@ -52,15 +52,16 @@ class VirtualServer(object):
             # TODO: remove SNAT automap for all VIPs when routing is finished
             self.lb_vs.set_snat_automap([name])
 
-            # add enabled VLANs
-            enabled_state = self.lb_vs.typefactory.create(
-                'Common.EnabledState').STATE_ENABLED
-            filter_list = self.lb_vs.typefactory.create(
-                'Common.VLANFilterList')
-            filter_list.state = enabled_state
-            filter_list.vlans = [vlan_name]
+            if self.bigip.vlan.exists(name=vlan_name, folder=folder):
+                # add enabled VLANs
+                enabled_state = self.lb_vs.typefactory.create(
+                    'Common.EnabledState').STATE_ENABLED
+                filter_list = self.lb_vs.typefactory.create(
+                    'Common.VLANFilterList')
+                filter_list.state = enabled_state
+                filter_list.vlans = [vlan_name]
 
-            self.lb_vs.set_vlan([name], [filter_list])
+                self.lb_vs.set_vlan([name], [filter_list])
 
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
@@ -70,12 +71,13 @@ class VirtualServer(object):
     @icontrol_folder
     def get_pool(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            return self.lb_vs.get_default_pool_name([name])[0]
+            pool_name = self.lb_vs.get_default_pool_name([name])[0]
+            return strip_folder_and_prefix(pool_name)
 
     @icontrol_folder
     def set_pool(self, name=None, pool_name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            if self.bigip.pool.exists(pool_name):
+            if self.bigip.pool.exists(name=pool_name, folder=folder):
                 self.lb_vs.set_default_pool_name([name], [pool_name])
             elif not pool_name:
                 self.lb_vs.set_default_pool_name([name], [''])
@@ -97,7 +99,7 @@ class VirtualServer(object):
     def get_addr(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             addr_port = self.lb_vs.get_destination_v2([name])[0]
-            return os.path.basename(addr_port.address)
+            return os.path.basename(addr_port.address).split('%')[0]
 
     @icontrol_folder
     def get_port(self, name=None, folder='Common'):
@@ -108,12 +110,12 @@ class VirtualServer(object):
     @icontrol_folder
     @domain_address
     def set_mask(self, name=None, netmask=None, folder='Common'):
-        if self.exists(name=name, folder='folder'):
+        if self.exists(name=name, folder=folder):
             self.lb_vs.set_wildmask([name], [netmask])
 
     @icontrol_folder
     def get_mask(self, name=None, folder='Common'):
-        if self.exists(name=name, folder='folder'):
+        if self.exists(name=name, folder=folder):
             return self.lb_vs.get_wildmask([name])[0]
 
     @icontrol_folder
