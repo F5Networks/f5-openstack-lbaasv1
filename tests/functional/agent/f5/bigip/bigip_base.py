@@ -8,14 +8,14 @@ class BigIPTestBase(unittest.TestCase):
         self.config = ConfigParser.ConfigParser()
         self.config.read('../../../../test_config.cfg')
 
-        self.bigip = self._get_bigip()
+        env = self.config.get('test_env', 'active')
 
-    def _get_bigip(self):
-        section = 'agent.f5.bigip:global'
+        self.bigip = self._get_bigip(env)
 
-        hostname = self.config.get(section, 'bigip_hostname')
-        username = self.config.get(section, 'bigip_username')
-        password = self.config.get(section, 'bigip_password')
+    def _get_bigip(self, env):
+        hostname = self.config.get(env, 'bigip_hostname')
+        username = self.config.get(env, 'bigip_username')
+        password = self.config.get(env, 'bigip_password')
 
         return BigIP(hostname, username, password)
 

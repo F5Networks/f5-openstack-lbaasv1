@@ -20,7 +20,7 @@ class VirtualServer(object):
         if not self.exists(name=name, folder=folder):
             # virtual server definition
             vs_def = self.lb_vs.typefactory.create(
-                                        'Common.VirtualServerDefinition')
+                'Common.VirtualServerDefinition')
             vs_def.name = name
             vs_def.address = ip_address
 
@@ -34,15 +34,15 @@ class VirtualServer(object):
 
             # virtual server resources
             res = self.lb_vs.typefactory.create(
-                            'LocalLB.VirtualServer.VirtualServerResource')
+                'LocalLB.VirtualServer.VirtualServerResource')
             vs_vs_type = self.lb_vs.typefactory.create(
-                                'LocalLB.VirtualServer.VirtualServerType')
+                'LocalLB.VirtualServer.VirtualServerType')
             res.type = vs_vs_type.RESOURCE_TYPE_POOL
             resources = [res]
 
             # virtual server profiles
             prof_seq = self.lb_vs.typefactory.create(
-                      'LocalLB.VirtualServer.VirtualServerProfileSequence')
+                'LocalLB.VirtualServer.VirtualServerProfileSequence')
             profiles = [prof_seq]
 
             # virtual server creation
@@ -53,9 +53,9 @@ class VirtualServer(object):
 
             # add enabled VLANs
             enabled_state = self.lb_vs.typefactory.create(
-                                        'Common.EnabledState').STATE_ENABLED
+                'Common.EnabledState').STATE_ENABLED
             filter_list = self.lb_vs.typefactory.create(
-                                           'Common.VLANFilterList')
+                'Common.VLANFilterList')
             filter_list.state = enabled_state
             filter_list.vlans = [vlan_name]
 
