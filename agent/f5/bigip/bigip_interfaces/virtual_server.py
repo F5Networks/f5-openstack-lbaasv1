@@ -14,9 +14,10 @@ class VirtualServer(object):
         # iControl helper objects
         self.lb_vs = self.bigip.icontrol.LocalLB.VirtualServer
 
+    @icontrol_folder
     @domain_address
     def create(self, name=None, ip_address=None, mask=None,
-               port=None, protocol=None, vlan_name=None, folder='/Common'):
+               port=None, protocol=None, vlan_name=None, folder='Common'):
         if not self.exists(name=name, folder=folder):
             # virtual server definition
             vs_def = self.lb_vs.typefactory.create(
@@ -61,24 +62,28 @@ class VirtualServer(object):
 
             self.lb_vs.set_vlan([name], [filter_list])
 
-    def delete(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.lb_vs.delete_virtual_server([name])
 
-    def get_pool(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_pool(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             return self.lb_vs.get_default_pool_name([name])[0]
 
-    def set_pool(self, name=None, pool_name=None, folder='/Common'):
+    @icontrol_folder
+    def set_pool(self, name=None, pool_name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             if self.bigip.pool.exists(pool_name):
                 self.lb_vs.set_default_pool_name([name], [pool_name])
             elif not pool_name:
                 self.lb_vs.set_default_pool_name([name], [''])
 
+    @icontrol_folder
     @domain_address
     def set_addr_port(self, name=None, ip_address=None,
-                      port=None, folder='/Common'):
+                      port=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             # TODO: virtual server definition in device spec needs a port
             if not port:
@@ -88,31 +93,37 @@ class VirtualServer(object):
             dest.port = port
             self.lb_vs.set_destination_v2([name], [dest])
 
-    def get_addr(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_addr(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             addr_port = self.lb_vs.get_destination_v2([name])[0]
             return os.path.basename(addr_port.address)
 
-    def get_port(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_port(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             addr_port = self.lb_vs.get_destination_v2([name])[0]
             return int(addr_port.port)
 
+    @icontrol_folder
     @domain_address
-    def set_mask(self, name=None, netmask=None, folder='/Common'):
+    def set_mask(self, name=None, netmask=None, folder='Common'):
         if self.exists(name=name, folder='folder'):
             self.lb_vs.set_wildmask([name], [netmask])
 
-    def get_mask(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_mask(self, name=None, folder='Common'):
         if self.exists(name=name, folder='folder'):
             return self.lb_vs.get_wildmask([name])[0]
 
-    def set_protocol(self, name=None, protocol=None, folder='/Common'):
+    @icontrol_folder
+    def set_protocol(self, name=None, protocol=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             protocol_type = self._get_protocol_type(protocol)
             self.lb_vs.set_protocol([name], [protocol_type])
 
-    def get_protocol(self, name=None, folder='/Common'):
+    @icontrol_folder
+    def get_protocol(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             protocol_type = self.lb_vs.get_protocol([name])[0]
 
@@ -124,7 +135,7 @@ class VirtualServer(object):
                 return 'TCP'
 
     def _get_protocol_type(self, protocol_str):
-        protocol_str = str.upper(protocol_str)
+        protocol_str = protocol_str.upper()
         protocol_type = self.lb_vs.typefactory.create('Common.ProtocolType')
 
         if protocol_str == 'ICMP':
@@ -135,7 +146,7 @@ class VirtualServer(object):
             return protocol_type.PROTOCOL_TCP
 
     @icontrol_folder
-    def exists(self, name=None, folder='/Common'):
+    def exists(self, name=None, folder='Common'):
         if name in self.lb_vs.get_list():
             return True
         else:

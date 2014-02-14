@@ -3,9 +3,14 @@ from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
+from neutron.services.loadbalancer.drivers.f5.bigip \
+                                     import agent_manager as am
 from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
+
+import netaddr
+import os
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
@@ -34,113 +39,192 @@ class iControlDriver(object):
         self.conf = conf
         self.conf.register_opts(OPTS)
         self.pool_to_port_id = {}
+        self.bigip = None
+        self.connected = False
 
-        if not self.conf.icontrol_hostname:
-            raise InvalidConfigurationOption(opt_name='icontrol_hostname',
-                                   opt_value='valid hostname or IP address')
-        if not self.conf.icontrol_username:
-            raise InvalidConfigurationOption(opt_name='icontrol_username',
-                                             opt_value='valid username')
-        if not self.conf.icontrol_password:
-            raise InvalidConfigurationOption(opt_name='icontrol_password',
-                                             opt_value='valid password')
-
-        self.hostname = self.conf.icontrol_hostname
-        self.username = self.conf.icontrol_username
-        self.password = self.conf.icontrol_password
-
-        LOG.debug(_('opening iControl connection to %s @ %s' % (self.username,
-                                                                self.hostname)
-                    ))
-
-        self.bigip = bigip.BigIP(self.hostname, self.username, self.password)
-
-        # device validate
-        major_version = self.bigip.system.get_major_version()
-        if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
-            raise f5ex.MajorVersionValidateFailed(
-                    'device must be at least TMOS %s.%s'
-                    % (f5const.MIN_TMOS_MAJOR_VERSION,
-                       f5const.MIN_TMOS_MINOR_VERSION))
-        minor_version = self.bigip.system.get_minor_version()
-        if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
-            raise f5ex.MinorVersionValidateFailed(
-                    'device must be at least TMOS %s.%s'
-                    % (f5const.MIN_TMOS_MAJOR_VERSION,
-                       f5const.MIN_TMOS_MINOR_VERSION))
+        self._init_connection()
 
         LOG.debug(_('iControlDriver initialized: hostname:%s username:%s'
                     % (self.hostname, self.username)))
 
+    @am.is_connected
     @log.log
     def sync(self, logical_config):
         pass
 
+    @am.is_connected
     @log.log
     def create_vip(self, vip, network):
+        self._assure_network(network)
+        #vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
+        #vip_netmask = str(vip_network.netmask
+
+        if network['shared'] or network['network_type'] == 'local':
+            vlan_name = '/Common/' + os.path.basename(network['id'])
+            ip_address = vip['address'] + "%0"
+        else:
+            vlan_name = network['id']
+            ip_address = vip['address']
+
+        self.bigip.virtual_server.create(name=vip['id'],
+                                         ip_address=ip_address,
+                                         mask='255.255.255.255',
+                                         port=vip['protocol_port'],
+                                         protocol='TCP',
+                                         vlan_name=vlan_name,
+                                         folder=vip['tenant_id'])
+        if 'id' in vip['pool']:
+            self.bigip.virtual_server.set_pool(
+                                         name=vip['id'],
+                                         pool_name=vip['pool']['id'],
+                                         folder=vip['tenant_id']
+                                        )
         return True
 
+    @am.is_connected
     @log.log
     def update_vip(self, old_vip, vip, old_network, network):
         return True
 
+    @am.is_connected
     @log.log
     def delete_vip(self, vip, network):
+        self.bigip.virtual_server.delete(name=vip['id'],
+                                   folder=vip['tenant_id'])
+        if network:
+            if network['network_type'] == 'vlan' or \
+               network['network_type'] == 'flat':
+                self.bigip.vlan.delete(name=network['id'],
+                                       folder=network['tenant_id'])
         return True
 
+    @am.is_connected
     @log.log
     def create_pool(self, pool, network):
-        #pool_name = 'p_' + pool['id']
-        #folder = 't_' + pool['tenant_id']
-        #if not pool['description']:
-        #    pool['description'] = ''
-        #if not self.bigip.pool.exists(pool_name=pool_name, folder=folder):
-        #    self.bigip.pool.create(
-        #                            name=pool_name,
-        #                            lb_method=pool['lb_method'],
-        #                            description=pool['description'],
-        #                            folder=folder
-        #                      )
-        #if len(pool['members']) > 0:
-        #    pass
-            # setup network
+
+        self._assure_network(network)
+
+        self.bigip.pool.create(name=pool['id'],
+                               lb_method=pool['lb_method'],
+                               description=pool['name'],
+                               folder=pool['tenant_id']
+                              )
+        # get port and fixe_ip on subnet
+        port = self.plugin_rpc.create_port(subnet_id=pool['subnet_id'],
+                      mac_address=None,
+                      name='non_floating_self_ip_' + pool['subnet_id'],
+                      fixed_address_count=1)
+        ip_address = port['fixed_ips'][0]['ip_address']
+        pool_network = netaddr.IPNetwork(network['subnet']['cidr'])
+        pool_netmask = str(pool_network.netmask)
+
+        LOG.debug(_('adding selfip %s/%s' % (ip_address, pool_netmask)))
+
+        if network['shared'] or network['network_type'] == 'local':
+            vlan_name = '/Common/' + os.path.basename(network['id'])
+            ip_address = ip_address + "%0"
+        else:
+            vlan_name = network['id']
+
+        LOG.debug(_('vlan_name %s' % vlan_name))
+
+        self.bigip.selfip.create(name=pool['subnet_id'],
+                                 ip_address=ip_address,
+                                 netmask=pool_netmask,
+                                 vlan_name=vlan_name,
+                                 floating=False,
+                                 folder=pool['tenant_id'])
+
+        for member in pool['members']:
+            # force tenancy on pool
+            member['tenant_id'] = pool['tenant_id']
+            self.create_member(member, network)
+
+        for health_monitor in pool['health_monitors']:
+            self.create_pool_health_monitor(health_monitor, pool, network)
+
         return True
 
+    @am.is_connected
     @log.log
     def update_pool(self, old_pool, pool, old_network, network):
         return True
 
+    @am.is_connected
     @log.log
     def delete_pool(self, pool, network):
         # WARNIG network might be NONE if
         # pool deleted by periodic task
+        self.bigip.pool.delete(name=pool['id'],
+                                   folder=pool['tenant_id'])
+        self.bigip.selfip.delete(name=pool['subnet_id'],
+                                 folder=pool['tenant_id'])
+
+        if network:
+            if network['network_type'] == 'vlan' or \
+               network['network_type'] == 'flat':
+                self.bigip.vlan.delete(name=network['id'],
+                                       folder=network['tenant_id'])
         return True
 
+    @am.is_connected
     @log.log
     def create_member(self, member, network):
+        self.bigip.pool.add_member(name=member['pool_id'],
+                                   ip_address=member['address'],
+                                   port=member['protocol_port'],
+                                   folder=member['tenant_id'])
         return True
 
+    @am.is_connected
     @log.log
     def update_member(self, old_member, member, old_network, network):
         return True
 
+    @am.is_connected
     @log.log
     def delete_member(self, member, network):
+        self.bigip.pool.remove_member(name=member['pool_id'],
+                                      ip_address=member['address'],
+                                      port=member['protocol_port'],
+                                      folder=member['tenant_id'])
         return True
 
+    @am.is_connected
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, network):
+        timeout = int(health_monitor['timeout']) * \
+                  int(health_monitor['max_retries'])
+        self.bigip.monitor.create(
+                                  name=health_monitor['id'],
+                                  mon_type=health_monitor['type'],
+                                  interval=int(health_monitor['delay']),
+                                  timeout=timeout,
+                                  send_text=None,
+                                  recv_text=None,
+                                  folder=pool['tenant_id'])
+        self.bigip.pool.add_monitor(name=pool['id'],
+                                    monitor_name=health_monitor['id'],
+                                    folder=pool['tenant_id'])
         return True
 
+    @am.is_connected
     @log.log
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, network):
         return True
 
+    @am.is_connected
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, network):
+        self.bigip.pool.remove_monitor(name=pool['id'],
+                                       monitor_name=health_monitor['id'],
+                                       folder=pool['tenant_id'])
+        self.bigip.monitor.delete(name=health_monitor['id'],
+                                  folder=pool['tenant_id'])
         return True
 
+    # @am.is_connected
     @log.log
     def get_stats(self, logical_service):
 
@@ -171,3 +255,90 @@ class iControlDriver(object):
     @log.log
     def remove_orphans(self, known_pool_ids):
         raise NotImplementedError()
+
+    def _assure_network(self, network):
+        if network['network_type'] == 'vlan':
+            if network['shared']:
+                network_folder = 'Common'
+            else:
+                network_folder = network['id']
+
+            self.bigip.vlan.create(name=network['id'],
+                                       vlanid=network['segmentation_id'],
+                                       interface='1.1',
+                                       folder=network_folder,
+                                       description=network['name'])
+        if network['network_type'] == 'flat':
+            if network['shared']:
+                network_folder = 'Common'
+            else:
+                network_folder = network['id']
+
+            self.bigip.vlan.create(name=network['id'],
+                                       vlanid=0,
+                                       interface='1.1',
+                                       folder=network_folder,
+                                       description=network['name'])
+        elif network['network_type'] == 'local':
+            if network['shared']:
+                network_folder = 'Common'
+            else:
+                network_folder = network['id']
+
+            self.bigip.vlan.create(name=network['name'],
+                                       vlanid=0,
+                                       interface='1.1',
+                                       folder=network_folder,
+                                       description=network['name'])
+
+    def _init_connection(self):
+        try:
+            if not self.connected:
+                if not self.conf.icontrol_hostname:
+                    raise InvalidConfigurationOption(
+                                 opt_name='icontrol_hostname',
+                                 opt_value='valid hostname or IP address')
+                if not self.conf.icontrol_username:
+                    raise InvalidConfigurationOption(
+                                 opt_name='icontrol_username',
+                                 opt_value='valid username')
+                if not self.conf.icontrol_password:
+                    raise InvalidConfigurationOption(
+                                 opt_name='icontrol_password',
+                                 opt_value='valid password')
+
+                self.hostname = self.conf.icontrol_hostname
+                self.username = self.conf.icontrol_username
+                self.password = self.conf.icontrol_password
+
+                LOG.debug(_('opening iControl connection to %s @ %s' % (
+                                                                self.username,
+                                                                self.hostname)
+                            ))
+                self.bigip = bigip.BigIP(self.hostname,
+                                         self.username,
+                                         self.password)
+
+                # device validate
+                major_version = self.bigip.system.get_major_version()
+                if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+                    raise f5ex.MajorVersionValidateFailed(
+                            'device must be at least TMOS %s.%s'
+                            % (f5const.MIN_TMOS_MAJOR_VERSION,
+                               f5const.MIN_TMOS_MINOR_VERSION))
+                minor_version = self.bigip.system.get_minor_version()
+                if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+                    raise f5ex.MinorVersionValidateFailed(
+                            'device must be at least TMOS %s.%s'
+                            % (f5const.MIN_TMOS_MAJOR_VERSION,
+                               f5const.MIN_TMOS_MINOR_VERSION))
+
+                LOG.debug(_('connected to iControl device %s @ %s ver %s.%s'
+                            % (self.username, self.hostname,
+                               major_version, minor_version)))
+
+                self.connected = True
+
+        except Exception as e:
+            LOG.error(_('Could not communicate with iControl device: %s'
+                           % e.message))

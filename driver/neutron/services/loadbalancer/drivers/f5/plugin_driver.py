@@ -211,7 +211,7 @@ class LoadBalancerCallbacks(object):
                 'mac_address': mac_address,
                 'admin_state_up': True,
                 'device_id': host,
-                'device_owner': self.plugin.__class__.__name__,
+                'device_owner': 'network:f5lbaas',
                 'fixed_ips': fixed_ips
             }
             port = self.plugin._core_plugin.create_port(context,
@@ -371,6 +371,7 @@ class LoadBalancerCallbacks(object):
         self.plugin.update_pool_health_monitor(context,
                                                health_monitor_id, pool_id,
                                                status, status_description)
+
     @log.log
     def health_monitor_destroyed(self, context, health_monitor_id=None,
                                  pool_id=None, host=None):

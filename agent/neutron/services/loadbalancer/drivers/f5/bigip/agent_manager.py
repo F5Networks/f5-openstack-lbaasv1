@@ -28,8 +28,10 @@ from neutron.common import log
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
+
 from neutron.services.loadbalancer.drivers.f5.bigip import agent_api
 from neutron.services.loadbalancer.drivers.f5 import plugin_driver
+
 
 LOG = logging.getLogger(__name__)
 
@@ -91,11 +93,11 @@ class LogicalServiceCache(object):
                 port_id = logical_config['vip']['port_id']
             else:
                 port_id = None
-            sevice = self.Service(
+            service = self.Service(
                 port_id, logical_config['pool']['id']
             )
         if logical_config in self.services:
-            self.services.remove(sevice)
+            self.services.remove(service)
 
     def remove_by_pool_id(self, pool_id):
         s = self.pool_lookup.get(pool_id)
@@ -175,6 +177,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     def _report_state(self):
         try:
+            # assure agent is connected:
+            if not self.driver.connected:
+                self.driver._init_connection()
+
             service_count = len(self.cache.services)
             self.agent_state['configurations']['services'] = service_count
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
@@ -352,7 +358,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_pool"""
         try:
             if self.driver.delete_pool(pool, network):
-                self.destroy_service(pool['id'])
+                self.cache.remove_by_pool_id(pool['id'])
                 self.plugin_rpc.pool_destroyed(pool['id'])
         except Exception as e:
             message = 'could not delete pool:' + e.message
@@ -465,3 +471,15 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 for pool_id in self.cache.get_pool_ids():
                     self.destroy_service(pool_id)
             LOG.info(_("agent_updated by server side %s!"), payload)
+
+
+def is_connected(method):
+    """Decorator to check we are connected before provisioning."""
+    def wrapper(*args, **kwargs):
+        instance = args[0]
+        if instance.connected:
+            return method(*args, **kwargs)
+        else:
+            LOG.error(_('Can not execute %s. Not connected.'
+                        % method.__name__))
+    return wrapper

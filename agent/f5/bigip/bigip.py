@@ -144,7 +144,7 @@ class BigIP(object):
         if folder == '/Common':
             return 0
         else:
-            return self.route.get_domain(folder)
+            return self.route.get_domain(folder=folder)
 
     @staticmethod
     def _get_icontrol(hostname, username, password, timeout=None):
