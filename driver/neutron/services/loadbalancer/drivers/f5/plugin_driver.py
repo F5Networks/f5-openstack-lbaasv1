@@ -155,10 +155,10 @@ class LoadBalancerCallbacks(object):
                                         retval['vip']['port']['network_id'])
                 retval['vip']['subnets'] = []
                 for fixed_ip in retval['vip']['port']['fixed_ips']:
-                    retval['vip']['subnets'].append(fixed_ip['subnet_id'])
-                retval['vip']['subnets'] = \
-                 self.plugin._core_plugin.get_subnets(context,
-                                                 retval['vip']['subnets'])
+                    retval['vip']['subnets'].append(
+                         self.plugin._core_plugin.get_subnet(context,
+                                                      fixed_ip['subnet_id'])
+                                                    )
             else:
                 retval['vip'] = {}
                 retval['vip']['port'] = {}
@@ -174,7 +174,7 @@ class LoadBalancerCallbacks(object):
                         self.plugin._core_plugin.get_subnet(
                                              context, allocated['subnet_id'])
                 member['network'] = \
-                        self.plugin._core_plugin.get_subnet(
+                        self.plugin._core_plugin.get_network(
                                              context, allocated['network_id'])
                 retval['members'].append(member)
             retval['healthmonitors'] = [
