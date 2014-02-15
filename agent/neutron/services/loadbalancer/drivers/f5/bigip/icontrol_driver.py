@@ -49,7 +49,7 @@ class iControlDriver(object):
 
     @am.is_connected
     @log.log
-    def sync(self, logical_config):
+    def sync(self, service):
         pass
 
     @am.is_connected

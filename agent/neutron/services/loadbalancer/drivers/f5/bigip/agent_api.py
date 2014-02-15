@@ -31,26 +31,26 @@ class LbaasAgentApi(proxy.RpcProxy):
         self.host = host
 
     @log.log
-    def get_ready_services(self, tenant_ids=None):
+    def get_active_pending_pool_ids(self, tenant_ids=None):
         if tenant_ids:
             return self.call(
                 self.context,
-                self.make_msg('get_ready_services', tenant_ids=tenant_ids),
+                self.make_msg('get_active_pending_pool_ids', tenant_ids=tenant_ids),
                 topic=self.topic
             )
         else:
             return self.call(
                 self.context,
-                self.make_msg('get_ready_services'),
+                self.make_msg('get_active_pending_pool_ids'),
                 topic=self.topic
             )
 
     @log.log
-    def get_logical_service(self, pool_id):
+    def get_service_by_pool_id(self, pool_id):
         return self.call(
             self.context,
             self.make_msg(
-                'get_logical_service',
+                'get_service_by_pool_id',
                 pool_id=pool_id,
                 host=self.host
             ),

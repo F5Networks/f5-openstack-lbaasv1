@@ -22,6 +22,7 @@ from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
 from neutron.common import exceptions as q_exc
 from neutron.common import rpc as q_rpc
+from neutron.db import models_v2
 from neutron.db import agents_db
 from neutron.db.loadbalancer import loadbalancer_db as ldb
 from neutron.extensions import lbaas_agentscheduler
@@ -72,7 +73,7 @@ class LoadBalancerCallbacks(object):
             [self, agents_db.AgentExtRpcCallback(self.plugin)])
 
     @log.log
-    def get_ready_services(self, context, tenant_ids=None):
+    def get_active_pending_pool_ids(self, context, tenant_ids=None):
         with context.session.begin(subtransactions=True):
             qry = (context.session.query(ldb.Pool.id).
                    join(ldb.Vip))
@@ -109,14 +110,14 @@ class LoadBalancerCallbacks(object):
                 return []
 
     @log.log
-    def get_logical_service(self, context, pool_id=None,
-                            activate=True, host=None,
+    def get_service_by_pool_id(self, context, pool_id=None,
+                            activate=False, host=None,
                            **kwargs):
         with context.session.begin(subtransactions=True):
             qry = context.session.query(ldb.Pool)
             qry = qry.filter_by(id=pool_id)
             pool = qry.one()
-            LOG.debug(_('setting logical_service entry for %s' % pool))
+            LOG.debug(_('setting service definition entry for %s' % pool))
             if activate:
                 # set all resources to active
                 if pool.status in ACTIVE_PENDING:
@@ -136,52 +137,58 @@ class LoadBalancerCallbacks(object):
                 raise q_exc.Invalid(_('Expected active vip'))
             retval = {}
             retval['pool'] = self.plugin._make_pool_dict(pool)
-
             subnet_dict = self.plugin._core_plugin.get_subnet(context,
                                             retval['pool']['subnet_id'])
             retval['pool']['subnet'] = subnet_dict
-            pool_fixed_ip_filters = {'network_id': [subnet_dict['network_id']],
+            pool_subnet_fixed_ip_filters = {'network_id':
+                                            [subnet_dict['network_id']],
                              'tenant_id': [subnet_dict['tenant_id']],
                              'device_id': [host]}
-            pool_fixed_ip_dict = self.plugin._core_plugin.get_ports(context,
-                                                filters=pool_fixed_ip_filters)
-            retval['pool_fixed_ips'] = pool_fixed_ip_dict
+            retval['pool']['ports'] = self.plugin._core_plugin.get_ports(
+                                                                   context,
+                                      filters=pool_subnet_fixed_ip_filters)
+            retval['pool']['network'] = self.plugin._core_plugin.get_network(
+                            context, retval['pool']['subnet']['network_id'])
             if pool.vip:
                 retval['vip'] = self.plugin._make_vip_dict(pool.vip)
                 retval['vip']['port'] = (
                     self.plugin._core_plugin._make_port_dict(pool.vip.port)
                 )
+                retval['vip']['network'] = \
+                 self.plugin._core_plugin.get_subnet(context,
+                                        retval['vip']['port']['network_id'])
+                retval['vip']['subnets'] = []
                 for fixed_ip in retval['vip']['port']['fixed_ips']:
-                    vip_subnet_dict = self.plugin._core_plugin.get_subnet(
-                        context,
-                        fixed_ip['subnet_id']
-                    )
-                    fixed_ip['subnet'] = vip_subnet_dict
-                vip_fixed_ip_filters = {'network_id':
-                                         [vip_subnet_dict['network_id']],
-                             'tenant_id': [vip_subnet_dict['tenant_id']],
-                             'device_id': [host]}
-                vip_fixed_ip_dict = self.plugin._core_plugin.get_ports(context,
-                                                  filters=vip_fixed_ip_filters)
-                retval['vip_fixed_ips'] = vip_fixed_ip_dict
+                    retval['vip']['subnets'].append(fixed_ip['subnet_id'])
+                retval['vip']['subnets'] = \
+                 self.plugin._core_plugin.get_subnets(context,
+                                                 retval['vip']['subnets'])
             else:
                 retval['vip'] = {}
                 retval['vip']['port'] = {}
-                retval['vip']['port']['subnet'] = {}
-                retval['vip_fixed_ips'] = []
-            retval['members'] = [
-                self.plugin._make_member_dict(m)
-                for m in pool.members if m.status in (constants.ACTIVE,
-                                                      constants.INACTIVE)
-            ]
+                retval['vip']['port']['network'] = {}
+                retval['vip']['port']['subnets'] = []
+            retval['members'] = []
+            for m in pool.members:
+                if m.status in (constants.ACTIVE,
+                                constants.INACTIVE):
+                    member = self.plugin._make_member_dict(m)
+                    alloc_qry = context.session.query(models_v2.IPAllocation)
+                    allocated = alloc_qry.filter_by(
+                                        ip_address=member['address']).first()
+                    member['subnet'] = \
+                        self.plugin._core_plugin.get_subnet(
+                                             context, allocated['subnet_id'])
+                    member['network'] = \
+                        self.plugin._core_plugin.get_subnet(
+                                             context, allocated['network_id'])
+                    retval['members'].append(member)
             retval['healthmonitors'] = [
                 self.plugin._make_health_monitor_dict(hm.healthmonitor)
                 for hm in pool.monitors
                 if hm.status == constants.ACTIVE
             ]
-            vxlan_endpoints = self._get_vxlan_endpoints(context)
-            retval['vxlan_endpoints'] = vxlan_endpoints
-            LOG.debug(_('vxlan_endpoints: %s' % vxlan_endpoints))
+            retval['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
             retval['gre_endpoints'] = self._get_gre_endpoints(context)
             return retval
 
@@ -428,113 +435,111 @@ class LoadBalancerAgentApi(proxy.RpcProxy):
             topic, default_version=self.BASE_RPC_API_VERSION)
 
     @log.log
-    def create_vip(self, context, vip, network, host):
+    def create_vip(self, context, vip, service, host):
         return self.cast(
             context,
-            self.make_msg('create_vip', vip=vip, network=network),
+            self.make_msg('create_vip', vip=vip, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def update_vip(self, context, old_vip, vip, old_network, network, host):
+    def update_vip(self, context, old_vip, vip, service, host):
         return self.cast(
             context,
             self.make_msg('update_vip', old_vip=old_vip, vip=vip,
-                          old_network=old_network, network=network),
+                          service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def delete_vip(self, context, vip, network, host):
+    def delete_vip(self, context, vip, service, host):
         return self.cast(
             context,
-            self.make_msg('delete_vip', vip=vip, network=network),
+            self.make_msg('delete_vip', vip=vip, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def create_pool(self, context, pool, network, host):
+    def create_pool(self, context, pool, service, host):
         return self.cast(
             context,
-            self.make_msg('create_pool', pool=pool, network=network),
+            self.make_msg('create_pool', pool=pool, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def update_pool(self, context, old_pool, pool, old_network, network, host):
+    def update_pool(self, context, old_pool, pool, service, host):
         return self.cast(
             context,
             self.make_msg('update_pool', old_pool=old_pool, pool=pool,
-                          old_network=old_network, network=network),
+                          service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def delete_pool(self, context, pool, network, host):
+    def delete_pool(self, context, pool, service, host):
         return self.cast(
             context,
-            self.make_msg('delete_pool', pool=pool, network=network),
+            self.make_msg('delete_pool', pool=pool, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def create_member(self, context, member, network, host):
+    def create_member(self, context, member, service, host):
         return self.cast(
             context,
-            self.make_msg('create_member', member=member, network=network),
+            self.make_msg('create_member', member=member, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def update_member(self, context, old_member, member, old_network,
-                      network, host):
+    def update_member(self, context, old_member, member, service, host):
         return self.cast(
             context,
             self.make_msg('update_member', old_member=old_member,
-                          member=member, old_network=old_network,
-                          network=network),
+                          member=member, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
-    def delete_member(self, context, member, network, host):
+    def delete_member(self, context, member, service, host):
         return self.cast(
             context,
-            self.make_msg('delete_member', member=member, network=network),
+            self.make_msg('delete_member', member=member, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool,
-                                   network, host):
+                                   service, host):
         return self.cast(
             context,
             self.make_msg('create_pool_health_monitor',
                           health_monitor=health_monitor, pool=pool,
-                          network=network),
+                          service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
-                              health_monitor, pool, network, host):
+                              health_monitor, pool, service, host):
         return self.cast(
             context,
             self.make_msg('update_health_monitor',
                           old_health_monitor=old_health_monitor,
                           health_monitor=health_monitor,
-                          pool=pool, network=network),
+                          pool=pool, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool,
-                                   network, host):
+                                   service, host):
         return self.cast(
             context,
             self.make_msg('delete_pool_health_monitor',
                           health_monitor=health_monitor,
-                          pool=pool, network=network),
+                          pool=pool, service=service),
             topic='%s.%s' % (self.topic, host)
         )
 
@@ -549,11 +554,11 @@ class LoadBalancerAgentApi(proxy.RpcProxy):
         )
 
     @log.log
-    def get_pool_stats(self, context, pool, host):
+    def get_pool_stats(self, context, pool, service, host):
         return self.cast(
                          context,
                          self.make_msg('get_pool_stats',
-                                       pool=pool),
+                                       pool=pool, service=service),
                          topic='%s.%s' % (self.topic, host)
                          )
 
@@ -611,11 +616,13 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         vip['pool'] = self._get_pool(context, vip['pool_id'])
 
-        # populate a network structure for the rpc message
-        network = self._get_vip_network(context, vip, agent)
-
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=vip['pool_id'],
+                                                        activate=False,
+                                                        host=agent['host'])
         # call the RPC proxy with the constructed message
-        self.agent_rpc.create_vip(context, vip, network, agent['host'])
+        self.agent_rpc.create_vip(context, vip, service, agent['host'])
 
     @log.log
     def update_vip(self, context, old_vip, vip):
@@ -626,15 +633,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         vip['pool'] = self._get_pool(context, vip['pool_id'])
 
-        # populate a 'was' network structure for the rpc message
-        old_network = self._get_vip_network(context, old_vip, agent)
-
-        # populate a 'to be' network structure for the rpc message
-        network = self._get_vip_network(context, vip, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=vip['pool_id'],
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.update_vip(context, old_vip, vip, old_network,
-                                  network, agent['host'])
+        self.agent_rpc.update_vip(context, old_vip, vip,
+                                  service, agent['host'])
 
     @log.log
     def delete_vip(self, context, vip):
@@ -643,11 +650,14 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         vip['pool'] = self._get_pool(context, vip['pool_id'])
 
-        # populate a network structure for the rpc message
-        network = self._get_vip_network(context, vip, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=vip['pool_id'],
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.delete_vip(context, vip, network, agent['host'])
+        self.agent_rpc.delete_vip(context, vip, service, agent['host'])
 
     @log.log
     def create_pool(self, context, pool):
@@ -669,11 +679,13 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             pool['vip'] = None
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
-
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool['id'],
+                                                        activate=False,
+                                                        host=agent['host'])
         # call the RPC proxy with the constructed message
-        self.agent_rpc.create_pool(context, pool, network, agent['host'])
+        self.agent_rpc.create_pool(context, pool, service, agent['host'])
 
     @log.log
     def update_pool(self, context, old_pool, pool):
@@ -703,28 +715,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             old_pool['vip'] = None
 
-        # populate a 'was' network structure for the rpc message
-        old_network = self._get_pool_network(context, old_pool, agent)
-
-        # populate a 'to be' network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
-
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
-
-        if pool['subnet_id'] != old_pool['subnet_id']:
-            # see if there are pools on this subnet
-            existing_pools = self._get_pools(context, pool['tenant_id'],
-                                             pool['subnet_id'])
-            if not existing_pools:
-                # signal the agent to remove a snat pool
-                old_network['remove_snat_pool'] = pool['subnet_id']
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool['id'],
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.update_pool(context, old_pool, pool, old_network,
-                                   network, agent['host'])
+        self.agent_rpc.update_pool(context, old_pool, pool,
+                                   service, agent['host'])
 
     @log.log
     def delete_pool(self, context, pool):
@@ -745,18 +744,14 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             pool['vip'] = None
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
-
-        # see if there are any other pools on this subnet
-        existing_pools = self._get_pools(context, pool['tenant_id'],
-                                             pool['subnet_id'])
-        if not existing_pools:
-            # signal the agent to remove a snat pool
-            network['remove_snat_pool'] = pool['subnet_id']
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool['id'],
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.delete_pool(context, pool, network, agent['host'])
+        self.agent_rpc.delete_pool(context, pool, service, agent['host'])
 
     @log.log
     def create_member(self, context, member):
@@ -773,11 +768,14 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         member['pool'] = pool
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                pool_id=member['pool_id'],
+                                                activate=False,
+                                                host=agent['host'])
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.create_member(context, member, network, agent['host'])
+        self.agent_rpc.create_member(context, member, service, agent['host'])
 
     @log.log
     def update_member(self, context, old_member, member):
@@ -803,14 +801,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         member['pool'] = pool
 
-        # populate a 'was' network structure for the rpc message
-        old_network = self._get_pool_network(context, old_pool, agent)
-        # populate a 'to be' network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                pool_id=member['pool_id'],
+                                                activate=False,
+                                                host=agent['host'])
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.update_member(context, old_member, member,
-                                     old_network, network, agent['host'])
+                                     service, agent['host'])
 
     @log.log
     def delete_member(self, context, member):
@@ -827,12 +826,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         member['pool'] = pool
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                pool_id=member['pool_id'],
+                                                activate=False,
+                                                host=agent['host'])
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_member(context, member,
-                                     network, agent['host'])
+                                     service, agent['host'])
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
@@ -847,12 +849,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             pool['vip'] = None
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool_id,
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_pool_health_monitor(context, health_monitor,
-                                                  pool, network,
+                                                  pool, service,
                                                   agent['host'])
 
     @log.log
@@ -869,13 +874,16 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             pool['vip'] = None
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool_id,
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.update_health_monitor(context, old_health_monitor,
                                              health_monitor, pool,
-                                             network, agent['host'])
+                                             service, agent['host'])
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool_id):
@@ -890,12 +898,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             pool['vip'] = None
 
-        # populate a network structure for the rpc message
-        network = self._get_pool_network(context, pool, agent)
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool_id,
+                                                        activate=False,
+                                                        host=agent['host'])
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.delete_pool_health_monitor(context, health_monitor,
-                                                  pool, network,
+                                                  pool, service,
                                                   agent['host'])
 
     @log.log
@@ -911,8 +922,14 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         else:
             pool['vip'] = None
 
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                                                        pool_id=pool_id,
+                                                        activate=False,
+                                                        host=agent['host'])
+
         # call the RPC proxy with the constructed message
-        self.agent_rpc.get_pool_stats(context, pool, agent['host'])
+        self.agent_rpc.get_pool_stats(context, pool, service, agent['host'])
 
     ################################
     # utility methods for this class
