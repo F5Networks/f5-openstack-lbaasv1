@@ -131,10 +131,6 @@ class LoadBalancerCallbacks(object):
                 for hm in pool.monitors:
                     if hm.status in ACTIVE_PENDING:
                         hm.status = constants.ACTIVE
-            if pool.status != constants.ACTIVE:
-                raise q_exc.Invalid(_('Expected active pool'))
-            if pool.vip and (pool.vip.status != constants.ACTIVE):
-                raise q_exc.Invalid(_('Expected active vip'))
             retval = {}
             retval['pool'] = self.plugin._make_pool_dict(pool)
             subnet_dict = self.plugin._core_plugin.get_subnet(context,
@@ -155,7 +151,7 @@ class LoadBalancerCallbacks(object):
                     self.plugin._core_plugin._make_port_dict(pool.vip.port)
                 )
                 retval['vip']['network'] = \
-                 self.plugin._core_plugin.get_subnet(context,
+                 self.plugin._core_plugin.get_network(context,
                                         retval['vip']['port']['network_id'])
                 retval['vip']['subnets'] = []
                 for fixed_ip in retval['vip']['port']['fixed_ips']:
@@ -170,19 +166,17 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port']['subnets'] = []
             retval['members'] = []
             for m in pool.members:
-                if m.status in (constants.ACTIVE,
-                                constants.INACTIVE):
-                    member = self.plugin._make_member_dict(m)
-                    alloc_qry = context.session.query(models_v2.IPAllocation)
-                    allocated = alloc_qry.filter_by(
+                member = self.plugin._make_member_dict(m)
+                alloc_qry = context.session.query(models_v2.IPAllocation)
+                allocated = alloc_qry.filter_by(
                                         ip_address=member['address']).first()
-                    member['subnet'] = \
+                member['subnet'] = \
                         self.plugin._core_plugin.get_subnet(
                                              context, allocated['subnet_id'])
-                    member['network'] = \
+                member['network'] = \
                         self.plugin._core_plugin.get_subnet(
                                              context, allocated['network_id'])
-                    retval['members'].append(member)
+                retval['members'].append(member)
             retval['healthmonitors'] = [
                 self.plugin._make_health_monitor_dict(hm.healthmonitor)
                 for hm in pool.monitors
@@ -728,7 +722,13 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def delete_pool(self, context, pool):
         # which agent should handle provisioning
-        agent = self.get_pool_agent(context, pool['id'])
+        try:
+            agent = self.get_pool_agent(context, pool['id'])
+        except lbaas_agentscheduler.NoActiveLbaasAgent:
+            # if there is agent for this pool.. allow the data
+            # model to delete it.
+            self.callbacks.pool_destroyed(context, pool['id'], None)
+            return
 
         # populate members and monitors
         for i in range(len(pool['members'])):
