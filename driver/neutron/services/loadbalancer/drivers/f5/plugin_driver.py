@@ -194,9 +194,9 @@ class LoadBalancerCallbacks(object):
                 retval['members'].append(member)
 
             retval['health_monitors'] = []
-            for hm in pool['health_monitors']:
+            for hm in retval['pool']['health_monitors']:
                 retval['health_monitors'].append(
-                      self.plugin._make_health_monitor_dict(hm))
+                      self.plugin.get_health_monitor(context, hm))
 
             retval['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
             retval['gre_endpoints'] = self._get_gre_endpoints(context)

@@ -726,32 +726,36 @@ class iControlDriver(object):
                             ))
 
                 # connect to inital device:
-                bigip = bigip.BigIP(self.hostnames[0],
+                first_bigip = bigip.BigIP(self.hostnames[0],
                                         self.username,
                                         self.password,
                                         5,
                                         self.conf.use_namespaces)
-                self.__bigips[self.hostnames[0]] = bigip
+                self.__bigips[self.hostnames[0]] = first_bigip
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
                 # devices trusted by this device.
                 if len(self.hostnames) < 2:
-                    if not bigip.cluster.get_sync_status() == 'Standalone':
+                    if not first_bigip.cluster.get_sync_status() == \
+                                                              'Standalone':
                         this_devicename = os.path.basename(
                             self.device.device.mgmt_dev.get_local_device())
-                        devices = bigip.device.get_all_device_names()
+                        devices = first_bigip.device.get_all_device_names()
                         devices.remove[this_devicename]
                         self.hostnames = self.hostnames + \
-                       bigip.device.mgmt_dev.get_management_address(devices)
+                    first_bigip.device.mgmt_dev.get_management_address(devices)
+                    else:
+                        LOG.debug(_(
+                            'only one host connected and it is Standalone.'))
                 # populate traffic groups
-                self.__traffic_groups = bigip.cluster.mgmt_tg.get_list()
+                self.__traffic_groups = first_bigip.cluster.mgmt_tg.get_list()
                 self.__traffic_groups.remove(
                                     '/Common/traffic-group-local-only')
                 self.__traffic_groups.remove('/Common/traffic-group-1')
                 for tg in self.__traffic_groups:
                     self.__gw_on_traffic_groups[tg] = 0
-                    self.__vips_on_traffic_groups = 0
+                    self.__vips_on_traffic_groups[tg] = 0
 
                 # connect to the rest of the devices
                 for host in self.hostnames[1:]:
@@ -764,15 +768,15 @@ class iControlDriver(object):
 
                 # validate device versions
                 for host in self.__bigips:
-                    bigip = self.__bigips[host]
-                    major_version = bigip.system.get_major_version()
+                    hostbigip = self.__bigips[host]
+                    major_version = hostbigip.system.get_major_version()
                     if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
                         raise f5ex.MajorVersionValidateFailed(
                                 'device %s must be at least TMOS %s.%s'
                                 % (host,
                                    f5const.MIN_TMOS_MAJOR_VERSION,
                                    f5const.MIN_TMOS_MINOR_VERSION))
-                    minor_version = bigip.system.get_minor_version()
+                    minor_version = hostbigip.system.get_minor_version()
                     if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
                         raise f5ex.MinorVersionValidateFailed(
                                 'device %s must be at least TMOS %s.%s'
@@ -780,8 +784,8 @@ class iControlDriver(object):
                                    f5const.MIN_TMOS_MAJOR_VERSION,
                                    f5const.MIN_TMOS_MINOR_VERSION))
 
-                    self.__device_to_bigip[bigip.device.get_device_name()] = \
-                        bigip
+                    self.__device_to_bigip[
+                         hostbigip.device.get_device_name()] = hostbigip
 
                     LOG.debug(_('connected to iControl %s @ %s ver %s.%s'
                                 % (self.username, self.host,
