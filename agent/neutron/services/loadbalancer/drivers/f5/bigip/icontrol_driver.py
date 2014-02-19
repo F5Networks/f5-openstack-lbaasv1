@@ -43,7 +43,6 @@ class iControlDriver(object):
     __traffic_groups = []
 
     # mappings
-    __device_to_bigip = {}
     __vips_to_traffic_group = {}
     __gw_to_traffic_group = {}
 
@@ -425,7 +424,7 @@ class iControlDriver(object):
                 if not member['network']['id'] in assured_networks:
                     self._assure_network(member['network'])
                 if 'id'in service['vip']['network'] and \
-                 (not service['vip']['subnet']['id'] == member['subnet']['id']):
+                (not service['vip']['subnet']['id'] == member['subnet']['id']):
                     # each member gets a local self IP on each device
                     self._assure_local_selfip_snat(member, service)
                 # if we are not using SNATS, attempt to become
@@ -441,19 +440,13 @@ class iControlDriver(object):
         # clean up member network
         #nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
         # any nodes on the member's subnet?
-            
-        # delete default gateway vs
-            
-        # self floating selfip
-            
-        # delete snats
-            
-        # delete non-floating selfips
-            
-        # delete network
 
+        # delete default gateway vs
+        # self floating selfip
+        # delete snats
+        # delete non-floating selfips
+        # delete network
         # clean up vip network
-        
         # try to remove the non-floating selfips
 
         # clean up pool network
@@ -519,7 +512,7 @@ class iControlDriver(object):
         for bigip in self.__bigips.values():
 
             local_selfip_name = "local-" \
-            + bigip.device.get_device_name() \
+            + bigip.device_name \
             + "-" + service_object['subnet']['id']
 
             ip_address = None
@@ -795,7 +788,7 @@ class iControlDriver(object):
                     if not first_bigip.cluster.get_sync_status() == \
                                                               'Standalone':
                         this_devicename = \
-                             self.device.device.mgmt_dev.get_local_device()
+                         first_bigip.device.device.mgmt_dev.get_local_device()
                         devices = first_bigip.device.get_all_device_names()
                         devices.remove[this_devicename]
                         self.hostnames = self.hostnames + \
@@ -842,8 +835,7 @@ class iControlDriver(object):
                                    f5const.MIN_TMOS_MAJOR_VERSION,
                                    f5const.MIN_TMOS_MINOR_VERSION))
 
-                    self.__device_to_bigip[
-                         hostbigip.device.get_device_name()] = hostbigip
+                    hostbigip.device_name = hostbigip.device.get_device_name()
 
                     LOG.debug(_('connected to iControl %s @ %s ver %s.%s'
                                 % (self.username, host,
