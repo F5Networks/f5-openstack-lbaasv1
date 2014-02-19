@@ -53,12 +53,12 @@ class Pool(object):
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            node_addresses = self._get_node_addresses_for_member(
-                                                    name=name,
-                                                    folder=folder)
+            nodes = self._get_nodess_for_members(
+                                                name=name,
+                                                folder=folder)
             self.lb_pool.delete_pool([name])
             try:
-                self.remove_nodes(node_names=node_addresses, folder=folder)
+                self.lb_node.delete_node_address([nodes])
             except:
                 pass
             return True
@@ -75,7 +75,7 @@ class Pool(object):
         return members
 
     @icontrol_folder
-    def _get_node_addresses_for_member(self, name=None, folder='Common'):
+    def _get_nodes_for_members(self, name=None, folder='Common'):
         nodes = self.lb_node.get_list()
         node_addresses = self.lb_node.get_address(nodes)
         return_nodes = []
@@ -201,7 +201,7 @@ class Pool(object):
         node_addresses = self.lb_node.get_address(nodes)
         for i in range(len(node_addresses)):
             if node_addresses[i] == node_ip_address:
-                self.remove_node(name=nodes[i], folder=folder)
+                self.lb_node.delete_node_address([nodes[i]])
                 return True
         return False
 
