@@ -100,11 +100,14 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def create_pool(self, pool, service):
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
     def update_pool(self, old_pool, pool, service):
+        self._assure_service_networks(service)
         self._assure_service(service)
         return True
 
@@ -205,7 +208,7 @@ class iControlDriver(object):
     def _assure_service(self, service):
         bigip = self._get_bigip()
 
-        if 'id' in service['pool']:
+        if 'id' in service['vip']:
 
             #
             # Provision Pool - Create/Update
@@ -302,11 +305,10 @@ class iControlDriver(object):
                                          name=service['pool']['id'],
                                          lb_method='RATIO',
                                          folder=service['pool']['tenant_id'])
-        #
-        # Provision Virtual Service - Create/Update
-        #
+            #
+            # Provision Virtual Service - Create/Update
+            #
 
-        if 'id' in service['vip']:
             vlan_name = service['vip']['network']['id']
             if service['vip']['network']['shared']:
                 vlan_name = '/Common/' + vlan_name
@@ -381,28 +383,30 @@ class iControlDriver(object):
                         folder=service['pool']['tenant_id'])
 
     def _assure_service_networks(self, service):
-        assured_networks = []
-        self._assure_network(service['pool']['network'])
-        assured_networks.append(service['pool']['network']['id'])
-        # does the pool network need a self-ip or snat addresses?
-        assured_networks.append(service['pool']['network']['id'])
-        if 'id' in service['vip']['network']:
-            if not service['vip']['network']['id'] in assured_networks:
-                self._assure_network(service['vip']['network'])
-                assured_networks.append(service['vip']['network']['id'])
-            # all VIPs get a non-floating self IP on each device
-            self._assure_local_selfip_snat(service['vip'], service)
-        for member in service['members']:
-            if not member['network']['id'] in assured_networks:
-                self._assure_network(member['network'])
-            if 'id'in service['vip']['network'] and \
-             (not service['vip']['subnet']['id'] == member['subnet']['id']):
-                # each member gets a local self IP on each device
-                self._assure_local_selfip_snat(member, service)
-            # if we are not using SNATS, attempt to become
-            # the subnet's default gateway.
-            if not self.conf.f5_snat_mode:
-                self._assure_floating_default_gateway(member, service)
+        if 'id' in service['vip']:
+            assured_networks = []
+            self._assure_network(service['pool']['network'])
+            assured_networks.append(service['pool']['network']['id'])
+            # does the pool network need a self-ip or snat addresses?
+            assured_networks.append(service['pool']['network']['id'])
+            if 'id' in service['vip']['network']:
+                if not service['vip']['network']['id'] in assured_networks:
+                    self._assure_network(service['vip']['network'])
+                    assured_networks.append(service['vip']['network']['id'])
+                # all VIPs get a non-floating self IP on each device
+                self._assure_local_selfip_snat(service['vip'], service)
+
+            for member in service['members']:
+                if not member['network']['id'] in assured_networks:
+                    self._assure_network(member['network'])
+                if 'id'in service['vip']['network'] and \
+                 (not service['vip']['subnet']['id'] == member['subnet']['id']):
+                    # each member gets a local self IP on each device
+                    self._assure_local_selfip_snat(member, service)
+                # if we are not using SNATS, attempt to become
+                # the subnet's default gateway.
+                if not self.conf.f5_snat_mode:
+                    self._assure_floating_default_gateway(member, service)
 
     def _delete_service_networks(self, service):
         #bigip = self._get_bigip()
