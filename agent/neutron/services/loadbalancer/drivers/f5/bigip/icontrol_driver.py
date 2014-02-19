@@ -306,18 +306,17 @@ class iControlDriver(object):
 
             # Members according to Neutron
             for member in service['members']:
+                ip_address = member['address']
+                if member['network']['shared']:
+                    ip_address = ip_address + '%0'
                 # Delete those pending delete
                 if member['status'] == 'PENDING_DELETE':
                     bigip.pool.remove_member(name=service['pool']['id'],
-                                      ip_address=member['address'],
+                                      ip_address=ip_address,
                                       port=int(member['protocol_port']),
                                       folder=service['pool']['tenant_id'])
                 else:
                     # See if we need to added it orginially
-                    ip_address = member['address']
-                    if member['network']['shared']:
-                        ip_address = ip_address + '%0'
-
                     if bigip.pool.add_member(name=service['pool']['id'],
                                           ip_address=ip_address,
                                           port=int(member['protocol_port']),
