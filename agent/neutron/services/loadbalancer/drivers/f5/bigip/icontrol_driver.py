@@ -235,15 +235,17 @@ class iControlDriver(object):
                     bigip.monitor.set_timeout(name=monitor['id'],
                                               timeout=timeout)
 
-            existing_monitors = bigip.pool.get_monitors()
+            existing_monitors = bigip.pool.get_monitors(
+                                    name=service['pool']['id'],
+                                    folder=service['pool']['tenant_id'])
             for monitor in service['health_monitors']:
                 if not bigip.pool.add_monitor(name=service['pool']['id'],
                                     monitor_name=monitor['id'],
                                     folder=service['pool']['tenant_id']):
-                    existing_monitors.remove[monitor]
+                    existing_monitors.remove[monitor['id']]
             # get rid of monitors no long in service definition
             for monitor in existing_monitors:
-                bigip.monitor.delete(name=monitor['id'])
+                bigip.monitor.delete(name=monitor)
 
             #
             # Provision Members - Create/Update
