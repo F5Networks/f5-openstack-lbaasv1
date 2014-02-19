@@ -80,7 +80,12 @@ class VirtualServer(object):
             if not traffic_group:
                 traffic_group = \
                   const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-            self.lb_va.set_traffic_group([ip_address], [traffic_group])
+            try:
+                # HACK for demo... The address is not always available right
+                # after you create the virtual server. 
+                self.lb_va.set_traffic_group([ip_address], [traffic_group])
+            except:
+                pass
 
     @icontrol_folder
     def create_ip_forwarder(self, name=None, ip_address=None,
