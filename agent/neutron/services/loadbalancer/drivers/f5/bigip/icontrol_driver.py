@@ -488,7 +488,6 @@ class iControlDriver(object):
 
         # Setup non-floating Self IPs on all BigIPs
         vlan_name = service_object['network']['id']
-        local_selfip_name = "local-" + service_object['subnet']['id']
         snat_pool_name = service_object['subnet']['tenant_id']
         # Where to put all these objects?
         network_folder = service_object['subnet']['tenant_id']
@@ -497,6 +496,11 @@ class iControlDriver(object):
 
         # On each BIG-IP create the local Self IP for this subnet
         for bigip in self.__bigips.values():
+
+            local_selfip_name = "local-" \
+            + bigip.device.get_device_name() \
+            + "-" + service_object['subnet']['id']
+
             ip_address = None
             if 'subnet_ports' in service_object:
                 for port in service_object['subnet_ports']:
