@@ -91,64 +91,130 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def create_vip(self, vip, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def update_vip(self, old_vip, vip, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def delete_vip(self, vip, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._delete_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def create_pool(self, pool, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def update_pool(self, old_pool, pool, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def delete_pool(self, pool, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._delete_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def create_member(self, member, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def update_member(self, old_member, member, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def delete_member(self, member, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, service):
-        self._assure_service(service)
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     @am.is_connected
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, service):
-        return True
+        self.lock.acquire()
+        try:
+            self._assure_service(service)
+            return True
+        finally:
+            self.lock.release()
 
     # @am.is_connected
     @log.log
@@ -242,7 +308,7 @@ class iControlDriver(object):
                 if not bigip.pool.add_monitor(name=service['pool']['id'],
                                     monitor_name=monitor['id'],
                                     folder=service['pool']['tenant_id']):
-                    existing_monitors.remove[monitor['id']]
+                    existing_monitors.remove(monitor['id'])
             # get rid of monitors no long in service definition
             for monitor in existing_monitors:
                 bigip.monitor.delete(name=monitor)
@@ -315,7 +381,7 @@ class iControlDriver(object):
 
             if bigip.virtual_server.create(
                                 name=service['vip']['id'],
-                                ip_address=['vip']['address'],
+                                ip_address=service['vip']['address'],
                                 mask='255.255.255.255',
                                 port=int(service['vip']['protocol_port']),
                                 protocol=service['vip']['protocol'],
@@ -338,11 +404,11 @@ class iControlDriver(object):
                                       folder=service['pool']['tenant_id'])
 
             if service['vip']['admin_state_up']:
-                bigip.virtual_server.disable_virtual_server(
+                bigip.virtual_server.enable_virtual_server(
                                     name=service['vip']['id'],
                                     folder=service['pool']['tenant_id'])
             else:
-                bigip.virtual_server.enable_virtual_server(
+                bigip.virtual_server.disable_virtual_server(
                                     name=service['vip']['id'],
                                     folder=service['pool']['tenant_id'])
 
