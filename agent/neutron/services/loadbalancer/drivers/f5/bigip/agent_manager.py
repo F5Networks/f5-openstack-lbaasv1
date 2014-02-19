@@ -289,11 +289,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @log.log
     def destroy_service(self, pool_id):
-        service = self.cache.get_by_pool_id(pool_id)
+        service = self.plugin_rpc.get_service_by_pool_id(pool_id)
         if not service:
             return
         try:
-            self.driver.delete_pool(self.cache.get_by_pool_id(pool_id),
+            self.driver.delete_pool(pool_id,
                                     service)
             self.plugin_rpc.pool_destroyed(pool_id)
         except Exception:
