@@ -60,7 +60,7 @@ OPTS = [
         help=_('Are we standalone, ha(active/standby), or scalen')
     ),
     cfg.StrOpt(
-        'f5_external_physical_mapping',
+        'f5_external_physical_mappings',
         default='defaul:1.1:True',
         help=_('What type of device onboarding')
     ),
@@ -191,8 +191,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         # to allow the driver to allocate ports
         # and fixed_ips in neutron.
         self.driver.plugin_rpc = self.plugin_rpc
-        self.needs_resync = False
         self.cache = LogicalServiceCache()
+        self.needs_resync = True
 
     @log.log
     def _setup_rpc(self):
@@ -276,9 +276,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def refresh_service(self, pool_id):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id)
-            # update is create or update
-            self.driver.sync(service)
-            self.cache.put(service)
+            if 'id' in service['vip']:
+                # update is create or update
+                self.driver.sync(service)
+                self.cache.put(service)
         except Exception:
             LOG.exception(_('Unable to refresh service for pool: %s'), pool_id)
             self.needs_resync = True

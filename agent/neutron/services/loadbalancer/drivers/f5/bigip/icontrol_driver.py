@@ -62,7 +62,7 @@ class iControlDriver(object):
         self.interface_mapping = {}
         self.tagging_mapping = {}
 
-        mappings = str(self.conf.f5_external_physical_mapping).split(",")
+        mappings = str(self.conf.f5_external_physical_mappings).split(",")
         # map format is   phynet:interface:tagged
         for maps in mappings:
             intmap = maps.split(':')
@@ -432,7 +432,7 @@ class iControlDriver(object):
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
-        for bigip in self.__bigips:
+        for bigip in self.__bigips.values():
             if network['provider:network_type'] == 'vlan':
                 if network['shared']:
                     network_folder = 'Common'
@@ -449,7 +449,7 @@ class iControlDriver(object):
                               network['provider:physical_network']]
                     if tagged:
                         vlanid = network['provider:segmentation_id']
-                self.bigip.vlan.create(name=network['id'],
+                bigip.vlan.create(name=network['id'],
                                            vlanid=vlanid,
                                            interface=interface,
                                            folder=network_folder,
@@ -466,7 +466,7 @@ class iControlDriver(object):
                     interface = self.interface_mapping[
                               network['provider:physical_network']]
 
-                self.bigip.vlan.create(name=network['id'],
+                bigip.vlan.create(name=network['id'],
                                            vlanid=0,
                                            interface=interface,
                                            folder=network_folder,
@@ -474,7 +474,7 @@ class iControlDriver(object):
 
     def _assure_local_selfip_snat(self, service_object, service):
         # Setup non-floating Self IPs on all BigIPs
-        for bigip in self.__bigips:
+        for bigip in self.__bigips.values():
             ip_address = None
             local_selfip_name = \
                 bigip.hostname.encode('base64', 'strict') + \
@@ -686,7 +686,7 @@ class iControlDriver(object):
         return traffic_group
 
     def _get_bigip(self):
-        for i in range(len(self.__bigips)):
+        for i in range(len(self.__bigips.values())):
             try:
                 self.__bigips[i].system.sys_session.set_active_folder(
                                                             '/Common')
@@ -788,7 +788,7 @@ class iControlDriver(object):
                          hostbigip.device.get_device_name()] = hostbigip
 
                     LOG.debug(_('connected to iControl %s @ %s ver %s.%s'
-                                % (self.username, self.host,
+                                % (self.username, host,
                                    major_version, minor_version)))
 
                 self.connected = True
