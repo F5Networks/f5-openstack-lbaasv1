@@ -179,6 +179,5 @@ class SelfIP(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        #if name in map(os.path.basename, self.net_self.get_list()):
         if name in self.net_self.get_list():
             return True
