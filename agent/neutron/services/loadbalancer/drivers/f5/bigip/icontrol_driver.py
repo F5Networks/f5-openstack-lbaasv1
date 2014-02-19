@@ -80,141 +80,89 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def sync(self, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def create_vip(self, vip, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def update_vip(self, old_vip, vip, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def delete_vip(self, vip, service):
-        self.lock.acquire()
-        try:
-            self._delete_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._delete_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def create_pool(self, pool, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def update_pool(self, old_pool, pool, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def delete_pool(self, pool, service):
-        self.lock.acquire()
-        try:
-            self._delete_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._delete_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def create_member(self, member, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def update_member(self, old_member, member, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def delete_member(self, member, service):
-        self.lock.acquire()
-        try:
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, service):
-        self.lock.acquire()
-        try:
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, service):
-        self.lock.acquire()
-        try:
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service(service)
+        return True
 
     @am.is_connected
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, service):
-        self.lock.acquire()
-        try:
-            self._assure_service(service)
-            return True
-        finally:
-            self.lock.release()
+        self._assure_service(service)
+        return True
 
     # @am.is_connected
     @log.log
@@ -248,6 +196,7 @@ class iControlDriver(object):
     def remove_orphans(self, known_pool_ids):
         raise NotImplementedError()
 
+    @log.log
     def _delete_service(self, service):
         bigip = self._get_bigip()
         LOG.debug(_('DELETING VIP %s/%s' % (service['pool']['tenant_id'],
@@ -272,6 +221,7 @@ class iControlDriver(object):
             bigip.monitor.delete(name=monitor['id'],
                                  folder=monitor['tenant_id'])
 
+    @log.log
     def _assure_service(self, service):
         if 'id' in service['vip']:
             bigip = self._get_bigip()
