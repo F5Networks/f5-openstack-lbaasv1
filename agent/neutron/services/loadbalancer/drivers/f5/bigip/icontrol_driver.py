@@ -82,7 +82,7 @@ class iControlDriver(object):
     @log.log
     def sync(self, service):
         try:
-            self.__lock.aquire()
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -93,6 +93,7 @@ class iControlDriver(object):
     @log.log
     def create_vip(self, vip, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -103,6 +104,7 @@ class iControlDriver(object):
     @log.log
     def update_vip(self, old_vip, vip, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -113,6 +115,7 @@ class iControlDriver(object):
     @log.log
     def delete_vip(self, vip, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -123,6 +126,7 @@ class iControlDriver(object):
     @log.log
     def create_pool(self, pool, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -133,6 +137,7 @@ class iControlDriver(object):
     @log.log
     def update_pool(self, old_pool, pool, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -143,6 +148,7 @@ class iControlDriver(object):
     @log.log
     def delete_pool(self, pool, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -153,6 +159,7 @@ class iControlDriver(object):
     @log.log
     def create_member(self, member, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -163,6 +170,7 @@ class iControlDriver(object):
     @log.log
     def update_member(self, old_member, member, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -173,6 +181,7 @@ class iControlDriver(object):
     @log.log
     def delete_member(self, member, service):
         try:
+            self.__lock.acquire()
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
@@ -183,6 +192,7 @@ class iControlDriver(object):
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, service):
         try:
+            self.__lock.acquire()
             self._assure_service(service)
             return True
         finally:
@@ -193,6 +203,7 @@ class iControlDriver(object):
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, service):
         try:
+            self.__lock.acquire()
             self._assure_service(service)
             return True
         finally:
@@ -202,6 +213,7 @@ class iControlDriver(object):
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, service):
         try:
+            self.__lock.acquire()
             self._assure_service(service)
             return True
         finally:
