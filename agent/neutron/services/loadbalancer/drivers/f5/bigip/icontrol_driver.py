@@ -773,10 +773,11 @@ class iControlDriver(object):
                 if len(self.hostnames) < 2:
                     if not first_bigip.cluster.get_sync_status() == \
                                                               'Standalone':
-                        this_devicename = os.path.basename(
-                            self.device.device.mgmt_dev.get_local_device())
+                        this_devicename = \
+                             self.device.device.mgmt_dev.get_local_device()
                         devices = first_bigip.device.get_all_device_names()
-                        devices.remove[this_devicename]
+                        if this_devicename in devices:
+                            devices.remove[this_devicename]
                         self.hostnames = self.hostnames + \
                     first_bigip.device.mgmt_dev.get_management_address(devices)
                     else:
