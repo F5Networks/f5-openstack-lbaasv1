@@ -512,8 +512,7 @@ def is_connected(method):
     """Decorator to check we are connected before provisioning."""
     def wrapper(*args, **kwargs):
         instance = args[0]
-        #if instance.connected:
-        if False:
+        if instance.connected:
             return method(*args, **kwargs)
         else:
             LOG.error(_('Can not execute %s. Not connected.'
