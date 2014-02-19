@@ -35,7 +35,8 @@ class LbaasAgentApi(proxy.RpcProxy):
         if tenant_ids:
             return self.call(
                 self.context,
-                self.make_msg('get_active_pending_pool_ids', tenant_ids=tenant_ids),
+                self.make_msg('get_active_pending_pool_ids',
+                              tenant_ids=tenant_ids),
                 topic=self.topic
             )
         else:
@@ -58,17 +59,34 @@ class LbaasAgentApi(proxy.RpcProxy):
         )
 
     @log.log
-    def create_port(self, subnet_id=None,
+    def create_port_on_subnet(self, subnet_id=None,
                     mac_address=None, name=None,
                     fixed_address_count=1):
         return self.call(
                          self.context,
                          self.make_msg(
-                                       'create_port',
+                                       'create_port_on_subnet',
                                        subnet_id=subnet_id,
                                        mac_address=mac_address,
                                        name=name,
                                        fixed_address_count=fixed_address_count,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    @log.log
+    def create_port_on_subnet_with_specific_ip(self, subnet_id=None,
+                                               mac_address=None, name=None,
+                                               ip_address=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                'create_port_on_subnet_with_specific_ip',
+                                       subnet_id=subnet_id,
+                                       mac_address=mac_address,
+                                       name=name,
+                                       ip_address=ip_address,
                                        host=self.host
                                       ),
                          topic=self.topic
@@ -87,13 +105,13 @@ class LbaasAgentApi(proxy.RpcProxy):
                 )
 
     @log.log
-    def allocate_fixed_address(self, subnet_id=None,
+    def allocate_fixed_address_on_subnet(self, subnet_id=None,
                                port_id=None, name=None,
                                fixed_address_count=1):
         return self.call(
                          self.context,
                          self.make_msg(
-                                       'allocate_fixed_address',
+                                       'allocate_fixed_address_on_subnet',
                                        subnet_id=subnet_id,
                                        port_id=port_id,
                                        name=name,
@@ -104,12 +122,29 @@ class LbaasAgentApi(proxy.RpcProxy):
                 )
 
     @log.log
-    def deallocate_fixed_address(self, fixed_addresses=None,
+    def allocate_specific_fixed_address_on_subnet(self, subnet_id=None,
+                               port_id=None, name=None,
+                               ip_address=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                'allocate_specific_fixed_address_on_subnet',
+                                       subnet_id=subnet_id,
+                                       port_id=port_id,
+                                       name=name,
+                                       ip_address=ip_address,
+                                       host=self.host
+                                      ),
+                         topic=self.topic
+                )
+
+    @log.log
+    def deallocate_fixed_address_on_subnet(self, fixed_addresses=None,
                              subnet_id=None, auto_delete_port=False):
         return self.call(
                          self.context,
                          self.make_msg(
-                                       'deallocate_fixed_address',
+                                       'deallocate_fixed_address_on_subnet',
                                        fixed_addresses=fixed_addresses,
                                        subnet_id=subnet_id,
                                        host=self.host,

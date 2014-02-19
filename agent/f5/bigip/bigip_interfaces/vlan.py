@@ -52,11 +52,17 @@ class Vlan(object):
                 self.net_vlan.set_description([name], [description])
             if not folder == 'Common':
                 self.bigip.route.add_vlan_to_domain(name=name, folder=folder)
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if not self._in_use(name) and self.exists(name):
             self.net_vlan.delete_vlan([name])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_all(self, folder='Common'):
@@ -71,6 +77,9 @@ class Vlan(object):
     def set_id(self, name=None, vlanid=0, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.net_vlan.set_vlan_id([name], [int(vlanid)])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_interface(self, name=None, folder='Common'):
@@ -106,6 +115,9 @@ class Vlan(object):
                     member_entry.tag_state = tag_state
                 member_seq.item = member_entry
                 self.net_vlan.add_member([name], [member_seq])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):

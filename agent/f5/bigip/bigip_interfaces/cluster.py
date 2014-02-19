@@ -18,6 +18,7 @@ class Cluster(object):
         self.bigip.icontrol.add_interfaces(
                                            ['Management.Device',
                                             'Management.DeviceGroup',
+                                            'Management.TrafficGroup',
                                             'Management.Trust',
                                             'System.ConfigSync'])
 
@@ -25,6 +26,7 @@ class Cluster(object):
         self.mgmt_dev = self.bigip.icontrol.Management.Device
         self.mgmt_dg = self.bigip.icontrol.Management.DeviceGroup
         self.mgmt_trust = self.bigip.icontrol.Management.Trust
+        self.mgmt_tg = self.bigip.icontrol.Management.TrafficGroup
         self.sys_sync = self.bigip.icontrol.System.ConfigSync
 
     def get_sync_status(self):
@@ -191,20 +193,27 @@ class Cluster(object):
             return False
 
     def create(self, name):
-        self.mgmt_dg.create([name],
-                            ['DGT_FAILOVER'])
-        self.mgmt_dg.set_network_failover_enabled_state(
-                                            [name],
-                                            ['STATE_ENABLED']
-                                            )
-        self.mgmt_dg.set_autosync_enabled_state(
-                                            [name],
-                                            ['STATE_ENABLED']
-                                            )
+        if not self.cluster_exists(name):
+            self.mgmt_dg.create([name],
+                                ['DGT_FAILOVER'])
+            self.mgmt_dg.set_network_failover_enabled_state(
+                                                [name],
+                                                ['STATE_ENABLED']
+                                                )
+            self.mgmt_dg.set_autosync_enabled_state(
+                                                [name],
+                                                ['STATE_ENABLED']
+                                                )
+            return True
+        else:
+            return False
 
     def delete(self, name):
         if self.cluster_exists(name):
             self.mgmt_dg.delete_device_group([name])
+            return True
+        else:
+            return False
 
     def devices(self, name):
         if self.cluster_exists(name):

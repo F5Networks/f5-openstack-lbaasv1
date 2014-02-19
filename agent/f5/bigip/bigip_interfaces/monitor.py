@@ -57,10 +57,17 @@ class Monitor(object):
                 self.set_send_string(name, send_text)
                 self.set_recv_string(name, recv_text)
 
+            return True
+        else:
+            return False
+
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.lb_monitor.delete_template([name])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_type(self, name=None, folder='Common'):
@@ -98,6 +105,9 @@ class Monitor(object):
                                 'Monitor.IntPropertyType').ITYPE_INTERVAL
             value.value = int(interval)
             self.lb_monitor.set_template_integer_property([name], [value])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_timeout(self, name=None, folder='Common'):
@@ -116,6 +126,9 @@ class Monitor(object):
                                 'Monitor.IntPropertyType').ITYPE_TIMEOUT
             value.value = int(timeout)
             self.lb_monitor.set_template_integer_property([name], [value])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_send_string(self, name=None, folder='Common'):
@@ -136,6 +149,9 @@ class Monitor(object):
                             'LocalLB.Monitor.StrPropertyType').STYPE_SEND
             value.value = send_text
             self.lb_monitor.set_template_string_property([name], [value])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_recv_string(self, name=None, folder='Common'):
@@ -157,6 +173,9 @@ class Monitor(object):
                          'LocalLB.Monitor.StrPropertyType').STYPE_RECEIVE
             value.value = recv_text
             self.lb_monitor.set_template_string_property([name], [value])
+            return True
+        else:
+            return False
 
     def _get_monitor_type(self, type_str):
         type_str = type_str.upper()

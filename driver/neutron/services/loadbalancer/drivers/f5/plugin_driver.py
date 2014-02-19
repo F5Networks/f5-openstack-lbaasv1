@@ -20,7 +20,6 @@ from oslo.config import cfg
 
 from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
-from neutron.common import exceptions as q_exc
 from neutron.common import rpc as q_rpc
 from neutron.db import models_v2
 from neutron.db import agents_db
@@ -117,7 +116,7 @@ class LoadBalancerCallbacks(object):
             qry = context.session.query(ldb.Pool)
             qry = qry.filter_by(id=pool_id)
             pool = qry.one()
-            LOG.debug(_('setting service definition entry for %s' % pool))
+            LOG.debug(_('getting service definition entry for %s' % pool))
             if activate:
                 # set all resources to active
                 if pool.status in ACTIVE_PENDING:
@@ -140,8 +139,8 @@ class LoadBalancerCallbacks(object):
                                             [subnet_dict['network_id']],
                              'tenant_id': [subnet_dict['tenant_id']],
                              'device_id': [host]}
-            retval['pool']['ports'] = self.plugin._core_plugin.get_ports(
-                                                                   context,
+            retval['pool']['subnet_ports'] = \
+                               self.plugin._core_plugin.get_ports(context,
                                       filters=pool_subnet_fixed_ip_filters)
             retval['pool']['network'] = self.plugin._core_plugin.get_network(
                             context, retval['pool']['subnet']['network_id'])
@@ -153,17 +152,26 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['network'] = \
                  self.plugin._core_plugin.get_network(context,
                                         retval['vip']['port']['network_id'])
-                retval['vip']['subnets'] = []
+                # there should only be one fixed_ip
                 for fixed_ip in retval['vip']['port']['fixed_ips']:
-                    retval['vip']['subnets'].append(
+                    retval['vip']['subnet'] = (
                          self.plugin._core_plugin.get_subnet(context,
                                                       fixed_ip['subnet_id'])
-                                                    )
+                                               )
+                    retval['vip']['address'] = fixed_ip['ip_address']
+                vip_subnet_fixed_ip_filters = {'network_id':
+                        [retval['vip']['subnet']['network_id']],
+                        'tenant_id': [retval['vip']['subnet']['tenant_id']],
+                        'device_id': [host]}
+                retval['vip']['subnet_ports'] = \
+                             self.plugin._core_plugin.get_ports(context,
+                                      filters=vip_subnet_fixed_ip_filters)
             else:
                 retval['vip'] = {}
                 retval['vip']['port'] = {}
-                retval['vip']['port']['network'] = {}
-                retval['vip']['port']['subnets'] = []
+                retval['vip']['port']['network'] = None
+                retval['vip']['port']['subnet'] = None
+                retval['vip']['subnet_ports'] = []
             retval['members'] = []
             for m in pool.members:
                 member = self.plugin._make_member_dict(m)
@@ -176,18 +184,76 @@ class LoadBalancerCallbacks(object):
                 member['network'] = \
                         self.plugin._core_plugin.get_network(
                                              context, allocated['network_id'])
+                member_subnet_fixed_ip_filters = {'network_id':
+                                            [member['subnet']['network_id']],
+                             'tenant_id': [member['subnet']['tenant_id']],
+                             'device_id': [host]}
+                member['subnet_ports'] = self.plugin._core_plugin.get_ports(
+                                                                   context,
+                                      filters=member_subnet_fixed_ip_filters)
                 retval['members'].append(member)
-            retval['healthmonitors'] = [
-                self.plugin._make_health_monitor_dict(hm.healthmonitor)
-                for hm in pool.monitors
-                if hm.status == constants.ACTIVE
-            ]
+
+            retval['healthmonitors'] = []
+            for hm in pool['healthmonitors']:
+                retval['healthmonitors'].append(
+                      self.plugin._make_health_monitor_dict(hm.healthmonitor))
+
             retval['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
             retval['gre_endpoints'] = self._get_gre_endpoints(context)
+
             return retval
 
     @log.log
-    def create_port(self, context, subnet_id=None,
+    def create_network(self, context, tenant_id=None, name=None, shared=False,
+                       admin_state_up=True, network_type=None,
+                       physical_network=None, segmentation_id=None):
+        network_data = {
+                         'tenant_id': tenant_id,
+                         'name': name,
+                         'admin_state_up': admin_state_up,
+                         'shared': shared
+                        }
+        if network_type:
+            network_data['provider:network_type'] = network_type
+        if physical_network:
+            network_data['provider:physical_network'] = physical_network
+        if segmentation_id:
+            network_data['provider:segmentation_id'] = segmentation_id
+        return self.plugin._core_plugin.create_network(context, {'network':
+                                                          network_data})
+
+    @log.log
+    def delete_network(self, context, network_id):
+        self.plugin._core_plugin.delete_network(context, network_id)
+
+    @log.log
+    def create_subnet(self, context, tenant_id=None, network_id=None,
+                      name=None, shared=False, cidr=None, enable_dhcp=False,
+                      gateway_ip=None, allocation_pools=None,
+                      dns_nameservers=None, host_routes=None):
+        subnet_data = {'tenant_id': tenant_id,
+                       'network_id': network_id,
+                       'name': name,
+                       'shared': shared,
+                       'enable_dhcp': enable_dhcp}
+        subnet_data['cidr'] = cidr
+        if gateway_ip:
+            subnet_data['gateway_ip'] = gateway_ip
+        if allocation_pools:
+            subnet_data['allocation_pools'] = allocation_pools
+        if dns_nameservers:
+            subnet_data['dns_nameservers'] = dns_nameservers
+        if host_routes:
+            subnet_data['host_routes'] = host_routes
+        return self.plugin._core_plugin.create_subnet(context, {'subenet':
+                                                         subnet_data})
+
+    @log.log
+    def delete_subnet(self, context, subnet_id):
+        self.plugin._core_plugin.delete_subnet(context, subnet_id)
+
+    @log.log
+    def create_port_on_subnet(self, context, subnet_id=None,
                     mac_address=None, name=None,
                     fixed_address_count=1, host=None):
         if subnet_id:
@@ -220,6 +286,33 @@ class LoadBalancerCallbacks(object):
             return port
 
     @log.log
+    def create_port_on_subnet_with_specific_ip(self, context, subnet_id=None,
+                    mac_address=None, name=None,
+                    ip_address=None, host=None):
+        if subnet_id and ip_address:
+            subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
+            if not mac_address:
+                mac_address = attributes.ATTR_NOT_SPECIFIED
+            fixed_ip = {'subnet_id': subnet['id'], 'ip_address': ip_address}
+            if not host:
+                host = ''
+            if not name:
+                name = ''
+            port_data = {
+                'tenant_id': subnet['tenant_id'],
+                'name': name,
+                'network_id': subnet['network_id'],
+                'mac_address': mac_address,
+                'admin_state_up': True,
+                'device_id': host,
+                'device_owner': 'network:f5lbaas',
+                'fixed_ips': [fixed_ip]
+            }
+            port = self.plugin._core_plugin.create_port(context,
+                                                        {'port': port_data})
+            return port
+
+    @log.log
     def delete_port(self, context, port_id=None, mac_address=None):
         if port_id:
             self.plugin._core_plugin.delete_port(context, port_id)
@@ -231,13 +324,13 @@ class LoadBalancerCallbacks(object):
                 self.plugin._core_plugin.delete_port(context, port['id'])
 
     @log.log
-    def allocate_fixed_address(self, context, subnet_id=None,
+    def allocate_fixed_address_on_subnet(self, context, subnet_id=None,
                                port_id=None, name=None,
                                fixed_address_count=1, host=None):
         if subnet_id:
             subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
             if not port_id:
-                port = self.create_port(context,
+                port = self.create_port_on_subnet(context,
                                  subnet_id=subnet_id,
                                  mac_address=None,
                                  name=name,
@@ -270,7 +363,33 @@ class LoadBalancerCallbacks(object):
             return port
 
     @log.log
-    def deallocate_fixed_address(self, context, fixed_addresses=None,
+    def allocate_specific_fixed_address_on_subnet(self, context,
+                               subnet_id=None,
+                               port_id=None, name=None,
+                               ip_address=None, host=None):
+        if subnet_id and ip_address:
+            subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
+            if not port_id:
+                port = self.create_port_on_subnet_with_specific_ip(
+                                 context,
+                                 subnet_id=subnet_id,
+                                 mac_address=None,
+                                 name=name,
+                                 ip_address=ip_address,
+                                 host=host)
+            else:
+                port = self.plugin._core_plugin.get_port(context,
+                                                         port_id)
+                existing_fixed_ips = port['fixed_ips']
+                fixed_ip = {'subnet_id': subnet['id'],
+                            'ip_address': ip_address}
+            port['fixed_ips'] = existing_fixed_ips + [fixed_ip]
+            port = self.plugin._core_plugin.update_port(context,
+                                                        {'port': port})
+            return port
+
+    @log.log
+    def deallocate_fixed_address_on_subnet(self, context, fixed_addresses=None,
                              subnet_id=None, host=None,
                              auto_delete_port=False):
         if fixed_addresses:
@@ -661,17 +780,17 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             raise lbaas_agentscheduler.NoEligibleLbaasAgent(pool_id=pool['id'])
 
         # populate members and monitors
-        for i in range(len(pool['members'])):
-            member_id = pool['members'][i]
-            pool['members'][i] = self.plugin.get_member(context, member_id)
-        for i in range(len(pool['health_monitors'])):
-            monitor_id = pool['health_monitors'][i]
-            pool['health_monitors'][i] = self.plugin.get_health_monitor(
-                                                     context, monitor_id)
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #for i in range(len(pool['members'])):
+        #    member_id = pool['members'][i]
+        #    pool['members'][i] = self.plugin.get_member(context, member_id)
+        #for i in range(len(pool['health_monitors'])):
+        #    monitor_id = pool['health_monitors'][i]
+        #    pool['health_monitors'][i] = self.plugin.get_health_monitor(
+        #                                             context, monitor_id)
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
@@ -687,22 +806,22 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool['id'])
 
         # populate members and monitors
-        for i in range(len(pool['members'])):
-            member_id = pool['members'][i]
-            pool['members'][i] = self.plugin.get_member(context, member_id)
-        for i in range(len(pool['health_monitors'])):
-            monitor_id = pool['health_monitors'][i]
-            pool['health_monitors'][i] = self.plugin.get_health_monitor(
-                                                     context, monitor_id)
+        #for i in range(len(pool['members'])):
+        #    member_id = pool['members'][i]
+        #    pool['members'][i] = self.plugin.get_member(context, member_id)
+        #for i in range(len(pool['health_monitors'])):
+        #    monitor_id = pool['health_monitors'][i]
+        #    pool['health_monitors'][i] = self.plugin.get_health_monitor(
+        #                                             context, monitor_id)
 
         # populate members and monitors for old_pool
-        for i in range(len(old_pool['members'])):
-            member_id = old_pool['members'][i]
-            old_pool['members'][i] = self.plugin.get_member(context, member_id)
-        for i in range(len(old_pool['health_monitors'])):
-            monitor_id = old_pool['health_monitors'][i]
-            old_pool['health_monitors'][i] = self.plugin.get_health_monitor(
-                                                     context, monitor_id)
+        #for i in range(len(old_pool['members'])):
+        #    member_id = old_pool['members'][i]
+        #  old_pool['members'][i] = self.plugin.get_member(context, member_id)
+        #for i in range(len(old_pool['health_monitors'])):
+        #    monitor_id = old_pool['health_monitors'][i]
+        #    old_pool['health_monitors'][i] = self.plugin.get_health_monitor(
+        #                                             context, monitor_id)
 
         if 'vip_id' in old_pool and old_pool['vip_id']:
             old_pool['vip'] = self._get_vip(context, pool['vip_id'])
@@ -731,18 +850,18 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             return
 
         # populate members and monitors
-        for i in range(len(pool['members'])):
-            member_id = pool['members'][i]
-            pool['members'][i] = self.plugin.get_member(context, member_id)
-        for i in range(len(pool['health_monitors'])):
-            monitor_id = pool['health_monitors'][i]
-            pool['health_monitors'][i] = self.plugin.get_health_monitor(
-                                                     context, monitor_id)
+        #for i in range(len(pool['members'])):
+        #    member_id = pool['members'][i]
+        #    pool['members'][i] = self.plugin.get_member(context, member_id)
+        #for i in range(len(pool['health_monitors'])):
+        #    monitor_id = pool['health_monitors'][i]
+        #    pool['health_monitors'][i] = self.plugin.get_health_monitor(
+        #                                             context, monitor_id)
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
@@ -761,10 +880,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a pool structure for the rpc message
         pool = self._get_pool(context, member['pool_id'])
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         member['pool'] = pool
 
@@ -785,19 +904,19 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a 'was' pool structure for the rpc message
         old_pool = self._get_pool(context, old_member['pool_id'])
 
-        if 'vip_id' in old_pool and old_pool['vip_id']:
-            old_pool['vip'] = self._get_vip(context, old_pool['vip_id'])
-        else:
-            old_pool['vip'] = None
+        #if 'vip_id' in old_pool and old_pool['vip_id']:
+        #    old_pool['vip'] = self._get_vip(context, old_pool['vip_id'])
+        #else:
+        #    old_pool['vip'] = None
         old_member['pool'] = old_pool
 
         # populate a 'to be' pool structure for the rpc message
         pool = self._get_pool(context, member['pool_id'])
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         member['pool'] = pool
 
@@ -819,10 +938,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a pool structure for the rpc message
         pool = self._get_pool(context, member['pool_id'])
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         member['pool'] = pool
 
@@ -844,10 +963,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a pool strucutre for the rpc message
         pool = self._get_pool(context, pool_id)
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
@@ -869,10 +988,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a pool structure for the rpc message
         pool = self._get_pool(context, pool_id)
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
@@ -893,10 +1012,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a pool structure for the rpc message
         pool = self._get_pool(context, pool_id)
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
@@ -917,10 +1036,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # populate a pool structure for the rpc message
         pool = self._get_pool(context, pool_id)
 
-        if 'vip_id' in pool and pool['vip_id']:
-            pool['vip'] = self._get_vip(context, pool['vip_id'])
-        else:
-            pool['vip'] = None
+        #if 'vip_id' in pool and pool['vip_id']:
+        #    pool['vip'] = self._get_vip(context, pool['vip_id'])
+        #else:
+        #    pool['vip'] = None
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
@@ -935,80 +1054,80 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     # utility methods for this class
     ################################
 
-    def _get_vip_network(self, context, vip, agent):
-        subnet_dict = self.plugin._core_plugin.get_subnet(
-                                                    context, vip['subnet_id'])
-        port_dict = self.plugin._core_plugin.get_port(context, vip['port_id'])
-        network_id = subnet_dict['network_id']
-        network_dict = self.plugin._core_plugin.get_network(context,
-                                                            network_id)
-        if 'provider:physical_network' in network_dict:
-            network_dict['physical_network'] = \
-                network_dict['provider:physical_network']
-        if 'provider:network_type' in network_dict:
-            network_dict['network_type'] = \
-                network_dict['provider:network_type']
-        if 'provider:segmentation_id' in network_dict:
-            network_dict['segmentation_id'] = \
-                network_dict['provider:segmentation_id']
-        network_dict['subnet'] = subnet_dict
-        fixed_ip_dict = self._get_fixed_ips(context,
-                                subnet_dict['tenant_id'],
-                                subnet_dict['id'],
-                                agent)
-        network_dict['fixed_ips'] = fixed_ip_dict
-        network_dict['port'] = port_dict
-        network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
-        network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
-        return network_dict
+    #def _get_vip_network(self, context, vip, agent):
+    #    subnet_dict = self.plugin._core_plugin.get_subnet(
+    #                                                context, vip['subnet_id'])
+    #    port_dict = self.plugin._core_plugin.get_port(context, vip['port_id'])
+    #    network_id = subnet_dict['network_id']
+    #    network_dict = self.plugin._core_plugin.get_network(context,
+    #                                                        network_id)
+    #    if 'provider:physical_network' in network_dict:
+    #        network_dict['physical_network'] = \
+    #            network_dict['provider:physical_network']
+    #    if 'provider:network_type' in network_dict:
+    #        network_dict['network_type'] = \
+    #            network_dict['provider:network_type']
+    #    if 'provider:segmentation_id' in network_dict:
+    #        network_dict['segmentation_id'] = \
+    #            network_dict['provider:segmentation_id']
+    #    network_dict['subnet'] = subnet_dict
+    #    fixed_ip_dict = self._get_fixed_ips(context,
+    #                            subnet_dict['tenant_id'],
+    #                            subnet_dict['id'],
+    #                            agent)
+    #    network_dict['fixed_ips'] = fixed_ip_dict
+    #    network_dict['port'] = port_dict
+    #    network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
+    #    network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
+    #    return network_dict
 
-    def _get_pool_network(self, context, pool, agent):
-        subnet_dict = self.plugin._core_plugin.get_subnet(
-                                        context, pool['subnet_id'])
-        network_id = subnet_dict['network_id']
-        network_dict = self.plugin._core_plugin.get_network(
-                                                context, network_id)
-        network_dict['subnet'] = subnet_dict
-        if 'provider:physical_network' in network_dict:
-            network_dict['physical_network'] = \
-                network_dict['provider:physical_network']
-        if 'provider:network_type' in network_dict:
-            network_dict['network_type'] = \
-                network_dict['provider:network_type']
-        if 'provider:segmentation_id' in network_dict:
-            network_dict['segmentation_id'] = \
-                network_dict['provider:segmentation_id']
-        fixed_ip_dict = self._get_fixed_ips(context,
-                                subnet_dict['tenant_id'],
-                                subnet_dict['id'],
-                                agent)
-        network_dict['fixed_ips'] = fixed_ip_dict
-        network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
-        network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
-        return network_dict
+    #def _get_pool_network(self, context, pool, agent):
+    #    subnet_dict = self.plugin._core_plugin.get_subnet(
+    #                                    context, pool['subnet_id'])
+    #    network_id = subnet_dict['network_id']
+    #    network_dict = self.plugin._core_plugin.get_network(
+    #                                            context, network_id)
+    #    network_dict['subnet'] = subnet_dict
+    #    if 'provider:physical_network' in network_dict:
+    #        network_dict['physical_network'] = \
+    #            network_dict['provider:physical_network']
+    #    if 'provider:network_type' in network_dict:
+    #        network_dict['network_type'] = \
+    #            network_dict['provider:network_type']
+    #    if 'provider:segmentation_id' in network_dict:
+    #        network_dict['segmentation_id'] = \
+    #            network_dict['provider:segmentation_id']
+    #    fixed_ip_dict = self._get_fixed_ips(context,
+    #                            subnet_dict['tenant_id'],
+    #                            subnet_dict['id'],
+    #                            agent)
+    #    network_dict['fixed_ips'] = fixed_ip_dict
+    #    network_dict['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
+    #    network_dict['gre_endpoints'] = self._get_gre_endpoints(context)
+    #    return network_dict
 
-    def _get_vip(self, context, vip_id):
-        vip = self.plugin.get_vip(context, vip_id)
-        if 'port_id' in vip:
-            vip['port'] = self.plugin._core_plugin.get_port(context,
-                                                            vip['port_id'])
-        if 'subnet_id' in vip:
-            vip['subnet'] = self.plugin._core_plugin.get_subnet(context,
-                                                            vip['subnet_id'])
-        vip['subnet']['network'] = \
-           self.plugin._core_plugin.get_network(context,
-                                                vip['subnet']['network_id'])
-        return vip
+    #def _get_vip(self, context, vip_id):
+    #    vip = self.plugin.get_vip(context, vip_id)
+    #    if 'port_id' in vip:
+    #        vip['port'] = self.plugin._core_plugin.get_port(context,
+    #                                                        vip['port_id'])
+    #    if 'subnet_id' in vip:
+    #        vip['subnet'] = self.plugin._core_plugin.get_subnet(context,
+    #                                                        vip['subnet_id'])
+    #    vip['subnet']['network'] = \
+    #       self.plugin._core_plugin.get_network(context,
+    #                                            vip['subnet']['network_id'])
+    #    return vip
 
     def _get_pool(self, context, pool_id):
         pool = self.plugin.get_pool(context, pool_id)
-        for i in range(len(pool['members'])):
-            member_id = pool['members'][i]
-            pool['members'][i] = self.plugin.get_member(context, member_id)
-        for i in range(len(pool['health_monitors'])):
-            monitor_id = pool['health_monitors'][i]
-            pool['health_monitors'][i] = self.plugin.get_health_monitor(
-                                                     context, monitor_id)
+        #for i in range(len(pool['members'])):
+        #    member_id = pool['members'][i]
+        #    pool['members'][i] = self.plugin.get_member(context, member_id)
+        #for i in range(len(pool['health_monitors'])):
+        #    monitor_id = pool['health_monitors'][i]
+        #    pool['health_monitors'][i] = self.plugin.get_health_monitor(
+        #                                             context, monitor_id)
         if 'subnet_id' in pool:
             pool['subnet'] = self.plugin._core_plugin.get_subnet(context,
                                                             pool['subnet_id'])
@@ -1018,34 +1137,34 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         return pool
 
-    def _get_pools(self, context, tenant_id, subnet_id):
-        filters = {'subnet_id': [subnet_id], 'tenant_id': [tenant_id]}
-        pools = self.plugin.get_pools(context, filters=filters)
-        return pools
+    #def _get_pools(self, context, tenant_id, subnet_id):
+    #    filters = {'subnet_id': [subnet_id], 'tenant_id': [tenant_id]}
+    #    pools = self.plugin.get_pools(context, filters=filters)
+    #    return pools
 
-    def _get_members(self, context, pool_id):
-        filters = {'pool_id': [pool_id]}
-        members = self.plugin.get_members(context, filters=filters)
-        return members
+    #def _get_members(self, context, pool_id):
+    #    filters = {'pool_id': [pool_id]}
+    #    members = self.plugin.get_members(context, filters=filters)
+    #    return members
 
-    def _get_pool_dict(self, pool):
-        return self.plugin._make_pool_dict(pool)
+    #def _get_pool_dict(self, pool):
+    #    return self.plugin._make_pool_dict(pool)
 
-    def _get_port_dict_by_port_id(self, context, port_id):
-        port = self.plugin._core_plugin.get_port(
-                                        context, port_id)
-        return self.plugin._core_plugin._make_port_dict(port)
+    #def _get_port_dict_by_port_id(self, context, port_id):
+    #    port = self.plugin._core_plugin.get_port(
+    #                                    context, port_id)
+    #    return self.plugin._core_plugin._make_port_dict(port)
 
-    def _get_fixed_ips(self, context, tenant_id, subnet_id, agent):
-        subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
-        filters = {'network_id': [subnet['network_id']],
-                  'tenant_id': [tenant_id],
-                  'device_id': [agent['host']]}
-        fixed_ips = self.plugin._core_plugin.get_ports(context,
-                                                        filters=filters)
-        if fixed_ips:
-            return fixed_ips
-        return None
+    #def _get_fixed_ips(self, context, tenant_id, subnet_id, agent):
+    #    subnet = self.plugin._core_plugin.get_subnet(context, subnet_id)
+    #    filters = {'network_id': [subnet['network_id']],
+    #              'tenant_id': [tenant_id],
+    #              'device_id': [agent['host']]}
+    #    fixed_ips = self.plugin._core_plugin.get_ports(context,
+    #                                                    filters=filters)
+    #    if fixed_ips:
+    #        return fixed_ips
+    #    return None
 
     def _get_vxlan_endpoints(self, context):
         endpoints = []

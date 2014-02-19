@@ -9,6 +9,7 @@ from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 
+import urllib2.URLError
 import netaddr
 import os
 
@@ -35,193 +36,123 @@ OPTS = [
 
 class iControlDriver(object):
 
+    # containers
+    __bigips = {}
+    __traffic_groups = []
+
+    # mappings
+    __device_to_bigip = {}
+    __vips_to_traffic_group = {}
+    __gw_to_traffic_group = {}
+
+    # scheduling counts
+    __vips_on_traffic_groups = {}
+    __gw_on_traffic_groups = {}
+
     def __init__(self, conf):
         self.conf = conf
         self.conf.register_opts(OPTS)
         self.pool_to_port_id = {}
-        self.bigip = None
         self.connected = False
 
         self._init_connection()
 
         LOG.debug(_('iControlDriver initialized: hostname:%s username:%s'
                     % (self.hostname, self.username)))
+        self.interface_mapping = {}
+        self.tagging_mapping = {}
+
+        mappings = str(self.conf.f5_external_physical_mapping).split(",")
+        # map format is   phynet:interface:tagged
+        for maps in mappings:
+            intmap = maps.split(':')
+            self.interface_mapping[intmap[0]] = intmap[1]
+            self.tagging_mapping[intmap[0]] = intmap[2]
 
     @am.is_connected
     @log.log
     def sync(self, service):
-        pass
-
-    @am.is_connected
-    @log.log
-    def create_vip(self, vip, network):
-        self._assure_network(network)
-        #vip_network = netaddr.IPNetwork(network['subnet']['cidr'])
-        #vip_netmask = str(vip_network.netmask
-
-        if network['shared'] or network['network_type'] == 'local':
-            vlan_name = '/Common/' + os.path.basename(network['id'])
-            ip_address = vip['address'] + "%0"
-        else:
-            vlan_name = network['id']
-            ip_address = vip['address']
-
-        self.bigip.virtual_server.create(name=vip['id'],
-                                         ip_address=ip_address,
-                                         mask='255.255.255.255',
-                                         port=vip['protocol_port'],
-                                         protocol='TCP',
-                                         vlan_name=vlan_name,
-                                         folder=vip['tenant_id'])
-        if 'id' in vip['pool']:
-            self.bigip.virtual_server.set_pool(
-                                         name=vip['id'],
-                                         pool_name=vip['pool']['id'],
-                                         folder=vip['tenant_id']
-                                        )
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def update_vip(self, old_vip, vip, old_network, network):
+    def create_vip(self, vip, service):
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def delete_vip(self, vip, network):
-        self.bigip.virtual_server.delete(name=vip['id'],
-                                   folder=vip['tenant_id'])
-        if network:
-            if network['network_type'] == 'vlan' or \
-               network['network_type'] == 'flat':
-                self.bigip.vlan.delete(name=network['id'],
-                                       folder=network['tenant_id'])
+    def update_vip(self, old_vip, vip, service):
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def create_pool(self, pool, network):
-
-        self._assure_network(network)
-
-        self.bigip.pool.create(name=pool['id'],
-                               lb_method=pool['lb_method'],
-                               description=pool['name'],
-                               folder=pool['tenant_id']
-                              )
-        # get port and fixe_ip on subnet
-        port = self.plugin_rpc.create_port(subnet_id=pool['subnet_id'],
-                      mac_address=None,
-                      name='non_floating_self_ip_' + pool['subnet_id'],
-                      fixed_address_count=1)
-        ip_address = port['fixed_ips'][0]['ip_address']
-        pool_network = netaddr.IPNetwork(network['subnet']['cidr'])
-        pool_netmask = str(pool_network.netmask)
-
-        LOG.debug(_('adding selfip %s/%s' % (ip_address, pool_netmask)))
-
-        if network['shared'] or network['network_type'] == 'local':
-            vlan_name = '/Common/' + os.path.basename(network['id'])
-            ip_address = ip_address + "%0"
-        else:
-            vlan_name = network['id']
-
-        LOG.debug(_('vlan_name %s' % vlan_name))
-
-        self.bigip.selfip.create(name=pool['subnet_id'],
-                                 ip_address=ip_address,
-                                 netmask=pool_netmask,
-                                 vlan_name=vlan_name,
-                                 floating=False,
-                                 folder=pool['tenant_id'])
-
-        for member in pool['members']:
-            # force tenancy on pool
-            member['tenant_id'] = pool['tenant_id']
-            self.create_member(member, network)
-
-        for health_monitor in pool['health_monitors']:
-            self.create_pool_health_monitor(health_monitor, pool, network)
-
+    def delete_vip(self, vip, service):
+        self._delete_service(service)
+        self._delete_service_networks(service)
         return True
 
     @am.is_connected
     @log.log
-    def update_pool(self, old_pool, pool, old_network, network):
+    def create_pool(self, pool, service):
         return True
 
     @am.is_connected
     @log.log
-    def delete_pool(self, pool, network):
-        # WARNIG network might be NONE if
-        # pool deleted by periodic task
-        self.bigip.pool.delete(name=pool['id'],
-                                   folder=pool['tenant_id'])
-        self.bigip.selfip.delete(name=pool['subnet_id'],
-                                 folder=pool['tenant_id'])
-
-        if network:
-            if network['network_type'] == 'vlan' or \
-               network['network_type'] == 'flat':
-                self.bigip.vlan.delete(name=network['id'],
-                                       folder=network['tenant_id'])
+    def update_pool(self, old_pool, pool, service):
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def create_member(self, member, network):
-        self.bigip.pool.add_member(name=member['pool_id'],
-                                   ip_address=member['address'],
-                                   port=member['protocol_port'],
-                                   folder=member['tenant_id'])
+    def delete_pool(self, pool, service):
+        self._delete_service(service)
+        self._delete_service_networks(service)
         return True
 
     @am.is_connected
     @log.log
-    def update_member(self, old_member, member, old_network, network):
+    def create_member(self, member, service):
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def delete_member(self, member, network):
-        self.bigip.pool.remove_member(name=member['pool_id'],
-                                      ip_address=member['address'],
-                                      port=member['protocol_port'],
-                                      folder=member['tenant_id'])
+    def update_member(self, old_member, member, service):
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def create_pool_health_monitor(self, health_monitor, pool, network):
-        timeout = int(health_monitor['timeout']) * \
-                  int(health_monitor['max_retries'])
-        self.bigip.monitor.create(
-                                  name=health_monitor['id'],
-                                  mon_type=health_monitor['type'],
-                                  interval=int(health_monitor['delay']),
-                                  timeout=timeout,
-                                  send_text=None,
-                                  recv_text=None,
-                                  folder=pool['tenant_id'])
-        self.bigip.pool.add_monitor(name=pool['id'],
-                                    monitor_name=health_monitor['id'],
-                                    folder=pool['tenant_id'])
+    def delete_member(self, member, service):
+        self._assure_service_networks(service)
+        self._assure_service(service)
+        return True
+
+    @am.is_connected
+    @log.log
+    def create_pool_health_monitor(self, health_monitor, pool, service):
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
     def update_health_monitor(self, old_health_monitor,
-                              health_monitor, pool, network):
+                              health_monitor, pool, service):
+        self._assure_service(service)
         return True
 
     @am.is_connected
     @log.log
-    def delete_pool_health_monitor(self, health_monitor, pool, network):
-        self.bigip.pool.remove_monitor(name=pool['id'],
-                                       monitor_name=health_monitor['id'],
-                                       folder=pool['tenant_id'])
-        self.bigip.monitor.delete(name=health_monitor['id'],
-                                  folder=pool['tenant_id'])
+    def delete_pool_health_monitor(self, health_monitor, pool, service):
+        self._assure_service(service)
         return True
 
     # @am.is_connected
@@ -256,40 +187,515 @@ class iControlDriver(object):
     def remove_orphans(self, known_pool_ids):
         raise NotImplementedError()
 
+    def _delete_service(self, service):
+        bigip = self._get_bigip()
+        bigip.virtual_server.delete(name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+        if service['vip']['id'] in self.__vips_to_traffic_group:
+            tg = self.__vips_to_traffic_group[service['vip']['id']]
+            self.__vips_on_traffic_groups[tg] = \
+                              self.__vips_on_traffic_groups[tg] - 1
+            del(self.__vips_to_traffic_groups[service['vip']['id']])
+        bigip.pool.delete(name=service['pool']['id'],
+                          folder=service['pool']['tenant_id'])
+        for monitor in service['pool']['healthmonitors']:
+            bigip.monitor.delete(name=monitor['id'],
+                                 folder=monitor['tenant_id'])
+
+    def _assure_service(self, service):
+        bigip = self._get_bigip()
+
+        if 'id' in service['pool']:
+
+            #
+            # Provision Pool - Create/Update
+            #
+
+            if not bigip.pool.create(name=service['pool']['id'],
+                              lb_method=service['pool']['lb_method'],
+                              description=service['pool']['name'] + \
+                              ':' + service['pool']['description'],
+                              folder=service['pool']['tenant_id']):
+                # make sure pool attributes are correct
+                bigip.pool.set_lb_method(name=service['pool']['id'],
+                                    lb_method=service['pool']['lb_method'])
+                bigip.pool.set_description(name=service['pool']['id'],
+                                    description=service['pool']['name'] + \
+                                      ':' + service['pool']['description'])
+            #
+            # Provision Health Monitors - Create/Update
+            #
+
+            for monitor in service['pool']['healthmonitors']:
+                timeout = int(monitor['max_retries']) * int(monitor['timeout'])
+                if not bigip.monitor.create(name=monitor['id'],
+                                     mon_type=monitor['type'],
+                                     interval=monitor['interval'],
+                                     timeout=timeout,
+                                     send_text=None,
+                                     recv_text=None,
+                                     folder=monitor['tenant_id']):
+                    # make sure monitor attributes are correct
+                    bigip.monitor.set_interval(name=monitor['id'],
+                                               interval=monitor['interval'])
+                    bigip.monitor.set_timeout(name=monitor['id'],
+                                              timeout=timeout)
+
+            existing_monitors = bigip.pool.get_monitors()
+            for monitor in service['pool']['health_monitors']:
+                if not bigip.pool.add_monitor(name=service['pool']['id'],
+                                       monitor_name=monitor['id'],
+                                       folder=service['pool']['tenant_id']):
+                    existing_monitors.remove[monitor]
+            # get rid of monitors no long in service definition
+            for monitor in existing_monitors:
+                bigip.monitor.delete(name=monitor['id'])
+
+            #
+            # Provision Members - Create/Update
+            #
+
+            # current members
+            existing_members = bigip.pool.get_members(
+                                        name=service['pool']['id'],
+                                        folder=service['pool']['tenant_id'])
+            # create any new members
+            for member in service['members']:
+                if not bigip.pool.add_member(name=service['pool']['id'],
+                                      ip_address=member['address'],
+                                      port=int(member['protocol_port']),
+                                      folder=service['pool']['tenant_id']):
+                    for existing_member in existing_members:
+                        if member['address'] == existing_member['addr'] and \
+                           member['protocol_port'] == existing_member['port']:
+                            existing_members.remove(existing_member)
+            # remove any members which are not long in the service definition
+            for need_to_delete in existing_members:
+                bigip.pool.remove_member(name=service['pool']['id'],
+                                         ip_address=need_to_delete['addr'],
+                                         port=int(need_to_delete['port']),
+                                         folder=service['pool']['tenant_id'])
+            # make sure member attributes are provisioned
+            using_ratio = False
+            for member in service['members']:
+                if member['admin_state_up']:
+                    bigip.pool.enable_member(name=member['id'],
+                                    ip_address=member['address'],
+                                    port=int(member['protocol_port']),
+                                    folder=service['pool']['tenant_id'])
+                else:
+                    bigip.pool.disable_member(name=member['id'],
+                                    ip_address=member['address'],
+                                    port=int(member['protocol_port']),
+                                    folder=service['pool']['tenant_id'])
+                if member['weight'] > 0:
+                    bigip.pool.set_member_ration(name=service['pool']['id'],
+                                            ip_address=member['address'],
+                                            port=int(member['protocol_port']),
+                                            ratio=int(member['ratio']),
+                                            folder=service['pool']['tenant_id']
+                                          )
+                    using_ratio = True
+            # if members are using weights, change the LB to RATIO
+            if using_ratio:
+                bigip.pool.set_lb_method(self,
+                                         name=service['pool']['id'],
+                                         lb_method='RATIO',
+                                         folder=service['pool']['tenant_id'])
+        #
+        # Provision Virtual Service - Create/Update
+        #
+
+        if 'id' in service['vip']:
+            vlan_name = service['vip']['network']['id']
+            if service['vip']['network']['shared']:
+                vlan_name = '/Common/' + vlan_name
+            if service['vip']['network']['provider:network_type'] == 'local':
+                vlan_name = '/Common/' + vlan_name
+
+            tg = self._get_least_vips_traffic_group()
+
+            if bigip.virtual_server.create(
+                                    name=service['vip']['id'],
+                                    ip_address=['vip']['address'],
+                                    mask='255.255.255.255',
+                                    port=int(service['vip']['protocol_port']),
+                                    protocol=service['vip']['protocol'],
+                                    vlan_name=vlan_name,
+                                    traffic_group=tg,
+                                    folder=service['pool']['tenant_id']
+                                 ):
+                # created update driver traffic group mapping
+                tg = bigip.virtual_server.get_traffic_group(
+                                          name=service['vip']['ip'],
+                                          folder=service['pool']['tenant_id'])
+                self.__vips_to_traffic_group[service['vip']['ip']] = tg
+
+            bigip.virtual_server.set_description(name=service['vip']['id'],
+                                     description=service['vip']['name'] + \
+                                     ':' + service['vip']['description'])
+
+            bigip.virtual_server.set_pool(name=service['vip']['id'],
+                                          pool_name=service['pool']['id'],
+                                          folder=service['pool']['tenant_id'])
+
+            if service['vip']['admin_state_up']:
+                bigip.virtual_server.disable_virtual_server(
+                                    name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+            else:
+                bigip.virtual_server.enable_virtual_server(
+                                    name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+
+            #TODO: fix session peristence
+            if 'session_persistence' in service:
+                type = service['vip']['session_persistence']['type']
+                if type == 'HTTP_COOKIE':
+                    pass
+                elif type == 'APP_COOKIE':
+                    pass
+                elif type == 'SOURCE_IP':
+                    pass
+
+            #TODO: fix vitual service protocol
+            if 'protocol' in service['vip']:
+                protocol = service['vip']['protocol']
+                if protocol == 'HTTP':
+                    pass
+                if protocol == 'HTTPS':
+                    pass
+                if protocol == 'TCP':
+                    pass
+
+            if service['vip']['connection_limit'] > 0:
+                bigip.virtual_server.set_connection_limit(
+                        name=service['vip']['id'],
+                        connection_limit=int(
+                                service['vip']['connection_limit']),
+                        folder=service['pool']['tenant_id'])
+            else:
+                bigip.virtual_server.set_connection_limit(
+                        name=service['vip']['id'],
+                        connection_limit=0,
+                        folder=service['pool']['tenant_id'])
+
+    def _assure_service_networks(self, service):
+        assured_networks = []
+        self._assure_network(service['pool']['network'])
+        assured_networks.append(service['pool']['network']['id'])
+        # does the pool network need a self-ip or snat addresses?
+        assured_networks.append(service['pool']['network']['id'])
+        if 'id' in service['vip']['network']:
+            if not service['vip']['network']['id'] in assured_networks:
+                self._assure_network(service['vip']['network'])
+                assured_networks.append(service['vip']['network']['id'])
+            # all VIPs get a non-floating self IP on each device
+            self._assure_local_selfip_snat(service['vip'], service)
+        for member in service['members']:
+            if not member['network']['id'] in assured_networks:
+                self._assure_network(member['network'])
+            if 'id'in service['vip']['network'] and \
+             (not service['vip']['subnet']['id'] == member['subnet']['id']):
+                # each member gets a local self IP on each device
+                self._assure_local_selfip_snat(member, service)
+            # if we are not using SNATS, attempt to become
+            # the subnet's default gateway.
+            if not self.conf.f5_snat_mode:
+                self._assure_floating_default_gateway(member, service)
+
+    def _delete_service_networks(self, service):
+        #bigip = self._get_bigip()
+        # vips
+        #vips_left = bigip.virtual_service.get_virtual_services(
+        #                                  folder=service['pool']['tenant_id'])
+        # clean up member network
+        #nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
+        # any nodes on the member's subnet?
+            
+        # delete default gateway vs
+            
+        # self floating selfip
+            
+        # delete snats
+            
+        # delete non-floating selfips
+            
+        # delete network
+
+        # clean up vip network
+        
+        # try to remove the non-floating selfips
+
+        # clean up pool network
+        pass
+
     def _assure_network(self, network):
-        if network['network_type'] == 'vlan':
-            if network['shared']:
-                network_folder = 'Common'
-            else:
-                network_folder = network['id']
+        # setup all needed L2 network segments on all BigIPs
+        for bigip in self.__bigips:
+            if network['provider:network_type'] == 'vlan':
+                if network['shared']:
+                    network_folder = 'Common'
+                else:
+                    network_folder = network['id']
 
-            self.bigip.vlan.create(name=network['id'],
-                                       vlanid=network['segmentation_id'],
-                                       interface='1.1',
-                                       folder=network_folder,
-                                       description=network['name'])
-        if network['network_type'] == 'flat':
-            if network['shared']:
-                network_folder = 'Common'
-            else:
-                network_folder = network['id']
+                interface = self.interface_mapping['default']
+                vlanid = 0
+                if network['provider:physical_network'] in \
+                                            self.interface_mapping:
+                    interface = self.interface_mapping[
+                              network['provider:physical_network']]
+                    tagged = self.tagging_mapping[
+                              network['provider:physical_network']]
+                    if tagged:
+                        vlanid = network['provider:segmentation_id']
+                self.bigip.vlan.create(name=network['id'],
+                                           vlanid=vlanid,
+                                           interface=interface,
+                                           folder=network_folder,
+                                           description=network['name'])
+            if network['provider:network_type'] == 'flat':
+                if network['shared']:
+                    network_folder = 'Common'
+                else:
+                    network_folder = network['id']
+                interface = self.interface_mapping['default']
+                vlanid = 0
+                if network['provider:physical_network'] in \
+                                            self.interface_mapping:
+                    interface = self.interface_mapping[
+                              network['provider:physical_network']]
 
-            self.bigip.vlan.create(name=network['id'],
-                                       vlanid=0,
-                                       interface='1.1',
-                                       folder=network_folder,
-                                       description=network['name'])
-        elif network['network_type'] == 'local':
-            if network['shared']:
-                network_folder = 'Common'
-            else:
-                network_folder = network['id']
+                self.bigip.vlan.create(name=network['id'],
+                                           vlanid=0,
+                                           interface=interface,
+                                           folder=network_folder,
+                                           description=network['name'])
 
-            self.bigip.vlan.create(name=network['name'],
-                                       vlanid=0,
-                                       interface='1.1',
-                                       folder=network_folder,
-                                       description=network['name'])
+    def _assure_local_selfip_snat(self, service_object=None, service):
+        # Setup non-floating Self IPs on all BigIPs
+        for bigip in self.__bigips:
+            ip_address = None
+            local_selfip_name = \
+                bigip.hostname.encode('base64', 'strict') + \
+                "-local-" + service_object['subnet']['id']
+            if 'subnet_ports' in service_object:
+                for port in service_object['subnet_ports']:
+                    if port['name'] == local_selfip_name:
+                        if port['fixed_ips'][0]['subnet_id'] == \
+                           service_object['subnet']['id']:
+                            ip_address = port['fixed_ips'][0]['ip_address']
+                if not ip_address:
+                    new_port = self.plugin_rpc.create_port_on_subnet(
+                                subnet_id=service_object['subnet']['id'],
+                                mac_address=None,
+                                name=local_selfip_name,
+                                fixed_address_count=1)
+                    ip_address = new_port['fixed_ips'][0]['ip_address']
+                netmask = netaddr.IPNetwork(
+                               service_object['subnet']['cidr']).netmask
+
+            vlan_name = service_object['network']['id']
+            if service_object['network']['shared']:
+                vlan_name = '/Common/' + vlan_name
+            if service_object['network']['provider:network_type'] == 'local':
+                vlan_name = '/Common/' + vlan_name
+
+            bigip.selfip.create(name=local_selfip_name,
+                                ip_address=ip_address,
+                                netmask=netmask,
+                                vlan_name=vlan_name,
+                                floating=False,
+                                folder=service_object['tenant_id'])
+
+        # Setup required SNAT addresses on this subnet
+        if self.conf.f5_snat_addresses_per_subnet > 0:
+            # failover mode dictates SNAT placement on traffic-groups
+            if self.conf.f5_ha_type == 'standalone':
+                # create number of snats on traffic-group-local-only
+                bigip = self._get_bigip()
+                snat_name = "snat-" + "traffic-group-local-only" + \
+                 service_object['subnet']['id']
+                snat_name = snat_name[0:60]
+                for i in range(self.conf.f5_snat_addresses_per_subnet):
+                    ip_address = None
+                    index_snat_name = snat_name + "_" + i
+                    if 'subnet_ports' in service_object:
+                        for port in service_object['subnet_ports']:
+                            if port['name'] == index_snat_name:
+                                if port['fixed_ips'][0]['subnet_id'] == \
+                                   service_object['subnet']['id']:
+                                    ip_address = \
+                                       port['fixed_ips'][0]['ip_address']
+                    if not ip_address:
+                        new_port = self.plugin_rpc.create_port_on_subnet(
+                            subnet_id=service_object['subnet']['id'],
+                            mac_address=None,
+                            name=index_snat_name,
+                            fixed_address_count=1)
+                        ip_address = new_port['fixed_ips'][0]['ip_address']
+
+                    bigip.snat.create(
+                     name=index_snat_name,
+                     ip_address=ip_address,
+                     traffic_group='/Common/traffic-group-local-only',
+                     snat_pool_name=service_object['subnet']['tenant_id'],
+                     folder=service_object['subnet']['tenant_id']
+                    )
+            elif self.conf.f5_ha_type == 'ha':
+                # create number of snats on traffic-group-1
+                bigip = self._get_bigip()
+                snat_name = "snat-" + 'traffic-group-1' + \
+                 service_object['subnet']['id']
+                snat_name = snat_name[0:60]
+                for i in range(self.conf.f5_snat_addresses_per_subnet):
+                    ip_address = None
+                    index_snat_name = snat_name + "_" + i
+                    if 'subnet_ports' in service_object:
+                        for port in service_object['subnet_ports']:
+                            if port['name'] == index_snat_name:
+                                if port['fixed_ips'][0]['subnet_id'] == \
+                                   service_object['subnet']['id']:
+                                    ip_address = \
+                                       port['fixed_ips'][0]['ip_address']
+                    if not ip_address:
+                        new_port = self.plugin_rpc.create_port_on_subnet(
+                            subnet_id=service_object['subnet']['id'],
+                            mac_address=None,
+                            name=index_snat_name,
+                            fixed_address_count=1)
+                        ip_address = new_port['fixed_ips'][0]['ip_address']
+
+                    bigip.snat.create(
+                     name=index_snat_name,
+                     ip_address=ip_address,
+                     traffic_group='/Common/traffic-group-1',
+                     snat_pool_name=service_object['subnet']['tenant_id'],
+                     folder=service_object['subnet']['tenant_id']
+                    )
+            elif self.conf.f5_ha_type == 'scalen':
+                # create number of snat on all provider defined traffic groups
+                bigip = self._get_bigip()
+                for traffic_group in self.__traffic_groups:
+                    for i in range(self.conf.f5_snat_addresses_per_subnet):
+                        snat_name = "snat-" + traffic_group + \
+                         service_object['subnet']['id']
+                        snat_name = snat_name[0:60]
+                        ip_address = None
+                        index_snat_name = snat_name + "_" + i
+                        if 'subnet_ports' in service_object:
+                            for port in service_object['subnet_ports']:
+                                if port['name'] == index_snat_name:
+                                    fixed_ip = port['fixed_ips'][0]
+                                    if fixed_ip['subnet_id'] == \
+                                       service_object['subnet']['id']:
+                                        ip_address = \
+                                        port['fixed_ips'][0]['ip_address']
+                        if not ip_address:
+                            new_port = \
+                              self.plugin_rpc.create_port_on_subnet(
+                                subnet_id=service_object['subnet']['id'],
+                                mac_address=None,
+                                name=index_snat_name,
+                                fixed_address_count=1
+                              )
+                            ip_address = \
+                               new_port['fixed_ips'][0]['ip_address']
+                        bigip.snat.create(
+                         name=index_snat_name,
+                         ip_address=ip_address,
+                         traffic_group=traffic_group,
+                     snat_pool_name=service_object['subnet']['tenant_id'],
+                         folder=service_object['subnet']['tenant_id']
+                        )
+
+    def _assure_floating_default_gateway(self, service_object, service):
+        # Do we already have a port with the gateway_ip belonging
+        # to this agent's host?
+        need_port_for_gateway = True
+        for port in service_object['subnet_ports']:
+            for fixed_ips in port['fixed_ips']:
+                if fixed_ips['ip_address'] == \
+                    service_object['subnet']['gateway_ip']:
+                    need_port_for_gateway = False
+        gw_name = "gw-" + service_object['subnet']['id']
+        if need_port_for_gateway:
+            try:
+                self.plugin_rpc.create_port_on_subnet_with_specific_ip(
+                            subnet_id=service_object['subnet']['id'],
+                            mac_address=None,
+                            name=gw_name,
+                            ip_address=service_object['subnet']['gateway_ip'])
+            except Exception as e:
+                ermsg = 'Invalid default gateway for subnet %s:%s - %s.' \
+                % (service_object['subnet']['id'],
+                   service_object['subnet']['gateway_ip'],
+                   e.message)
+                ermsg += " SNAT will not function and load balancing"
+                ermsg += " support will likely fail. Enable f5_snat_mode"
+                ermsg += " and f5_source_monitor_from_member_subnet."
+                LOG.error(_(ermsg))
+        floating_selfip_name = "gw-" + service_object['subnet']['id']
+        netmask = netaddr.IPNetwork(
+                               service_object['subnet']['cidr']).netmask
+
+        # Go ahead and setup a floating SelfIP with the subnet's
+        # gateway_ip address on this agent's device service group
+        bigip = self._get_bigip()
+        vlan_name = service_object['network']['id']
+        if service_object['network']['shared']:
+            vlan_name = '/Common/' + vlan_name
+        if service_object['network']['provider:network_type'] == 'local':
+            vlan_name = '/Common/' + vlan_name
+
+        tg = self._get_least_gw_traffic_group()
+        bigip.selfip.create(
+                            name=floating_selfip_name,
+                            ip_address=service_object['subnet']['gateway_ip'],
+                            netmask=netmask,
+                            vlan_name=vlan_name,
+                            floating=True,
+                            traffic_group=tg,
+                            service_object['subnet']['tenant_id'],
+                            folder=service_object['subnet']['tenant_id'])
+        tg = bigip.self.get_traffic_group(name=floating_selfip_name,
+                                folder=service_object['subnet']['tenant_id'])
+        # Setup a wild card ip forwarding virtual service for this subnet
+        bigip.virtual_server.create_ip_forwarder(self,
+                            name=gw_name, ip_address='0.0.0.0',
+                            mask='0.0.0.0',
+                            vlan_name=vlan_name,
+                            traffic_group=tg,
+                            folder=service_object['subnet']['tenant_id'])
+        bigip.virtual_server.set_snat_automap(name=gw_name,
+                            folder=service_object['subnet']['tenant_id'])
+
+    def _get_least_vips_traffic_group(self):
+        traffic_group = '/Common/traffic-group-1'
+        lowest_count = 0
+        for tg in self.__vips_on_traffic_groups:
+            if self.__vips_on_traffic_groups[tg] <= lowest_count:
+                traffic_group = self.__vips_on_traffic_groups[tg]
+        return traffic_group
+
+    def _get_least_gw_traffic_group(self):
+        traffic_group = '/Common/traffic-group-1'
+        lowest_count = 0
+        for tg in self.__gw_on_traffic_groups:
+            if self.__gw_on_traffic_groups[tg] <= lowest_count:
+                traffic_group = self.__gw_on_traffic_groups[tg]
+        return traffic_group
+
+    def _get_bigip(self):
+        for i in range(len(self.__bigips)):
+            try:
+                self.__bigips[i].system.sys_session.set_active_folder(
+                                                            '/Common')
+                return self.__bigips[i]
+            except urllib2.URLError:
+                pass
+        else:
+            raise urllib2.URLError('cannot communicate to any bigips')
 
     def _init_connection(self):
         try:
@@ -307,38 +713,83 @@ class iControlDriver(object):
                                  opt_name='icontrol_password',
                                  opt_value='valid password')
 
-                self.hostname = self.conf.icontrol_hostname
+                self.hostnames = sorted(
+                                    self.conf.icontrol_hostname.split(','))
+
+                self.agent_id = self.hostnames[0]
+
                 self.username = self.conf.icontrol_username
                 self.password = self.conf.icontrol_password
 
-                LOG.debug(_('opening iControl connection to %s @ %s' % (
-                                                                self.username,
-                                                                self.hostname)
+                LOG.debug(_('opening iControl connections to %s @ %s' % (
+                                                            self.username,
+                                                            self.hostnames[0])
                             ))
-                self.bigip = bigip.BigIP(self.hostname,
-                                         self.username,
-                                         self.password)
 
-                # device validate
-                major_version = self.bigip.system.get_major_version()
-                if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
-                    raise f5ex.MajorVersionValidateFailed(
-                            'device must be at least TMOS %s.%s'
-                            % (f5const.MIN_TMOS_MAJOR_VERSION,
-                               f5const.MIN_TMOS_MINOR_VERSION))
-                minor_version = self.bigip.system.get_minor_version()
-                if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
-                    raise f5ex.MinorVersionValidateFailed(
-                            'device must be at least TMOS %s.%s'
-                            % (f5const.MIN_TMOS_MAJOR_VERSION,
-                               f5const.MIN_TMOS_MINOR_VERSION))
+                # connect to inital device:
+                bigip = bigip.BigIP(self.hostnames[0],
+                                        self.username,
+                                        self.password,
+                                        5,
+                                        self.conf.use_namespaces)
+                self.__bigips[self.hostnames[0]] = bigip
 
-                LOG.debug(_('connected to iControl device %s @ %s ver %s.%s'
-                            % (self.username, self.hostname,
-                               major_version, minor_version)))
+                # if there was only one address supplied and
+                # this is not a standalone device, get the
+                # devices trusted by this device.
+                if len(self.hostnames) < 2:
+                    if not bigip.cluster.get_sync_status() == 'Standalone':
+                        this_devicename = os.path.basename(
+                            self.device.device.mgmt_dev.get_local_device())
+                        devices = bigip.device.get_all_device_names()
+                        devices.remove[this_devicename]
+                        self.hostnames = self.hostnames + \
+                       bigip.device.mgmt_dev.get_management_address(devices)
+                # populate traffic groups
+                self.__traffic_groups = bigip.cluster.mgmt_tg.get_list()
+                self.__traffic_groups.remove(
+                                    '/Common/traffic-group-local-only')
+                self.__traffic_groups.remove('/Common/traffic-group-1')
+                for tg in self.__traffic_groups:
+                    self.__gw_on_traffic_groups[tg] = 0
+                    self.__vips_on_traffic_groups = 0
+
+                # connect to the rest of the devices
+                for host in self.hostnames[1:]:
+                    hostbigip = bigip.BigIP(host,
+                                            self.username,
+                                            self.password,
+                                            5,
+                                            self.conf.use_namespaces)
+                    self.__bigips[host] = hostbigip
+
+                # validate device versions
+                for host in self.__bigips:
+                    bigip = self.__bigips[host]
+                    major_version = bigip.system.get_major_version()
+                    if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+                        raise f5ex.MajorVersionValidateFailed(
+                                'device %s must be at least TMOS %s.%s'
+                                % (host,
+                                   f5const.MIN_TMOS_MAJOR_VERSION,
+                                   f5const.MIN_TMOS_MINOR_VERSION))
+                    minor_version = bigip.system.get_minor_version()
+                    if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+                        raise f5ex.MinorVersionValidateFailed(
+                                'device %s must be at least TMOS %s.%s'
+                                % (host,
+                                   f5const.MIN_TMOS_MAJOR_VERSION,
+                                   f5const.MIN_TMOS_MINOR_VERSION))
+
+                    self.__device_to_bigip[bigip.device.get_device_name()] = \
+                        bigip
+
+                    LOG.debug(_('connected to iControl %s @ %s ver %s.%s'
+                                % (self.username, self.host,
+                                   major_version, minor_version)))
 
                 self.connected = True
 
         except Exception as e:
-            LOG.error(_('Could not communicate with iControl device: %s'
+            LOG.error(_('Could not communicate with all iControl devices: %s'
                            % e.message))

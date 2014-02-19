@@ -48,6 +48,46 @@ OPTS = [
         default=('neutron.services.loadbalancer.drivers'
                  '.f5.bigip.icontrol_driver.iControlDriver'),
         help=_('The driver used to provision BigIPs'),
+    ),
+    cfg.BoolOpt(
+        'use_namespaces',
+        default=True,
+        help=_('Allow overlapping IP addresses for tenants')
+    ),
+    cfg.StrOpt(
+        'f5_device_type',
+        default='external',
+        help=_('What type of device onboarding')
+    ),
+    cfg.StrOpt(
+        'f5_ha_type',
+        default='ha',
+        help=_('Are we standalone, ha(active/standby), or scalen')
+    ),
+    cfg.StrOpt(
+        'f5_external_physical_mapping',
+        default='defaul:1.1:True',
+        help=_('What type of device onboarding')
+    ),
+    cfg.StrOpt(
+        'f5_external_tunnel_interface',
+        default='1.1:0',
+        help=_('Interface and VLAN for the VTEP overlay network')
+    ),
+    cfg.BoolOpt(
+        'f5_source_monitor_from_member_subnet',
+        default=True,
+        help=_('create Self IP on member subnet for monitors')
+    ),
+    cfg.BoolOpt(
+        'f5_snat_mode',
+        default=True,
+        help=_('use SNATs, not direct routed mode')
+    ),
+    cfg.IntOpt(
+        'f5_snat_addresses_per_subnet',
+        default='1',
+        help=_('Interface and VLAN for the VTEP overlay network')
     )
 ]
 
@@ -134,7 +174,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             self.device_type = conf.f5_device_type
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
-            self.agent_host = conf.host + ":" + self.driver.hostname
+            self.agent_host = conf.host + ":" + self.driver.agent_id
         except ImportError:
             msg = _('Error importing loadbalancer device driver: %s')
             raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
@@ -254,7 +294,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         if not service:
             return
         try:
-            self.driver.delete_pool(self.cache.get_by_pool_id(pool_id), None)
+            self.driver.delete_pool(self.cache.get_by_pool_id(pool_id),
+                                    service)
             self.plugin_rpc.pool_destroyed(pool_id)
         except Exception:
             LOG.exception(_('Unable to destroy service for pool: %s'), pool_id)

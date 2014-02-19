@@ -30,10 +30,16 @@ class Route(object):
                     'Networking.RouteTableV2.RouteAttribute')
             attr.gateway = gw_ip_address
             self.net_route2.create_static_route([name], [dest], [attr])
+            return True
+        else:
+            return False
 
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.net_route2.delete_static_route([name])
+            return True
+        else:
+            return False
 
     def get_vlans_in_domain(self, folder='Common'):
         return self.net_domain.get_vlan([self._get_domain_name(folder)])[0]

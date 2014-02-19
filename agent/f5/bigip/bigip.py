@@ -4,13 +4,14 @@ import logging
 from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
 
-from f5.bigip.bigip_interfaces import OBJ_PREFIX
 from f5.bigip.bigip_interfaces.cluster import Cluster
 from f5.bigip.bigip_interfaces.device import Device
 from f5.bigip.bigip_interfaces.monitor import Monitor
 from f5.bigip.bigip_interfaces.pool import Pool
 from f5.bigip.bigip_interfaces.route import Route
 from f5.bigip.bigip_interfaces.selfip import SelfIP
+from f5.bigip.bigip_interfaces.snat import SNAT
+from f5.bigip.bigip_interfaces.nat import NAT
 from f5.bigip.bigip_interfaces.stat import Stat
 from f5.bigip.bigip_interfaces.system import System
 from f5.bigip.bigip_interfaces.virtual_server import VirtualServer
@@ -85,6 +86,24 @@ class BigIP(object):
             return selfip
 
     @property
+    def snat(self):
+        if 'snat' in self.interfaces:
+            return self.interfaces['snat']
+        else:
+            snat = SNAT(self)
+            self.interfaces['snat'] = snat
+            return snat
+
+    @property
+    def nat(self):
+        if 'nat' in self.interfaces:
+            return self.interfaces['nat']
+        else:
+            nat = NAT(self)
+            self.interfaces['nat'] = nat
+            return nat
+
+    @property
     def route(self):
         if 'route' in self.interfaces:
             return self.interfaces['route']
@@ -142,7 +161,7 @@ class BigIP(object):
             return None
 
     def get_domain_index(self, folder='/Common'):
-        if folder == '/Common':
+        if folder == '/Common' or folder == 'Common':
             return 0
         else:
             return self.route.get_domain(folder=folder)
@@ -184,6 +203,35 @@ class BigIP(object):
             low += (1 << 32)
 
         return long((high << 32) | low)
+
+    @staticmethod
+    def int_to_ulong(integer):
+        ulong = type('ULong', (object,), {})
+        ulong.low = 0
+        ulong.high = 0
+        if integer < 0:
+            integer = -1 * integer
+            binval = bin(integer)[2:]
+            bitlen = len(binval)
+            if bitlen > 32:
+                ulong.low = int((binval[(bitlen - 32):]), 2)
+                ulong.high = int((binval[:(bitlen - 32)]), 2)
+            else:
+                ulong.low = int(binval, 2)
+                ulong.high = 0
+            ulong.low = -1 * ulong.low
+            ulong.high = -1 * ulong.high
+            return ulong
+        else:
+            binval = bin(integer)[2:]
+            bitlen = len(binval)
+            if bitlen > 32:
+                ulong.low = int((binval[(bitlen - 32):]), 2)
+                ulong.high = int((binval[:(bitlen - 32)]), 2)
+            else:
+                ulong.low = int(binval, 2)
+                ulong.high = 0
+            return ulong
 
     @staticmethod
     def add_folder(folder, name):
