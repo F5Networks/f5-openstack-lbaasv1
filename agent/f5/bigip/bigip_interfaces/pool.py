@@ -57,10 +57,8 @@ class Pool(object):
                                                 name=name,
                                                 folder=folder)
             self.lb_pool.delete_pool([name])
-            try:
+            if len(nodes) > 0:
                 self.lb_node.delete_node_address([nodes])
-            except:
-                pass
             return True
         else:
             return False
@@ -77,6 +75,8 @@ class Pool(object):
     @icontrol_folder
     def _get_nodes_for_members(self, name=None, folder='Common'):
         nodes = self.lb_node.get_list()
+        if not len(nodes) > 0:
+            return nodes
         node_addresses = self.lb_node.get_address(nodes)
         return_nodes = []
         for member in self.lb_pool.get_member_v2([name])[0]:
