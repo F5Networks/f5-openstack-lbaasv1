@@ -201,8 +201,6 @@ class iControlDriver(object):
         if 'id' in service['vip']:
             bigip.virtual_server.delete(name=service['vip']['id'],
                                         folder=service['pool']['tenant_id'])
-            self.plugin_rpc.delete_port(port_id=service['vip']['port_id'],
-                                        mac_address=None)
             if service['vip']['id'] in self.__vips_to_traffic_group:
                 tg = self.__vips_to_traffic_group[service['vip']['id']]
                 self.__vips_on_traffic_groups[tg] = \
@@ -280,6 +278,8 @@ class iControlDriver(object):
             existing_members = bigip.pool.get_members(
                                     name=service['pool']['id'],
                                     folder=service['pool']['tenant_id'])
+            LOG.debug(_("Pool: %s before assurance has membership: %s"
+                        % (service['pool']['id'], existing_members)))
 
             # Flag if we need to change the pool's LB method to
             # include weighting by the ratio attribute
@@ -295,10 +295,15 @@ class iControlDriver(object):
                                       folder=service['pool']['tenant_id'])
                 else:
                     # See if we need to added it orginially
-                    bigip.pool.add_member(name=service['pool']['id'],
+                    if bigip.pool.add_member(name=service['pool']['id'],
                                           ip_address=member['address'],
                                           port=int(member['protocol_port']),
-                                          folder=service['pool']['tenant_id'])
+                                          folder=service['pool']['tenant_id']):
+                        LOG.debug(_("Pool: %s added member: %s:%d"
+                        % (service['pool']['id'],
+                           member['address'],
+                           member['protocol_port'])))
+
                     # Is it enabled or disabled?
                     if member['admin_state_up']:
                         bigip.pool.enable_member(name=member['id'],
@@ -328,8 +333,14 @@ class iControlDriver(object):
                     if member['address'] == existing_member['addr'] and \
                        member['protocol_port'] == existing_member['port']:
                         existing_members.remove(existing_member)
+                        LOG.debug(_("Pool: %s assured member: %s:%d"
+                        % (service['pool']['id'],
+                           member['address'],
+                           member['protocol_port'])))
 
             # remove any members which are not long in the service
+            LOG.debug(_("Pool: %s removing members %s"
+                        % (service['pool']['id'], existing_member)))
             for need_to_delete in existing_members:
                 bigip.pool.remove_member(
                                      name=service['pool']['id'],
@@ -339,6 +350,8 @@ class iControlDriver(object):
                                     )
             # if members are using weights, change the LB to RATIO
             if using_ratio:
+                LOG.debug(_("Pool: %s changing to ratio based lb"
+                        % service['pool']['id']))
                 bigip.pool.set_lb_method(
                                     name=service['pool']['id'],
                                     lb_method='RATIO',
