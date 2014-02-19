@@ -145,13 +145,14 @@ class BigIP(object):
     def set_folder(self, name, folder='/Common'):
         if not folder.startswith("/"):
             folder = "/" + folder
-        if not hasattr(self, 'folder'):
-            self.system.set_folder(folder)
-            self.folder = folder
-        else:
-            if not self.folder == folder:
-                self.system.set_folder(folder)
-                self.folder = folder
+        #if not hasattr(self, 'folder'):
+        #    self.system.set_folder(folder)
+        #    self.folder = folder
+        #else:
+        #    if not self.folder == folder:
+        #        self.system.set_folder(folder)
+        #        self.folder = folder
+        self.system.set_folder(folder)
         if name:
             if not name.startswith(folder + "/"):
                 return folder + "/" + name
