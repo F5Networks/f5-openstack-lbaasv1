@@ -9,7 +9,7 @@ from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 
-import urllib2.URLError
+import urllib2
 import netaddr
 import os
 
@@ -57,8 +57,8 @@ class iControlDriver(object):
 
         self._init_connection()
 
-        LOG.debug(_('iControlDriver initialized: hostname:%s username:%s'
-                    % (self.hostname, self.username)))
+        LOG.debug(_('iControlDriver initialized to %d hosts with username:%s'
+                    % (len(self.__bigips), self.username)))
         self.interface_mapping = {}
         self.tagging_mapping = {}
 
@@ -198,7 +198,7 @@ class iControlDriver(object):
             del(self.__vips_to_traffic_groups[service['vip']['id']])
         bigip.pool.delete(name=service['pool']['id'],
                           folder=service['pool']['tenant_id'])
-        for monitor in service['pool']['healthmonitors']:
+        for monitor in service['pool']['health_monitors']:
             bigip.monitor.delete(name=monitor['id'],
                                  folder=monitor['tenant_id'])
 
@@ -226,7 +226,7 @@ class iControlDriver(object):
             # Provision Health Monitors - Create/Update
             #
 
-            for monitor in service['pool']['healthmonitors']:
+            for monitor in service['pool']['health_monitors']:
                 timeout = int(monitor['max_retries']) * int(monitor['timeout'])
                 if not bigip.monitor.create(name=monitor['id'],
                                      mon_type=monitor['type'],
@@ -472,7 +472,7 @@ class iControlDriver(object):
                                            folder=network_folder,
                                            description=network['name'])
 
-    def _assure_local_selfip_snat(self, service_object=None, service):
+    def _assure_local_selfip_snat(self, service_object, service):
         # Setup non-floating Self IPs on all BigIPs
         for bigip in self.__bigips:
             ip_address = None
@@ -656,7 +656,6 @@ class iControlDriver(object):
                             vlan_name=vlan_name,
                             floating=True,
                             traffic_group=tg,
-                            service_object['subnet']['tenant_id'],
                             folder=service_object['subnet']['tenant_id'])
         tg = bigip.self.get_traffic_group(name=floating_selfip_name,
                                 folder=service_object['subnet']['tenant_id'])

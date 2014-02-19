@@ -39,11 +39,6 @@ __VERSION__ = "0.1.1"
 
 OPTS = [
     cfg.StrOpt(
-        'f5_device_type',
-        default=('external'),
-        help=_('Type of BigIP Integration'),
-    ),
-    cfg.StrOpt(
         'f5_bigip_lbaas_device_driver',
         default=('neutron.services.loadbalancer.drivers'
                  '.f5.bigip.icontrol_driver.iControlDriver'),

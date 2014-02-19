@@ -193,10 +193,10 @@ class LoadBalancerCallbacks(object):
                                       filters=member_subnet_fixed_ip_filters)
                 retval['members'].append(member)
 
-            retval['healthmonitors'] = []
-            for hm in pool['healthmonitors']:
-                retval['healthmonitors'].append(
-                      self.plugin._make_health_monitor_dict(hm.healthmonitor))
+            retval['health_monitors'] = []
+            for hm in pool['health_monitors']:
+                retval['health_monitors'].append(
+                      self.plugin._make_health_monitor_dict(hm))
 
             retval['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
             retval['gre_endpoints'] = self._get_gre_endpoints(context)
