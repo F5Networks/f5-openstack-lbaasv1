@@ -776,18 +776,20 @@ class iControlDriver(object):
                         this_devicename = \
                              self.device.device.mgmt_dev.get_local_device()
                         devices = first_bigip.device.get_all_device_names()
-                        if this_devicename in devices:
-                            devices.remove[this_devicename]
+                        devices.remove[this_devicename]
                         self.hostnames = self.hostnames + \
                     first_bigip.device.mgmt_dev.get_management_address(devices)
                     else:
                         LOG.debug(_(
                             'only one host connected and it is Standalone.'))
                 # populate traffic groups
+                first_bigip.system.set_folder(folder='/Common')
                 self.__traffic_groups = first_bigip.cluster.mgmt_tg.get_list()
-                self.__traffic_groups.remove(
+                if '/Common/traffic-group-local-only' in self.__traffic_groups:
+                    self.__traffic_groups.remove(
                                     '/Common/traffic-group-local-only')
-                self.__traffic_groups.remove('/Common/traffic-group-1')
+                if '/Common/traffic-group-1' in self.__traffic_groups:
+                    self.__traffic_groups.remove('/Common/traffic-group-1')
                 for tg in self.__traffic_groups:
                     self.__gw_on_traffic_groups[tg] = 0
                     self.__vips_on_traffic_groups[tg] = 0
