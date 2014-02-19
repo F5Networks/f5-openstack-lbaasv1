@@ -52,7 +52,7 @@ class iControlDriver(object):
     __gw_on_traffic_groups = {}
 
     # lock
-    __lock = threading.RLock()
+    __lock = threading.Lock()
 
     def __init__(self, conf):
         self.conf = conf
@@ -81,91 +81,131 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def sync(self, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self.__lock.aquire()
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def create_vip(self, vip, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def update_vip(self, old_vip, vip, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def delete_vip(self, vip, service):
-        self._delete_service(service)
-        self._delete_service_networks(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def create_pool(self, pool, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def update_pool(self, old_pool, pool, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def delete_pool(self, pool, service):
-        self._delete_service(service)
-        self._delete_service_networks(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def create_member(self, member, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def update_member(self, old_member, member, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def delete_member(self, member, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, service):
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, service):
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     @am.is_connected
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, service):
-        self._assure_service(service)
-        return True
+        try:
+            self._assure_service(service)
+            return True
+        finally:
+            self.__lock.release()
 
     # @am.is_connected
     @log.log
@@ -216,246 +256,235 @@ class iControlDriver(object):
 
     def _assure_service(self, service):
         if 'id' in service['vip']:
-            try:
-                self.__lock.acquire()
-                bigip = self._get_bigip()
+            bigip = self._get_bigip()
 
-                #
-                # Provision Pool - Create/Update
-                #
+            #
+            # Provision Pool - Create/Update
+            #
 
-                if not bigip.pool.create(name=service['pool']['id'],
-                                  lb_method=service['pool']['lb_method'],
-                                  description=service['pool']['name'] + \
-                                  ':' + service['pool']['description'],
-                                  folder=service['pool']['tenant_id']):
-                    # make sure pool attributes are correct
-                    bigip.pool.set_lb_method(name=service['pool']['id'],
-                                        lb_method=service['pool']['lb_method'])
-                    bigip.pool.set_description(name=service['pool']['id'],
-                                        description=service['pool']['name'] + \
-                                          ':' + service['pool']['description'])
-                #
-                # Provision Health Monitors - Create/Update
-                #
+            if not bigip.pool.create(name=service['pool']['id'],
+                              lb_method=service['pool']['lb_method'],
+                              description=service['pool']['name'] + \
+                              ':' + service['pool']['description'],
+                              folder=service['pool']['tenant_id']):
+                # make sure pool attributes are correct
+                bigip.pool.set_lb_method(name=service['pool']['id'],
+                                    lb_method=service['pool']['lb_method'])
+                bigip.pool.set_description(name=service['pool']['id'],
+                                    description=service['pool']['name'] + \
+                                      ':' + service['pool']['description'])
+            #
+            # Provision Health Monitors - Create/Update
+            #
 
-                for monitor in service['pool']['health_monitors']:
-                    timeout = int(monitor['max_retries']) \
-                              * int(monitor['timeout'])
-                    if not bigip.monitor.create(name=monitor['id'],
-                                         mon_type=monitor['type'],
-                                         interval=monitor['interval'],
-                                         timeout=timeout,
-                                         send_text=None,
-                                         recv_text=None,
-                                         folder=monitor['tenant_id']):
-                        # make sure monitor attributes are correct
-                        bigip.monitor.set_interval(name=monitor['id'],
-                                         interval=monitor['interval'])
-                        bigip.monitor.set_timeout(name=monitor['id'],
-                                                  timeout=timeout)
+            for monitor in service['pool']['health_monitors']:
+                timeout = int(monitor['max_retries']) \
+                          * int(monitor['timeout'])
+                if not bigip.monitor.create(name=monitor['id'],
+                                     mon_type=monitor['type'],
+                                     interval=monitor['interval'],
+                                     timeout=timeout,
+                                     send_text=None,
+                                     recv_text=None,
+                                     folder=monitor['tenant_id']):
+                    # make sure monitor attributes are correct
+                    bigip.monitor.set_interval(name=monitor['id'],
+                                     interval=monitor['interval'])
+                    bigip.monitor.set_timeout(name=monitor['id'],
+                                              timeout=timeout)
 
-                existing_monitors = bigip.pool.get_monitors()
-                for monitor in service['pool']['health_monitors']:
-                    if not bigip.pool.add_monitor(name=service['pool']['id'],
-                                        monitor_name=monitor['id'],
-                                        folder=service['pool']['tenant_id']):
-                        existing_monitors.remove[monitor]
-                # get rid of monitors no long in service definition
-                for monitor in existing_monitors:
-                    bigip.monitor.delete(name=monitor['id'])
+            existing_monitors = bigip.pool.get_monitors()
+            for monitor in service['pool']['health_monitors']:
+                if not bigip.pool.add_monitor(name=service['pool']['id'],
+                                    monitor_name=monitor['id'],
+                                    folder=service['pool']['tenant_id']):
+                    existing_monitors.remove[monitor]
+            # get rid of monitors no long in service definition
+            for monitor in existing_monitors:
+                bigip.monitor.delete(name=monitor['id'])
 
-                #
-                # Provision Members - Create/Update
-                #
+            #
+            # Provision Members - Create/Update
+            #
 
-                # current members
-                existing_members = bigip.pool.get_members(
-                                        name=service['pool']['id'],
-                                        folder=service['pool']['tenant_id'])
-                # create any new members
-                for member in service['members']:
-                    if not bigip.pool.add_member(name=service['pool']['id'],
-                                          ip_address=member['address'],
-                                          port=int(member['protocol_port']),
-                                          folder=service['pool']['tenant_id']):
-                        for existing_member in existing_members:
-                            if member['address'] == \
-                                   existing_member['addr'] and \
-                               member['protocol_port'] == \
-                                    existing_member['port']:
-                                existing_members.remove(existing_member)
-                # remove any members which are not long in the service
-                for need_to_delete in existing_members:
-                    bigip.pool.remove_member(
-                                         name=service['pool']['id'],
-                                         ip_address=need_to_delete['addr'],
-                                         port=int(need_to_delete['port']),
-                                         folder=service['pool']['tenant_id']
-                                        )
-                # make sure member attributes are provisioned
-                using_ratio = False
-                for member in service['members']:
-                    if member['admin_state_up']:
-                        bigip.pool.enable_member(name=member['id'],
-                                        ip_address=member['address'],
-                                        port=int(member['protocol_port']),
-                                        folder=service['pool']['tenant_id'])
-                    else:
-                        bigip.pool.disable_member(name=member['id'],
-                                        ip_address=member['address'],
-                                        port=int(member['protocol_port']),
-                                        folder=service['pool']['tenant_id'])
-                    if member['weight'] > 0:
-                        bigip.pool.set_member_ration(
-                                        name=service['pool']['id'],
-                                        ip_address=member['address'],
-                                        port=int(member['protocol_port']),
-                                        ratio=int(member['ratio']),
-                                        folder=service['pool']['tenant_id']
-                                       )
-                        using_ratio = True
-                # if members are using weights, change the LB to RATIO
-                if using_ratio:
-                    bigip.pool.set_lb_method(
-                                        name=service['pool']['id'],
-                                        lb_method='RATIO',
-                                        folder=service['pool']['tenant_id'])
-                #
-                # Provision Virtual Service - Create/Update
-                #
-
-                vlan_name = service['vip']['network']['id']
-                if service['vip']['network']['shared']:
-                    vlan_name = '/Common/' + vlan_name
-
-                tg = self._get_least_vips_traffic_group()
-
-                if bigip.virtual_server.create(
-                                    name=service['vip']['id'],
-                                    ip_address=['vip']['address'],
-                                    mask='255.255.255.255',
-                                    port=int(service['vip']['protocol_port']),
-                                    protocol=service['vip']['protocol'],
-                                    vlan_name=vlan_name,
-                                    traffic_group=tg,
+            # current members
+            existing_members = bigip.pool.get_members(
+                                    name=service['pool']['id'],
+                                    folder=service['pool']['tenant_id'])
+            # create any new members
+            for member in service['members']:
+                if not bigip.pool.add_member(name=service['pool']['id'],
+                                      ip_address=member['address'],
+                                      port=int(member['protocol_port']),
+                                      folder=service['pool']['tenant_id']):
+                    for existing_member in existing_members:
+                        if member['address'] == \
+                               existing_member['addr'] and \
+                           member['protocol_port'] == \
+                                existing_member['port']:
+                            existing_members.remove(existing_member)
+            # remove any members which are not long in the service
+            for need_to_delete in existing_members:
+                bigip.pool.remove_member(
+                                     name=service['pool']['id'],
+                                     ip_address=need_to_delete['addr'],
+                                     port=int(need_to_delete['port']),
+                                     folder=service['pool']['tenant_id']
+                                    )
+            # make sure member attributes are provisioned
+            using_ratio = False
+            for member in service['members']:
+                if member['admin_state_up']:
+                    bigip.pool.enable_member(name=member['id'],
+                                    ip_address=member['address'],
+                                    port=int(member['protocol_port']),
+                                    folder=service['pool']['tenant_id'])
+                else:
+                    bigip.pool.disable_member(name=member['id'],
+                                    ip_address=member['address'],
+                                    port=int(member['protocol_port']),
+                                    folder=service['pool']['tenant_id'])
+                if member['weight'] > 0:
+                    bigip.pool.set_member_ration(
+                                    name=service['pool']['id'],
+                                    ip_address=member['address'],
+                                    port=int(member['protocol_port']),
+                                    ratio=int(member['ratio']),
                                     folder=service['pool']['tenant_id']
-                                   ):
-                    # created update driver traffic group mapping
-                    tg = bigip.virtual_server.get_traffic_group(
-                                          name=service['vip']['ip'],
-                                          folder=service['pool']['tenant_id'])
-                    self.__vips_to_traffic_group[service['vip']['ip']] = tg
+                                   )
+                    using_ratio = True
+            # if members are using weights, change the LB to RATIO
+            if using_ratio:
+                bigip.pool.set_lb_method(
+                                    name=service['pool']['id'],
+                                    lb_method='RATIO',
+                                    folder=service['pool']['tenant_id'])
+            #
+            # Provision Virtual Service - Create/Update
+            #
 
-                bigip.virtual_server.set_description(name=service['vip']['id'],
-                                         description=service['vip']['name'] + \
-                                         ':' + service['vip']['description'])
+            vlan_name = service['vip']['network']['id']
+            if service['vip']['network']['shared']:
+                vlan_name = '/Common/' + vlan_name
 
-                bigip.virtual_server.set_pool(name=service['vip']['id'],
-                                          pool_name=service['pool']['id'],
-                                          folder=service['pool']['tenant_id'])
+            tg = self._get_least_vips_traffic_group()
 
-                if service['vip']['admin_state_up']:
-                    bigip.virtual_server.disable_virtual_server(
-                                        name=service['vip']['id'],
-                                        folder=service['pool']['tenant_id'])
-                else:
-                    bigip.virtual_server.enable_virtual_server(
-                                        name=service['vip']['id'],
-                                        folder=service['pool']['tenant_id'])
+            if bigip.virtual_server.create(
+                                name=service['vip']['id'],
+                                ip_address=['vip']['address'],
+                                mask='255.255.255.255',
+                                port=int(service['vip']['protocol_port']),
+                                protocol=service['vip']['protocol'],
+                                vlan_name=vlan_name,
+                                traffic_group=tg,
+                                folder=service['pool']['tenant_id']
+                               ):
+                # created update driver traffic group mapping
+                tg = bigip.virtual_server.get_traffic_group(
+                                      name=service['vip']['ip'],
+                                      folder=service['pool']['tenant_id'])
+                self.__vips_to_traffic_group[service['vip']['ip']] = tg
 
-                #TODO: fix session peristence
-                if 'session_persistence' in service:
-                    type = service['vip']['session_persistence']['type']
-                    if type == 'HTTP_COOKIE':
-                        pass
-                    elif type == 'APP_COOKIE':
-                        pass
-                    elif type == 'SOURCE_IP':
-                        pass
+            bigip.virtual_server.set_description(name=service['vip']['id'],
+                                     description=service['vip']['name'] + \
+                                     ':' + service['vip']['description'])
 
-                #TODO: fix vitual service protocol
-                if 'protocol' in service['vip']:
-                    protocol = service['vip']['protocol']
-                    if protocol == 'HTTP':
-                        pass
-                    if protocol == 'HTTPS':
-                        pass
-                    if protocol == 'TCP':
-                        pass
+            bigip.virtual_server.set_pool(name=service['vip']['id'],
+                                      pool_name=service['pool']['id'],
+                                      folder=service['pool']['tenant_id'])
 
-                if service['vip']['connection_limit'] > 0:
-                    bigip.virtual_server.set_connection_limit(
-                            name=service['vip']['id'],
-                            connection_limit=int(
-                                    service['vip']['connection_limit']),
-                            folder=service['pool']['tenant_id'])
-                else:
-                    bigip.virtual_server.set_connection_limit(
-                            name=service['vip']['id'],
-                            connection_limit=0,
-                            folder=service['pool']['tenant_id'])
-            finally:
-                self.__lock.release()
+            if service['vip']['admin_state_up']:
+                bigip.virtual_server.disable_virtual_server(
+                                    name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+            else:
+                bigip.virtual_server.enable_virtual_server(
+                                    name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+
+            #TODO: fix session peristence
+            if 'session_persistence' in service:
+                type = service['vip']['session_persistence']['type']
+                if type == 'HTTP_COOKIE':
+                    pass
+                elif type == 'APP_COOKIE':
+                    pass
+                elif type == 'SOURCE_IP':
+                    pass
+
+            #TODO: fix vitual service protocol
+            if 'protocol' in service['vip']:
+                protocol = service['vip']['protocol']
+                if protocol == 'HTTP':
+                    pass
+                if protocol == 'HTTPS':
+                    pass
+                if protocol == 'TCP':
+                    pass
+
+            if service['vip']['connection_limit'] > 0:
+                bigip.virtual_server.set_connection_limit(
+                        name=service['vip']['id'],
+                        connection_limit=int(
+                                service['vip']['connection_limit']),
+                        folder=service['pool']['tenant_id'])
+            else:
+                bigip.virtual_server.set_connection_limit(
+                        name=service['vip']['id'],
+                        connection_limit=0,
+                        folder=service['pool']['tenant_id'])
 
     def _assure_service_networks(self, service):
         if 'id' in service['vip']:
-            try:
-                self.__lock.acquire()
-                assured_networks = []
-                self._assure_network(service['pool']['network'])
-                assured_networks.append(service['pool']['network']['id'])
-                # does the pool network need a self-ip or snat addresses?
-                assured_networks.append(service['pool']['network']['id'])
-                if 'id' in service['vip']['network']:
-                    if not service['vip']['network']['id'] in assured_networks:
-                        self._assure_network(service['vip']['network'])
-                        assured_networks.append(service['vip']['network']['id'])
-                    # all VIPs get a non-floating self IP on each device
-                    self._assure_local_selfip_snat(service['vip'], service)
+            assured_networks = []
+            self._assure_network(service['pool']['network'])
+            assured_networks.append(service['pool']['network']['id'])
+            # does the pool network need a self-ip or snat addresses?
+            assured_networks.append(service['pool']['network']['id'])
+            if 'id' in service['vip']['network']:
+                if not service['vip']['network']['id'] in assured_networks:
+                    self._assure_network(service['vip']['network'])
+                    assured_networks.append(service['vip']['network']['id'])
+                # all VIPs get a non-floating self IP on each device
+                self._assure_local_selfip_snat(service['vip'], service)
 
-                for member in service['members']:
-                    if not member['network']['id'] in assured_networks:
-                        self._assure_network(member['network'])
-                    if 'id'in service['vip']['network'] and \
-                     (not service['vip']['subnet']['id'] == member['subnet']['id']):
-                        # each member gets a local self IP on each device
-                        self._assure_local_selfip_snat(member, service)
-                    # if we are not using SNATS, attempt to become
-                    # the subnet's default gateway.
-                    if not self.conf.f5_snat_mode:
-                        self._assure_floating_default_gateway(member, service)
-            finally:
-                self.__lock.release()
+            for member in service['members']:
+                if not member['network']['id'] in assured_networks:
+                    self._assure_network(member['network'])
+                if 'id'in service['vip']['network'] and \
+                 (not service['vip']['subnet']['id'] == member['subnet']['id']):
+                    # each member gets a local self IP on each device
+                    self._assure_local_selfip_snat(member, service)
+                # if we are not using SNATS, attempt to become
+                # the subnet's default gateway.
+                if not self.conf.f5_snat_mode:
+                    self._assure_floating_default_gateway(member, service)
 
     def _delete_service_networks(self, service):
-        try:
-            self.__lock.acquire()
-            #bigip = self._get_bigip()
-            # vips
-            #vips_left = bigip.virtual_service.get_virtual_services(
-            #                                  folder=service['pool']['tenant_id'])
-            # clean up member network
-            #nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
-            # any nodes on the member's subnet?
-                
-            # delete default gateway vs
-                
-            # self floating selfip
-                
-            # delete snats
-                
-            # delete non-floating selfips
-                
-            # delete network
-    
-            # clean up vip network
+        #bigip = self._get_bigip()
+        # vips
+        #vips_left = bigip.virtual_service.get_virtual_services(
+        #                                  folder=service['pool']['tenant_id'])
+        # clean up member network
+        #nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
+        # any nodes on the member's subnet?
             
-            # try to remove the non-floating selfips
-    
-            # clean up pool network
-        finally:
-            self.__lock.release()
+        # delete default gateway vs
+            
+        # self floating selfip
+            
+        # delete snats
+            
+        # delete non-floating selfips
+            
+        # delete network
+
+        # clean up vip network
+        
+        # try to remove the non-floating selfips
+
+        # clean up pool network
+        pass
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
