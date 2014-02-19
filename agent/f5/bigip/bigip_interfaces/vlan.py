@@ -2,6 +2,8 @@ from f5.common import constants as const
 
 from f5.bigip.bigip_interfaces import icontrol_folder
 
+import os
+
 # Networking - VLAN
 
 
@@ -118,6 +120,31 @@ class Vlan(object):
             return True
         else:
             return False
+
+    def get_vlan_hash(self, interface, vlanid):
+        return "vlan-" + str(interface).replace(".", "-") + str(vlanid)
+
+    @icontrol_folder
+    def get_vlan_name_by_description(self, description=None, folder='Common'):
+        vlans = self.net_vlan.get_list()
+        descriptions = self.net_vlan.get_description(vlans)
+        for i in range(len(descriptions)):
+            if descriptions[i] == description:
+                return os.path.basename(vlans[i])
+        return None
+
+    @icontrol_folder
+    def set_description(self, name=None, description=None, folder='Common'):
+        if self.exists(name=name, folder=folder):
+            self.net_vlan.set_description([name], [description])
+            return True
+        else:
+            return False
+
+    @icontrol_folder
+    def get_description(self, name=None, folder='Common'):
+        if self.exists(name=name, folder=folder):
+            return self.net_vlan.get_description([name])[0]
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):

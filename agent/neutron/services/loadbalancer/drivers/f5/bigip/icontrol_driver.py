@@ -11,7 +11,6 @@ from f5.bigip import exceptions as f5ex
 
 import urllib2
 import netaddr
-import os
 
 import threading
 
@@ -381,8 +380,7 @@ class iControlDriver(object):
             #
             # Provision Virtual Service - Create/Update
             #
-
-            vlan_name = service['vip']['network']['id']
+            vlan_name = self._get_vlan_name(service['vip']['network'])
             ip_address = service['vip']['address']
             if service['vip']['network']['shared']:
                 vlan_name = '/Common/' + vlan_name
@@ -532,6 +530,9 @@ class iControlDriver(object):
                 else:
                     network_folder = network['tenant_id']
 
+                # VLAN names are limited to 64 characters including
+                # the folder name, so we name them foolish things.
+
                 interface = self.interface_mapping['default']
                 tagged = True
                 vlanid = 0
@@ -545,11 +546,13 @@ class iControlDriver(object):
                     if tagged:
                         vlanid = network['provider:segmentation_id']
 
-                bigip.vlan.create(name=network['id'],
-                                           vlanid=vlanid,
-                                           interface=interface,
-                                           folder=network_folder,
-                                           description=network['name'])
+                vlan_name = bigip.vlan.get_vlan_hash(interface, vlanid)
+
+                bigip.vlan.create(name=vlan_name,
+                                  vlanid=vlanid,
+                                  interface=interface,
+                                  folder=network_folder,
+                                  description=network['id'])
 
             if network['provider:network_type'] == 'flat':
                 if network['shared']:
@@ -563,21 +566,24 @@ class iControlDriver(object):
                     interface = self.interface_mapping[
                               network['provider:physical_network']]
 
-                bigip.vlan.create(name=network['id'],
-                                           vlanid=0,
-                                           interface=interface,
-                                           folder=network_folder,
-                                           description=network['name'])
+                vlan_name = bigip.vlan.get_vlan_hash(interface, vlanid)
+
+                bigip.vlan.create(name=vlan_name,
+                                  vlanid=0,
+                                  interface=interface,
+                                  folder=network_folder,
+                                  description=network['id'])
 
     def _assure_local_selfip_snat(self, service_object, service):
 
+        bigip = self._get_bigip()
         # Setup non-floating Self IPs on all BigIPs
-        vlan_name = service_object['network']['id']
         snat_pool_name = service_object['subnet']['tenant_id']
         # Where to put all these objects?
         network_folder = service_object['subnet']['tenant_id']
         if service_object['network']['shared']:
             network_folder = 'Common'
+        vlan_name = self._get_vlan_name(service_object['network'])
 
         # On each BIG-IP create the local Self IP for this subnet
         for bigip in self.__bigips.values():
@@ -752,12 +758,13 @@ class iControlDriver(object):
 
         # Go ahead and setup a floating SelfIP with the subnet's
         # gateway_ip address on this agent's device service group
-        vlan_name = service_object['network']['id']
+
         network_folder = service_object['subnet']['tenant_id']
+        vlan_name = self._get_vlan_name(service_object['network'])
         # Where to put all these objects?
         if service_object['network']['shared']:
-            vlan_name = '/Common/' + vlan_name
             network_folder = 'Common'
+            vlan_name = '/Common/' + vlan_name
 
         # Select a traffic group for the floating SelfIP
         tg = self._get_least_gw_traffic_group()
@@ -814,6 +821,18 @@ class iControlDriver(object):
                 pass
         else:
             raise urllib2.URLError('cannot communicate to any bigips')
+
+    def _get_vlan_name(self, network):
+        interface = self.interface_mapping['default']
+        vlanid = 0
+
+        if network['provider:physical_network'] in \
+                                            self.interface_mapping:
+            interface = self.interface_mapping[
+                              network['provider:physical_network']]
+            vlanid = network['provider:segmentation_id']
+
+        return bigip.vlan.get_vlan_hash(interface, vlanid)
 
     def _init_connection(self):
         try:
