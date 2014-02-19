@@ -48,7 +48,7 @@ def icontrol_folder(method):
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                              folder)
 
-        instance.bigip.set_folder(None, folder=folder)
+        instance.bigip.set_folder(None, folder=kwargs['folder'])
 
         return method(*args, **kwargs)
     return wrapper
