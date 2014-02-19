@@ -247,24 +247,38 @@ class iControlDriver(object):
             LOG.debug(_("Pool: %s before assurance has monitors: %s"
                         % (service['pool']['id'], existing_monitors)))
 
+            health_monitor_status = {}
+            for monitor in service['pool']['health_monitor_status']:
+                health_monitor_status[monitor['monitor_id']] = \
+                                                           monitor['status']
+
             # Current monitor associations according to Neutron
             for monitor in service['health_monitors']:
-                timeout = int(monitor['max_retries']) * int(monitor['timeout'])
-                bigip.monitor.create(name=monitor['id'],
-                                     mon_type=monitor['type'],
-                                     interval=monitor['delay'],
-                                     timeout=timeout,
-                                     send_text=None,
-                                     recv_text=None,
-                                     folder=monitor['tenant_id'])
-                # make sure monitor attributes are correct
-                bigip.monitor.set_interval(name=monitor['id'],
-                                     interval=monitor['delay'])
-                bigip.monitor.set_timeout(name=monitor['id'],
-                                              timeout=timeout)
-                bigip.pool.add_monitor(name=service['pool']['id'],
-                                    monitor_name=monitor['id'],
-                                    folder=service['pool']['tenant_id'])
+                if monitor['id'] in health_monitor_status and \
+                   health_monitor_status[monitor['id']] == 'PENDING_DELETE':
+                    bigip.pool.remove_monitor(
+                                          name=service['pool']['id'],
+                                          monitor_name=monitor['id'],
+                                          folder=service['pool']['tenant_id']
+                                        )
+                else:
+                    timeout = int(monitor['max_retries']) \
+                            * int(monitor['timeout'])
+                    bigip.monitor.create(name=monitor['id'],
+                                         mon_type=monitor['type'],
+                                         interval=monitor['delay'],
+                                         timeout=timeout,
+                                         send_text=None,
+                                         recv_text=None,
+                                         folder=monitor['tenant_id'])
+                    # make sure monitor attributes are correct
+                    bigip.monitor.set_interval(name=monitor['id'],
+                                         interval=monitor['delay'])
+                    bigip.monitor.set_timeout(name=monitor['id'],
+                                                  timeout=timeout)
+                    bigip.pool.add_monitor(name=service['pool']['id'],
+                                        monitor_name=monitor['id'],
+                                        folder=service['pool']['tenant_id'])
                 existing_monitors.remove(monitor['id'])
 
             LOG.debug(_("Pool: %s removing monitors %s"
@@ -464,24 +478,46 @@ class iControlDriver(object):
                     self._assure_floating_default_gateway(member, service)
 
     def _delete_service_networks(self, service):
-        #bigip = self._get_bigip()
-        # vips
-        #vips_left = bigip.virtual_service.get_virtual_services(
-        #                                  folder=service['pool']['tenant_id'])
+        bigip = self._get_bigip()
+        cleaned_subnets = []
+        # vip subnet
+        vips_left = bigip.virtual_service.get_virtual_services(
+                                          folder=service['vip']['tenant_id'])
+        nodes_left = bigip.pool.get_nodes(folder=service['vip']['tenant_id'])
+        if len(vips_left) == 0 and len(nodes_left) == 0:
+            # remove ip_forwarding vs for this subnet
+            # remove floating Self IP for this subnet
+            # remove snats from this subnet
+            # remove non-floating SelfIP from all device on this subnet
+            pass
+        # try to remove L2 associated with vip['network']
+        cleaned_subnets.append(service['vip']['subnet']['id'])
         # clean up member network
-        #nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
-        # any nodes on the member's subnet?
-
-        # delete default gateway vs
-        # self floating selfip
-        # delete snats
-        # delete non-floating selfips
-        # delete network
-        # clean up vip network
-        # try to remove the non-floating selfips
-
+        for member in service['members']:
+            if not member['subnet']['id'] in cleaned_subnets:
+                vips_left = bigip.virtual_service.get_virtual_services(
+                                                   folder=member['tenant_id'])
+                nodes_left = bigip.pool.get_nodes(folder=member['tenant_id'])
+                if len(vips_left) == 0 and len(nodes_left) == 0:
+                    # remove ip_forwarding vs for this subnet
+                    # remove floating Self IP for this subnet
+                    # remove snats from this subnet
+                    # remove non-floating SelfIP from all devices on this subnet
+                    pass
+                cleaned_subnets.append(member['subnet']['id'])
+                # try to remove L2 associated with member['network']
         # clean up pool network
-        pass
+        if not service['pool']['subnet']['id'] in cleaned_subnets:
+            vips_left = bigip.virtual_service.get_virtual_services(
+                                              folder=service['pool']['tenant_id'])
+            nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
+            if len(vips_left) == 0 and len(nodes_left) == 0:
+                # remove ip_forwarding vs for this subnet
+                # remove floating Self IP for this subnet
+                # remove snats from this subnet
+                # remove non-floating SelfIP from all device on this subnet
+                pass
+        # try to remove L2 associated with pool['network']
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
