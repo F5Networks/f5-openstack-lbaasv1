@@ -49,6 +49,9 @@ class iControlDriver(object):
     __vips_on_traffic_groups = {}
     __gw_on_traffic_groups = {}
 
+    # syncing services
+    __syncing = []
+
     def __init__(self, conf):
         self.conf = conf
         self.conf.register_opts(OPTS)
@@ -76,8 +79,11 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def sync(self, service):
-        self._assure_service_networks(service)
-        self._assure_service(service)
+        if not service['pool']['id'] in self.__syncing:
+            self.__syncing.append(service['pool']['id'])
+            self._assure_service_networks(service)
+            self._assure_service(service)
+            self.__syncing.remove(service['pool']['id'])
         return True
 
     @am.is_connected
