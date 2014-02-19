@@ -25,16 +25,23 @@ class SNAT(object):
     @domain_address
     @log.log
     def create(self, name=None, ip_address=None,
-               traffic_group=None, folder='Common'):
+               traffic_group=None, snat_pool_name=None,
+               folder='Common'):
+        if not snat_pool_name:
+            snat_pool_name = folder
         if self.exists(name=name, folder=folder):
             if not traffic_group:
                 traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
             self.lb_snataddress.create([name], [ip_address], [traffic_group])
-        if self.pool_exists(name=folder, folder=folder):
-            self.add_to_pool(name=name, pool_name=folder, folder=folder)
+        if self.pool_exists(name=snat_pool_name, folder=folder):
+            self.add_to_pool(name=name,
+                             pool_name=snat_pool_name,
+                             folder=folder)
             return True
         else:
-            self.create_pool(name=folder, member_name=name, folder=folder)
+            self.create_pool(name=snat_pool_name,
+                             member_name=name,
+                             folder=folder)
             return True
         return False
 

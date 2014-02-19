@@ -533,7 +533,7 @@ class iControlDriver(object):
                 snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     ip_address = None
-                    index_snat_name = snat_name + "_" + i
+                    index_snat_name = snat_name + "_" + str(i)
                     if 'subnet_ports' in service_object:
                         for port in service_object['subnet_ports']:
                             if port['name'] == index_snat_name:
@@ -565,7 +565,7 @@ class iControlDriver(object):
                 snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     ip_address = None
-                    index_snat_name = snat_name + "_" + i
+                    index_snat_name = snat_name + "_" + str(i)
                     if 'subnet_ports' in service_object:
                         for port in service_object['subnet_ports']:
                             if port['name'] == index_snat_name:
@@ -597,7 +597,7 @@ class iControlDriver(object):
                          service_object['subnet']['id']
                         snat_name = snat_name[0:60]
                         ip_address = None
-                        index_snat_name = snat_name + "_" + i
+                        index_snat_name = snat_name + "_" + str(i)
                         if 'subnet_ports' in service_object:
                             for port in service_object['subnet_ports']:
                                 if port['name'] == index_snat_name:
@@ -715,11 +715,12 @@ class iControlDriver(object):
         return traffic_group
 
     def _get_bigip(self):
-        for i in range(len(self.__bigips.values())):
+        hostnames = sorted(self.__bigips)
+        for i in range(len(hostnames)):
             try:
-                self.__bigips[i].system.sys_session.set_active_folder(
-                                                            '/Common')
-                return self.__bigips[i]
+                bigip = self.__bigips[hostnames[i]]
+                bigip.system.sys_session.set_active_folder('/Common')
+                return bigip
             except urllib2.URLError:
                 pass
         else:
