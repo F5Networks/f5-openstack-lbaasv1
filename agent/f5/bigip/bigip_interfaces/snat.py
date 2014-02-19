@@ -29,13 +29,15 @@ class SNAT(object):
                folder='Common'):
         if not snat_pool_name:
             snat_pool_name = folder
+
         if not self.exists(name=name, folder=folder):
             if not traffic_group:
                 traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
             self.lb_snataddress.create([name], [ip_address], [traffic_group])
+
         if self.pool_exists(name=snat_pool_name, folder=folder):
-            self.add_to_pool(name=name,
-                             pool_name=snat_pool_name,
+            self.add_to_pool(name=snat_pool_name,
+                             member_name=name,
                              folder=folder)
             return True
         else:
@@ -63,19 +65,21 @@ class SNAT(object):
          self.lb_snatpool.typefactory.create('Common.StringSequence')
         string_seq_seq = \
          self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
-        string_seq.values = member_name
+        string_seq.values = [member_name]
         string_seq_seq.values = [string_seq]
         self.lb_snatpool.create_v2([name], string_seq_seq)
 
     @icontrol_folder
     def add_to_pool(self, name=None, member_name=None, folder='Common'):
-        string_seq = \
-         self.lb_snatpool.typefactory.create('Common.StringSequence')
-        string_seq_seq = \
-         self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
-        string_seq.values = member_name
-        string_seq_seq.values = [string_seq]
-        self.lb_snatpool.add_member_v2([name], string_seq_seq)
+        existing_members = self.lb_snatpool.get_members_v2([name])
+        if not member_name in existing_members:
+            string_seq = \
+             self.lb_snatpool.typefactory.create('Common.StringSequence')
+            string_seq_seq = \
+        self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
+            string_seq.values = member_name
+            string_seq_seq.values = [string_seq]
+            self.lb_snatpool.add_member_v2([name], string_seq_seq)
 
     @icontrol_folder
     def pool_exists(self, name=None, folder='Common'):
