@@ -29,7 +29,7 @@ class SNAT(object):
                folder='Common'):
         if not snat_pool_name:
             snat_pool_name = folder
-        if self.exists(name=name, folder=folder):
+        if not self.exists(name=name, folder=folder):
             if not traffic_group:
                 traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
             self.lb_snataddress.create([name], [ip_address], [traffic_group])

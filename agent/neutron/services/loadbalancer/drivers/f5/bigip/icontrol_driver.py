@@ -528,7 +528,7 @@ class iControlDriver(object):
             if self.conf.f5_ha_type == 'standalone':
                 # Create SNATs on traffic-group-local-only
                 bigip = self._get_bigip()
-                snat_name = "snat-" + "traffic-group-local-only" + \
+                snat_name = 'snat-traffic-group-local-only-' + \
                  service_object['subnet']['id']
                 snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
@@ -560,7 +560,7 @@ class iControlDriver(object):
             elif self.conf.f5_ha_type == 'ha':
                 # Create SNATs on traffic-group-1
                 bigip = self._get_bigip()
-                snat_name = "snat-" + 'traffic-group-1' + \
+                snat_name = 'snat-traffic-group-1' + \
                  service_object['subnet']['id']
                 snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
@@ -593,7 +593,7 @@ class iControlDriver(object):
                 bigip = self._get_bigip()
                 for traffic_group in self.__traffic_groups:
                     for i in range(self.conf.f5_snat_addresses_per_subnet):
-                        snat_name = "snat-" + traffic_group + \
+                        snat_name = "snat-" + traffic_group + "-" + \
                          service_object['subnet']['id']
                         snat_name = snat_name[0:60]
                         ip_address = None
