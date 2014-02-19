@@ -86,7 +86,7 @@ class Route(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        self.bigip.system.set_folder(folder=folder)
+        self.bigip.system.set_folder(folder)
         if name in self.net_route2.get_static_route_list():
             return True
 
