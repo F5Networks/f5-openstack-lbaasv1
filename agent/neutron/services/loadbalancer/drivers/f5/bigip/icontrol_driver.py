@@ -345,7 +345,7 @@ class iControlDriver(object):
 
             if bigip.virtual_server.create(
                                 name=service['vip']['id'],
-                                ip_address=service['vip']['address'],
+                                ip_address=ip_address,
                                 mask='255.255.255.255',
                                 port=int(service['vip']['protocol_port']),
                                 protocol=service['vip']['protocol'],
