@@ -53,7 +53,7 @@ class Pool(object):
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            nodes = self._get_nodess_for_members(
+            nodes = self._get_nodes_for_members(
                                                 name=name,
                                                 folder=folder)
             self.lb_pool.delete_pool([name])
