@@ -546,7 +546,7 @@ class iControlDriver(object):
                     if tagged:
                         vlanid = network['provider:segmentation_id']
 
-                vlan_name = bigip.vlan.get_vlan_hash(interface, vlanid)
+                vlan_name = self._get_vlan_name(network)
 
                 bigip.vlan.create(name=vlan_name,
                                   vlanid=vlanid,
@@ -566,7 +566,7 @@ class iControlDriver(object):
                     interface = self.interface_mapping[
                               network['provider:physical_network']]
 
-                vlan_name = bigip.vlan.get_vlan_hash(interface, vlanid)
+                vlan_name = self._get_vlan_name(network)
 
                 bigip.vlan.create(name=vlan_name,
                                   vlanid=0,
@@ -832,7 +832,7 @@ class iControlDriver(object):
                               network['provider:physical_network']]
             vlanid = network['provider:segmentation_id']
 
-        return bigip.vlan.get_vlan_hash(interface, vlanid)
+        return "vlan-" + str(interface).replace(".", "-") + "-" + str(vlanid)
 
     def _init_connection(self):
         try:
