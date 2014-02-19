@@ -244,27 +244,37 @@ class iControlDriver(object):
             existing_monitors = bigip.pool.get_monitors(
                                     name=service['pool']['id'],
                                     folder=service['pool']['tenant_id'])
+            LOG.debug(_("Pool: %s before assurance has monitors: %s"
+                        % (service['pool']['id'], existing_monitors)))
 
             # Current monitor associations according to Neutron
             for monitor in service['health_monitors']:
-                timeout = int(monitor['max_retries']) * int(monitor['timeout'])
-                bigip.monitor.create(name=monitor['id'],
+                if monitor['status'] == 'PENDING_DELETE':
+                    bigip.pool.remove_monitor(name=service['pool']['id'],
+                                      monitor_name=monitor['id'],
+                                      folder=service['pool']['tenant_id'])
+                else:
+                    timeout = int(monitor['max_retries']) \
+                                    * int(monitor['timeout'])
+                    bigip.monitor.create(name=monitor['id'],
                                      mon_type=monitor['type'],
                                      interval=monitor['delay'],
                                      timeout=timeout,
                                      send_text=None,
                                      recv_text=None,
                                      folder=monitor['tenant_id'])
-                # make sure monitor attributes are correct
-                bigip.monitor.set_interval(name=monitor['id'],
-                                     interval=monitor['delay'])
-                bigip.monitor.set_timeout(name=monitor['id'],
-                                              timeout=timeout)
-                bigip.pool.add_monitor(name=service['pool']['id'],
-                                    monitor_name=monitor['id'],
-                                    folder=service['pool']['tenant_id'])
-                existing_monitors.remove(monitor['id'])
+                    # make sure monitor attributes are correct
+                    bigip.monitor.set_interval(name=monitor['id'],
+                                         interval=monitor['delay'])
+                    bigip.monitor.set_timeout(name=monitor['id'],
+                                                  timeout=timeout)
+                    bigip.pool.add_monitor(name=service['pool']['id'],
+                                        monitor_name=monitor['id'],
+                                        folder=service['pool']['tenant_id'])
+            existing_monitors.remove(monitor['id'])
 
+            LOG.debug(_("Pool: %s removing monitors %s"
+                        % (service['pool']['id'], existing_monitors)))
             # get rid of monitors no long in service definition
             for monitor in existing_monitors:
                 bigip.monitor.delete(name=monitor,
@@ -340,7 +350,7 @@ class iControlDriver(object):
 
             # remove any members which are not long in the service
             LOG.debug(_("Pool: %s removing members %s"
-                        % (service['pool']['id'], existing_member)))
+                        % (service['pool']['id'], existing_members)))
             for need_to_delete in existing_members:
                 bigip.pool.remove_member(
                                      name=service['pool']['id'],
