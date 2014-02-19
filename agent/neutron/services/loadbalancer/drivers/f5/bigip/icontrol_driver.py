@@ -199,28 +199,22 @@ class iControlDriver(object):
     def _delete_service(self, service):
         bigip = self._get_bigip()
         if 'id' in service['vip']:
-            LOG.debug(_('DELETING VIP %s/%s' % (service['pool']['tenant_id'],
-                                                service['vip']['id'])))
-            LOG.debug(_('Does that VIP exist? %s' % bigip.virtual_server.exists(name=service['vip']['id'], folder=service['pool']['tenant_id'])))
             bigip.virtual_server.delete(name=service['vip']['id'],
                                         folder=service['pool']['tenant_id'])
+            self.plugin_rpc.delete_port(port_id=service['vip']['port_id'],
+                                        mac_address=None)
             if service['vip']['id'] in self.__vips_to_traffic_group:
                 tg = self.__vips_to_traffic_group[service['vip']['id']]
                 self.__vips_on_traffic_groups[tg] = \
                                   self.__vips_on_traffic_groups[tg] - 1
                 del(self.__vips_to_traffic_groups[service['vip']['id']])
 
+        # Delete the Pool
         if 'id' in service['pool']:
-            LOG.debug(_('Does that POOL exist? %s' % bigip.pool.exists(name=service['pool']['id'], folder=service['pool']['tenant_id'])))
-            LOG.debug(_('DELETING POOL %s/%s' % (service['pool']['tenant_id'],
-                                                service['pool']['id'])))
             bigip.pool.delete(name=service['pool']['id'],
                               folder=service['pool']['tenant_id'])
 
         for monitor in service['health_monitors']:
-            LOG.debug(_('Does that MONITOR exist? %s' % bigip.monitor.exists(name=monitor['id'], folder=monitor['tenant_id'])))
-            LOG.debug(_('DELETING MONITOR %s/%s' % (monitor['tenant_id'],
-                                                    monitor['id'])))
             bigip.monitor.delete(name=monitor['id'],
                                  folder=monitor['tenant_id'])
 
@@ -248,53 +242,93 @@ class iControlDriver(object):
             # Provision Health Monitors - Create/Update
             #
 
+            # Current monitors on the pool according to BigIP
+            existing_monitors = bigip.pool.get_monitors(
+                                    name=service['pool']['id'],
+                                    folder=service['pool']['tenant_id'])
+
+            # Current monitor associations according to Neutron
             for monitor in service['health_monitors']:
                 timeout = int(monitor['max_retries']) * int(monitor['timeout'])
-                if not bigip.monitor.create(name=monitor['id'],
+                bigip.monitor.create(name=monitor['id'],
                                      mon_type=monitor['type'],
                                      interval=monitor['delay'],
                                      timeout=timeout,
                                      send_text=None,
                                      recv_text=None,
-                                     folder=monitor['tenant_id']):
-                    # make sure monitor attributes are correct
-                    bigip.monitor.set_interval(name=monitor['id'],
+                                     folder=monitor['tenant_id'])
+                # make sure monitor attributes are correct
+                bigip.monitor.set_interval(name=monitor['id'],
                                      interval=monitor['delay'])
-                    bigip.monitor.set_timeout(name=monitor['id'],
+                bigip.monitor.set_timeout(name=monitor['id'],
                                               timeout=timeout)
-
-            existing_monitors = bigip.pool.get_monitors(
-                                    name=service['pool']['id'],
-                                    folder=service['pool']['tenant_id'])
-            for monitor in service['health_monitors']:
-                if not bigip.pool.add_monitor(name=service['pool']['id'],
+                bigip.pool.add_monitor(name=service['pool']['id'],
                                     monitor_name=monitor['id'],
-                                    folder=service['pool']['tenant_id']):
-                    existing_monitors.remove(monitor['id'])
+                                    folder=service['pool']['tenant_id'])
+                existing_monitors.remove(monitor['id'])
+
             # get rid of monitors no long in service definition
             for monitor in existing_monitors:
-                bigip.monitor.delete(name=monitor)
+                bigip.monitor.delete(name=monitor,
+                                     folder=service['pool']['tenant_id'])
 
             #
             # Provision Members - Create/Update
             #
 
-            # current members
+            # Current members on the BigIP
             existing_members = bigip.pool.get_members(
                                     name=service['pool']['id'],
                                     folder=service['pool']['tenant_id'])
-            # create any new members
+
+            # Flag if we need to change the pool's LB method to
+            # include weighting by the ratio attribute
+            using_ratio = False
+
+            # Members according to Neutron
             for member in service['members']:
-                if not bigip.pool.add_member(name=service['pool']['id'],
+                # Delete those pending delete
+                if member['status'] == 'PENDING_DELETE':
+                    bigip.pool.remove_member(name=service['pool']['id'],
                                       ip_address=member['address'],
                                       port=int(member['protocol_port']),
-                                      folder=service['pool']['tenant_id']):
-                    for existing_member in existing_members:
-                        if member['address'] == \
-                               existing_member['addr'] and \
-                           member['protocol_port'] == \
-                                existing_member['port']:
-                            existing_members.remove(existing_member)
+                                      folder=service['pool']['tenant_id'])
+                else:
+                    # See if we need to added it orginially
+                    bigip.pool.add_member(name=service['pool']['id'],
+                                          ip_address=member['address'],
+                                          port=int(member['protocol_port']),
+                                          folder=service['pool']['tenant_id'])
+                    # Is it enabled or disabled?
+                    if member['admin_state_up']:
+                        bigip.pool.enable_member(name=member['id'],
+                                        ip_address=member['address'],
+                                        port=int(member['protocol_port']),
+                                        folder=service['pool']['tenant_id'])
+                    else:
+                        bigip.pool.disable_member(name=member['id'],
+                                        ip_address=member['address'],
+                                        port=int(member['protocol_port']),
+                                        folder=service['pool']['tenant_id'])
+                    # Do we have weights for ratios?
+                    if member['weight'] > 0:
+                        bigip.pool.set_member_ration(
+                                        name=service['pool']['id'],
+                                        ip_address=member['address'],
+                                        port=int(member['protocol_port']),
+                                        ratio=int(member['ratio']),
+                                        folder=service['pool']['tenant_id']
+                                       )
+                    using_ratio = True
+
+                # Remove them from the one's BigIP needs to
+                # handle.. leaving on those that are needed to
+                # delete from the BigIP
+                for existing_member in existing_members:
+                    if member['address'] == existing_member['addr'] and \
+                       member['protocol_port'] == existing_member['port']:
+                        existing_members.remove(existing_member)
+
             # remove any members which are not long in the service
             for need_to_delete in existing_members:
                 bigip.pool.remove_member(
@@ -303,28 +337,6 @@ class iControlDriver(object):
                                      port=int(need_to_delete['port']),
                                      folder=service['pool']['tenant_id']
                                     )
-            # make sure member attributes are provisioned
-            using_ratio = False
-            for member in service['members']:
-                if member['admin_state_up']:
-                    bigip.pool.enable_member(name=member['id'],
-                                    ip_address=member['address'],
-                                    port=int(member['protocol_port']),
-                                    folder=service['pool']['tenant_id'])
-                else:
-                    bigip.pool.disable_member(name=member['id'],
-                                    ip_address=member['address'],
-                                    port=int(member['protocol_port']),
-                                    folder=service['pool']['tenant_id'])
-                if member['weight'] > 0:
-                    bigip.pool.set_member_ration(
-                                    name=service['pool']['id'],
-                                    ip_address=member['address'],
-                                    port=int(member['protocol_port']),
-                                    ratio=int(member['ratio']),
-                                    folder=service['pool']['tenant_id']
-                                   )
-                    using_ratio = True
             # if members are using weights, change the LB to RATIO
             if using_ratio:
                 bigip.pool.set_lb_method(

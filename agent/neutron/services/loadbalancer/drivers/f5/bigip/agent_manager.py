@@ -92,15 +92,16 @@ class LogicalServiceCache(object):
 
     class Service(object):
         """Inner classes used to hold values for weakref lookups."""
-        def __init__(self, port_id, pool_id):
+        def __init__(self, port_id, pool_id, tenant_id):
             self.port_id = port_id
             self.pool_id = pool_id
+            self.tenant_id = tenant_id
 
         def __eq__(self, other):
             return self.__dict__ == other.__dict__
 
         def __hash__(self):
-            return hash((self.port_id, self.pool_id))
+            return hash((self.port_id, self.pool_id, self.tenant_id))
 
     def __init__(self):
         LOG.debug(_("Initializing LogicalServiceCache version %s"
@@ -109,13 +110,14 @@ class LogicalServiceCache(object):
         self.port_lookup = weakref.WeakValueDictionary()
         self.pool_lookup = weakref.WeakValueDictionary()
 
-    def put(self, logical_config):
-        if 'port_id' in logical_config['vip']:
-            port_id = logical_config['vip']['port_id']
+    def put(self, service):
+        if 'port_id' in service['vip']:
+            port_id = service['vip']['port_id']
         else:
             port_id = None
-        pool_id = logical_config['pool']['id']
-        s = self.Service(port_id, pool_id)
+        pool_id = service['pool']['id']
+        tenant_id = service['pool']['tenant_id']
+        s = self.Service(port_id, pool_id, tenant_id)
         if s not in self.services:
             self.services.add(s)
             if port_id:
@@ -129,7 +131,8 @@ class LogicalServiceCache(object):
             else:
                 port_id = None
             service = self.Service(
-                port_id, service['pool']['id']
+                port_id, service['pool']['id'],
+                service['pool']['tenant_id']
             )
         if service in self.services:
             self.services.remove(service)
@@ -151,8 +154,7 @@ class LogicalServiceCache(object):
     def get_tenant_ids(self):
         tenant_ids = {}
         for service in self.services:
-            if 'pool' in service:
-                tenant_ids[service['pool']['tenant_id']] = 1
+            tenant_ids[service.tenant_id] = 1
         return tenant_ids.keys()
 
 

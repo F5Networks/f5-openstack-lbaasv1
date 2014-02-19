@@ -1,5 +1,4 @@
 import os
-import netaddr
 from suds import WebFault
 
 from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
@@ -38,7 +37,9 @@ class Pool(object):
                 'Common.AddressPortSequence')
             pool_members_seq = [addr_port_seq]
             try:
-                self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
+                self.lb_pool.create_v2(pool_names,
+                                       lb_methods,
+                                       pool_members_seq)
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
                     LOG.error(_(
@@ -80,7 +81,7 @@ class Pool(object):
         return_nodes = []
         for member in self.lb_pool.get_member_v2([name])[0]:
             for i in range(len(node_addresses)):
-                if node_addresses[i] == member.address:
+                if node_addresses[i] == os.path.basename(member.address):
                     return_nodes.append(nodes[i])
         return return_nodes
 
@@ -176,6 +177,8 @@ class Pool(object):
                               port=port, folder=folder):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
             self.lb_pool.remove_member_v2([name], [addr_port_seq])
+            self.remove_node_by_address(node_ip_address=ip_address,
+                                        folder=folder)
             return True
         else:
             return False
@@ -189,6 +192,18 @@ class Pool(object):
     def remove_nodes(self, node_names=None, folder='Common'):
         self.lb_node.delete_node_address([node_names])
         return True
+
+    @icontrol_folder
+    def remove_node_by_address(self,
+                               node_ip_address=None,
+                               folder='Common'):
+        nodes = self.lb_node.get_list()
+        node_addresses = self.lb_node.get_address(nodes)
+        for i in range(len(node_addresses)):
+            if node_addresses[i] == node_ip_address:
+                self.remove_node(name=nodes[i], folder=folder)
+                return True
+        return False
 
     @icontrol_folder
     def get_nodes(self, folder='Common'):
