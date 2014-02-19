@@ -151,7 +151,8 @@ class LogicalServiceCache(object):
     def get_tenant_ids(self):
         tenant_ids = {}
         for service in self.services:
-            tenant_ids[service['pool']['tenant_id']] = 1
+            if 'pool' in service:
+                tenant_ids[service['pool']['tenant_id']] = 1
         return tenant_ids.keys()
 
 

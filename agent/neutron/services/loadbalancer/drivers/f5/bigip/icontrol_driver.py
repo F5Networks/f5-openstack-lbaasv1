@@ -336,8 +336,10 @@ class iControlDriver(object):
             #
 
             vlan_name = service['vip']['network']['id']
+            ip_address = service['vip']['address']
             if service['vip']['network']['shared']:
                 vlan_name = '/Common/' + vlan_name
+                ip_address = ip_address + "%0"
 
             tg = self._get_least_vips_traffic_group()
 
