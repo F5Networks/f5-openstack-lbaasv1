@@ -380,7 +380,6 @@ class Pool(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        self.bigip.system.set_folder(folder)
         if name in self.lb_pool.get_list():
             return True
 

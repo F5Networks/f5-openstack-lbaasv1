@@ -339,7 +339,6 @@ class VirtualServer(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        self.bigip.system.set_folder(folder)
         if name in self.lb_vs.get_list():
             return True
         else:

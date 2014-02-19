@@ -179,6 +179,5 @@ class SelfIP(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        self.bigip.system.set_folder(folder)
         if name in self.net_self.get_list():
             return True

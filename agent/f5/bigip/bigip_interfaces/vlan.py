@@ -124,8 +124,6 @@ class Vlan(object):
         if name:
             if name.startswith('/Common/'):
                 self.bigip.system.set_folder('/Common')
-            else:
-                self.bigip.system.set_folder(folder)
             if name in self.net_vlan.get_list():
                 return True
 
