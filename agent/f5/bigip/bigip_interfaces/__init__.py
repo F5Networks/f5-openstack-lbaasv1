@@ -35,8 +35,7 @@ def icontrol_folder(method):
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                                  'Common')
                     else:
-                        name_prefix = \
-                                  kwargs[name][0:kwargs[name].index('_name')]
+                        name_prefix = name[0:name.index('_name')]
                         specific_folder_name = name_prefix + "_folder"
                         folder = kwargs['folder']
                         if specific_folder_name in kwargs:
@@ -71,8 +70,7 @@ def domain_address(method):
             if name.find('ip_address') > -1:
                 if kwargs[name]:
                     if name.find('_ip_address') > -1:
-                        name_prefix = \
-                         kwargs[name][0:kwargs[name].index('_ip_address')]
+                        name_prefix = name[0:name.index('_ip_address')]
                         specific_folder_name = name_prefix + "_folder"
                         if specific_folder_name in kwargs:
                             folder = kwargs[specific_folder_name]
