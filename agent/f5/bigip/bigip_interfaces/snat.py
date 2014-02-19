@@ -4,6 +4,11 @@ from f5.bigip.bigip_interfaces import icontrol_folder
 
 # Networking - Self-IP
 from neutron.common import log
+from suds import WebFault
+
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class SNAT(object):
@@ -33,7 +38,14 @@ class SNAT(object):
         if not self.exists(name=name, folder=folder):
             if not traffic_group:
                 traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
-            self.lb_snataddress.create([name], [ip_address], [traffic_group])
+            try:
+                self.lb_snataddress.create([name],
+                                           [ip_address],
+                                           [traffic_group])
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a SNAT when exists again..fix me!'))
 
         if self.pool_exists(name=snat_pool_name, folder=folder):
             self.add_to_pool(name=snat_pool_name,

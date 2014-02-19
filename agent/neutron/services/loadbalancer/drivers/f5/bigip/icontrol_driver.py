@@ -79,11 +79,8 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def sync(self, service):
-        if not service['pool']['id'] in self.__syncing:
-            self.__syncing.append(service['pool']['id'])
-            self._assure_service_networks(service)
-            self._assure_service(service)
-            self.__syncing.remove(service['pool']['id'])
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
