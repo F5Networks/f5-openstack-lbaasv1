@@ -66,8 +66,9 @@ class iControlDriver(object):
         # map format is   phynet:interface:tagged
         for maps in mappings:
             intmap = maps.split(':')
-            self.interface_mapping[intmap[0]] = intmap[1]
-            self.tagging_mapping[intmap[0]] = intmap[2]
+            intmap[0] = str(intmap[0]).strip()
+            self.interface_mapping[intmap[0]] = str(intmap[1]).strip()
+            self.tagging_mapping[intmap[0]] = str(intmap[2]).strip()
             LOG.debug(_('physical_network %s = BigIP interface %s, tagged %s'
                         % (intmap[0], intmap[1], intmap[2])
                         ))
@@ -449,6 +450,7 @@ class iControlDriver(object):
                 interface = self.interface_mapping['default']
                 tagged = True
                 vlanid = 0
+
                 if network['provider:physical_network'] in \
                                             self.interface_mapping:
                     interface = self.interface_mapping[
@@ -458,12 +460,6 @@ class iControlDriver(object):
                     if tagged:
                         vlanid = network['provider:segmentation_id']
 
-                LOG.debug(_('creating BigIP VLAN %s/%s : %s: %d'
-                            % (network_folder,
-                               network['id'],
-                               interface,
-                               vlanid)
-                            ))
                 bigip.vlan.create(name=network['id'],
                                            vlanid=vlanid,
                                            interface=interface,
@@ -482,12 +478,6 @@ class iControlDriver(object):
                     interface = self.interface_mapping[
                               network['provider:physical_network']]
 
-                LOG.debug(_('creating BigIP VLAN %s/%s : %s: %d'
-                            % (network_folder,
-                               network['id'],
-                               interface,
-                               vlanid)
-                            ))
                 bigip.vlan.create(name=network['id'],
                                            vlanid=0,
                                            interface=interface,
@@ -495,11 +485,19 @@ class iControlDriver(object):
                                            description=network['name'])
 
     def _assure_local_selfip_snat(self, service_object, service):
+
         # Setup non-floating Self IPs on all BigIPs
+        vlan_name = service_object['network']['id']
+        local_selfip_name = "local-" + service_object['subnet']['id']
+        snat_pool_name = service_object['subnet']['tenant_id']
+        # Where to put all these objects?
+        network_folder = service_object['subnet']['tenant_id']
+        if service_object['network']['shared']:
+            network_folder = 'Common'
+
+        # On each BIG-IP create the local Self IP for this subnet
         for bigip in self.__bigips.values():
             ip_address = None
-            local_selfip_name = \
-                "local-" + service_object['subnet']['id']
             if 'subnet_ports' in service_object:
                 for port in service_object['subnet_ports']:
                     if port['name'] == local_selfip_name:
@@ -516,24 +514,19 @@ class iControlDriver(object):
                 netmask = netaddr.IPNetwork(
                                service_object['subnet']['cidr']).netmask
 
-            vlan_name = service_object['network']['id']
-            if service_object['network']['shared']:
-                vlan_name = '/Common/' + vlan_name
-            if service_object['network']['provider:network_type'] == 'local':
-                vlan_name = '/Common/' + vlan_name
-
             bigip.selfip.create(name=local_selfip_name,
                                 ip_address=ip_address,
                                 netmask=netmask,
                                 vlan_name=vlan_name,
                                 floating=False,
-                                folder=service_object['tenant_id'])
+                                folder=network_folder)
 
         # Setup required SNAT addresses on this subnet
+        # based on the HA requirements
         if self.conf.f5_snat_addresses_per_subnet > 0:
             # failover mode dictates SNAT placement on traffic-groups
             if self.conf.f5_ha_type == 'standalone':
-                # create number of snats on traffic-group-local-only
+                # Create SNATs on traffic-group-local-only
                 bigip = self._get_bigip()
                 snat_name = "snat-" + "traffic-group-local-only" + \
                  service_object['subnet']['id']
@@ -560,11 +553,12 @@ class iControlDriver(object):
                      name=index_snat_name,
                      ip_address=ip_address,
                      traffic_group='/Common/traffic-group-local-only',
-                     snat_pool_name=service_object['subnet']['tenant_id'],
-                     folder=service_object['subnet']['tenant_id']
+                     snat_pool_name=snat_pool_name,
+                     folder=network_folder
                     )
+
             elif self.conf.f5_ha_type == 'ha':
-                # create number of snats on traffic-group-1
+                # Create SNATs on traffic-group-1
                 bigip = self._get_bigip()
                 snat_name = "snat-" + 'traffic-group-1' + \
                  service_object['subnet']['id']
@@ -591,11 +585,11 @@ class iControlDriver(object):
                      name=index_snat_name,
                      ip_address=ip_address,
                      traffic_group='/Common/traffic-group-1',
-                     snat_pool_name=service_object['subnet']['tenant_id'],
-                     folder=service_object['subnet']['tenant_id']
+                     snat_pool_name=snat_pool_name,
+                     folder=network_folder
                     )
             elif self.conf.f5_ha_type == 'scalen':
-                # create number of snat on all provider defined traffic groups
+                # create SNATs on all provider defined traffic groups
                 bigip = self._get_bigip()
                 for traffic_group in self.__traffic_groups:
                     for i in range(self.conf.f5_snat_addresses_per_subnet):
@@ -626,11 +620,14 @@ class iControlDriver(object):
                          name=index_snat_name,
                          ip_address=ip_address,
                          traffic_group=traffic_group,
-                     snat_pool_name=service_object['subnet']['tenant_id'],
-                         folder=service_object['subnet']['tenant_id']
+                         snat_pool_name=snat_pool_name,
+                         folder=network_folder
                         )
 
     def _assure_floating_default_gateway(self, service_object, service):
+
+        bigip = self._get_bigip()
+
         # Do we already have a port with the gateway_ip belonging
         # to this agent's host?
         need_port_for_gateway = True
@@ -639,7 +636,14 @@ class iControlDriver(object):
                 if fixed_ips['ip_address'] == \
                     service_object['subnet']['gateway_ip']:
                     need_port_for_gateway = False
+
+        # Create a name for the port and for the IP Forwarding Virtual Server
+        # as well as the floating Self IP which will answer ARP for the members
         gw_name = "gw-" + service_object['subnet']['id']
+        floating_selfip_name = "gw-" + service_object['subnet']['id']
+        netmask = netaddr.IPNetwork(
+                               service_object['subnet']['cidr']).netmask
+        # There was not port on this agent's host, so get one from Neutron
         if need_port_for_gateway:
             try:
                 self.plugin_rpc.create_port_on_subnet_with_specific_ip(
@@ -656,19 +660,17 @@ class iControlDriver(object):
                 ermsg += " support will likely fail. Enable f5_snat_mode"
                 ermsg += " and f5_source_monitor_from_member_subnet."
                 LOG.error(_(ermsg))
-        floating_selfip_name = "gw-" + service_object['subnet']['id']
-        netmask = netaddr.IPNetwork(
-                               service_object['subnet']['cidr']).netmask
 
         # Go ahead and setup a floating SelfIP with the subnet's
         # gateway_ip address on this agent's device service group
-        bigip = self._get_bigip()
         vlan_name = service_object['network']['id']
+        network_folder = service_object['subnet']['tenant_id']
+        # Where to put all these objects?
         if service_object['network']['shared']:
             vlan_name = '/Common/' + vlan_name
-        if service_object['network']['provider:network_type'] == 'local':
-            vlan_name = '/Common/' + vlan_name
+            network_folder = 'Common'
 
+        # Select a traffic group for the floating SelfIP
         tg = self._get_least_gw_traffic_group()
         bigip.selfip.create(
                             name=floating_selfip_name,
@@ -677,18 +679,24 @@ class iControlDriver(object):
                             vlan_name=vlan_name,
                             floating=True,
                             traffic_group=tg,
-                            folder=service_object['subnet']['tenant_id'])
+                            folder=network_folder)
+
+        # Get the actual traffic group if the Self IP already existed
         tg = bigip.self.get_traffic_group(name=floating_selfip_name,
                                 folder=service_object['subnet']['tenant_id'])
+
         # Setup a wild card ip forwarding virtual service for this subnet
         bigip.virtual_server.create_ip_forwarder(self,
                             name=gw_name, ip_address='0.0.0.0',
                             mask='0.0.0.0',
                             vlan_name=vlan_name,
                             traffic_group=tg,
-                            folder=service_object['subnet']['tenant_id'])
+                            folder=network_folder)
+
+        # Setup the IP forwarding virtual server to use the Self IPs
+        # as the forwarding SNAT addresses
         bigip.virtual_server.set_snat_automap(name=gw_name,
-                            folder=service_object['subnet']['tenant_id'])
+                            folder=network_folder)
 
     def _get_least_vips_traffic_group(self):
         traffic_group = '/Common/traffic-group-1'
