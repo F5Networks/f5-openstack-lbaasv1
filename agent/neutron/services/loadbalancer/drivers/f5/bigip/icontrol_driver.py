@@ -51,14 +51,13 @@ class iControlDriver(object):
     __vips_on_traffic_groups = {}
     __gw_on_traffic_groups = {}
 
-    # lock
-    __lock = threading.Lock()
-
     def __init__(self, conf):
         self.conf = conf
         self.conf.register_opts(OPTS)
         self.pool_to_port_id = {}
         self.connected = False
+
+        self.lock = threading.Lock()
 
         self._init_connection()
 
@@ -81,13 +80,13 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def sync(self, service):
-        self.__lock.aquire()
+        self.lock.aquire()
         try:
             self._assure_service_networks(service)
             self._assure_service(service)
             return True
         finally:
-            self.__lock.release()
+            self.lock.release()
 
     @am.is_connected
     @log.log

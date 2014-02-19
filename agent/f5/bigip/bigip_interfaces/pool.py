@@ -1,5 +1,6 @@
 import os
 import netaddr
+from suds import WebFault
 
 from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
     strip_folder_and_prefix
@@ -7,6 +8,10 @@ from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
 # Local Traffic - Pool
 
 from neutron.common import log
+
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class Pool(object):
@@ -32,7 +37,12 @@ class Pool(object):
             addr_port_seq = self.lb_pool.typefactory.create(
                 'Common.AddressPortSequence')
             pool_members_seq = [addr_port_seq]
-            self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
+            try:
+                self.lb_pool.create_v2(pool_names, lb_methods, pool_members_seq)
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a Pool when exists again..fix me!'))
             if description:
                 self.lb_pool.set_description([pool_names], [description])
             return True
