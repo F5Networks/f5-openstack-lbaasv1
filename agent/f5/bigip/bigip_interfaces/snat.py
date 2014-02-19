@@ -71,7 +71,7 @@ class SNAT(object):
 
     @icontrol_folder
     def add_to_pool(self, name=None, member_name=None, folder='Common'):
-        existing_members = self.lb_snatpool.get_members_v2([name])
+        existing_members = self.lb_snatpool.get_member_v2([name])
         if not member_name in existing_members:
             string_seq = \
              self.lb_snatpool.typefactory.create('Common.StringSequence')
