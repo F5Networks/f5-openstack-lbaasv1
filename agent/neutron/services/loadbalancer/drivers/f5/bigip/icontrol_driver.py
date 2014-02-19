@@ -319,7 +319,7 @@ class iControlDriver(object):
                         ip_address = ip_address + '%0'
 
                     if bigip.pool.add_member(name=service['pool']['id'],
-                                          ip_address=member['address'],
+                                          ip_address=ip_address,
                                           port=int(member['protocol_port']),
                                           folder=service['pool']['tenant_id']):
                         LOG.debug(_("Pool: %s added member: %s:%d"
@@ -330,19 +330,19 @@ class iControlDriver(object):
                     # Is it enabled or disabled?
                     if member['admin_state_up']:
                         bigip.pool.enable_member(name=member['id'],
-                                        ip_address=member['address'],
+                                        ip_address=ip_address,
                                         port=int(member['protocol_port']),
                                         folder=service['pool']['tenant_id'])
                     else:
                         bigip.pool.disable_member(name=member['id'],
-                                        ip_address=member['address'],
+                                        ip_address=ip_address,
                                         port=int(member['protocol_port']),
                                         folder=service['pool']['tenant_id'])
                     # Do we have weights for ratios?
                     if member['weight'] > 0:
                         bigip.pool.set_member_ration(
                                         name=service['pool']['id'],
-                                        ip_address=member['address'],
+                                        ip_address=ip_address,
                                         port=int(member['protocol_port']),
                                         ratio=int(member['ratio']),
                                         folder=service['pool']['tenant_id']
