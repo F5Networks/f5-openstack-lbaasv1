@@ -204,6 +204,7 @@ class Monitor(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
+        self.bigip.system.set_folder(folder=folder)
         for template in self.lb_monitor.get_template_list():
             if template.template_name == name:
                 return True

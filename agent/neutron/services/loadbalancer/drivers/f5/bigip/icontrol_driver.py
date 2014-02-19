@@ -250,6 +250,9 @@ class iControlDriver(object):
 
     def _delete_service(self, service):
         bigip = self._get_bigip()
+        LOG.debug(_('DELETING VIP %s/%s' % (service['pool']['tenant_id'],
+                                            service['vip']['id'])))
+        LOG.debug(_('Does that VIP exist? %s' % bigip.virtual_server.exists(name=service['vip']['id'], folder=service['pool']['tenant_id'])))
         bigip.virtual_server.delete(name=service['vip']['id'],
                                     folder=service['pool']['tenant_id'])
         if service['vip']['id'] in self.__vips_to_traffic_group:
@@ -257,9 +260,15 @@ class iControlDriver(object):
             self.__vips_on_traffic_groups[tg] = \
                               self.__vips_on_traffic_groups[tg] - 1
             del(self.__vips_to_traffic_groups[service['vip']['id']])
+        LOG.debug(_('Does that POOL exist? %s' % bigip.pool.exists(name=service['pool']['id'], folder=service['pool']['tenant_id'])))
+        LOG.debug(_('DELETING POOL %s/%s' % (service['pool']['tenant_id'],
+                                            service['pool']['id'])))
         bigip.pool.delete(name=service['pool']['id'],
                           folder=service['pool']['tenant_id'])
-        for monitor in service['pool']['health_monitors']:
+        for monitor in service['health_monitors']:
+            LOG.debug(_('Does that MONITOR exist? %s' % bigip.monitor.exists(name=monitor['id'], folder=monitor['tenant_id'])))
+            LOG.debug(_('DELETING MONITOR %s/%s' % (monitor['tenant_id'],
+                                                    monitor['id'])))
             bigip.monitor.delete(name=monitor['id'],
                                  folder=monitor['tenant_id'])
 

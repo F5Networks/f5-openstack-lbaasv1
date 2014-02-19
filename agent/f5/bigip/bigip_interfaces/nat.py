@@ -83,5 +83,6 @@ class NAT(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
+        self.bigip.system.set_folder(folder=folder)
         if name in self.lb_nat.get_list():
             return True

@@ -5,6 +5,8 @@ from f5.common import constants as const
 from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
     strip_folder_and_prefix
 
+from neutron.common import log
+
 # Local Traffic - Virtual Server
 
 
@@ -188,6 +190,7 @@ class VirtualServer(object):
         else:
             return False
 
+    @log.log
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
@@ -336,6 +339,7 @@ class VirtualServer(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
+        self.bigip.system.set_folder(folder=folder)
         if name in self.lb_vs.get_list():
             return True
         else:
