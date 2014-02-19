@@ -33,6 +33,10 @@ class VirtualServer(object):
             vs_def = self.lb_vs.typefactory.create(
                 'Common.VirtualServerDefinition')
             vs_def.name = name
+
+            if str(ip_address).endswith('%0'):
+                ip_address = ip_address[:-2]
+
             vs_def.address = ip_address
 
             if port:
