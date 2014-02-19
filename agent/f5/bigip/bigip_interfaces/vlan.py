@@ -122,7 +122,7 @@ class Vlan(object):
             return False
 
     def get_vlan_hash(self, interface, vlanid):
-        return "vlan-" + str(interface).replace(".", "-") + str(vlanid)
+        return "vlan-" + str(interface).replace(".", "-") + "-" + str(vlanid)
 
     @icontrol_folder
     def get_vlan_name_by_description(self, description=None, folder='Common'):
