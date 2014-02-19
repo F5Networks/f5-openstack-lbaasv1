@@ -249,29 +249,23 @@ class iControlDriver(object):
 
             # Current monitor associations according to Neutron
             for monitor in service['health_monitors']:
-                if monitor['status'] == 'PENDING_DELETE':
-                    bigip.pool.remove_monitor(name=service['pool']['id'],
-                                      monitor_name=monitor['id'],
-                                      folder=service['pool']['tenant_id'])
-                else:
-                    timeout = int(monitor['max_retries']) \
-                                    * int(monitor['timeout'])
-                    bigip.monitor.create(name=monitor['id'],
+                timeout = int(monitor['max_retries']) * int(monitor['timeout'])
+                bigip.monitor.create(name=monitor['id'],
                                      mon_type=monitor['type'],
                                      interval=monitor['delay'],
                                      timeout=timeout,
                                      send_text=None,
                                      recv_text=None,
                                      folder=monitor['tenant_id'])
-                    # make sure monitor attributes are correct
-                    bigip.monitor.set_interval(name=monitor['id'],
-                                         interval=monitor['delay'])
-                    bigip.monitor.set_timeout(name=monitor['id'],
-                                                  timeout=timeout)
-                    bigip.pool.add_monitor(name=service['pool']['id'],
-                                        monitor_name=monitor['id'],
-                                        folder=service['pool']['tenant_id'])
-            existing_monitors.remove(monitor['id'])
+                # make sure monitor attributes are correct
+                bigip.monitor.set_interval(name=monitor['id'],
+                                     interval=monitor['delay'])
+                bigip.monitor.set_timeout(name=monitor['id'],
+                                              timeout=timeout)
+                bigip.pool.add_monitor(name=service['pool']['id'],
+                                    monitor_name=monitor['id'],
+                                    folder=service['pool']['tenant_id'])
+                existing_monitors.remove(monitor['id'])
 
             LOG.debug(_("Pool: %s removing monitors %s"
                         % (service['pool']['id'], existing_monitors)))
