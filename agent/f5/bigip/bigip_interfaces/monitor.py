@@ -2,6 +2,12 @@
 
 from f5.bigip.bigip_interfaces import icontrol_folder
 
+from suds import WebFault
+
+import logging
+
+LOG = logging.getLogger(__name__)
+
 
 class Monitor(object):
     def __init__(self, bigip):
@@ -50,8 +56,13 @@ class Monitor(object):
             template_attributes.is_read_only = False
             template_attributes.is_directly_usable = True
 
-            self.lb_monitor.create_template([template],
-                                            [template_attributes])
+            try:
+                self.lb_monitor.create_template([template],
+                                                [template_attributes])
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a Monitor when exists again..fix me!'))
 
             if mon_type.lower() in ['tcp', 'http']:
                 self.set_send_string(name, send_text)

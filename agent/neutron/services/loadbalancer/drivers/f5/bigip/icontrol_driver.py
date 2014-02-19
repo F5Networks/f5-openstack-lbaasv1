@@ -80,7 +80,7 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def sync(self, service):
-        self.lock.aquire()
+        self.lock.acquire()
         try:
             self._assure_service_networks(service)
             self._assure_service(service)
@@ -220,24 +220,23 @@ class iControlDriver(object):
             # Provision Health Monitors - Create/Update
             #
 
-            for monitor in service['pool']['health_monitors']:
-                timeout = int(monitor['max_retries']) \
-                          * int(monitor['timeout'])
+            for monitor in service['health_monitors']:
+                timeout = int(monitor['max_retries']) * int(monitor['timeout'])
                 if not bigip.monitor.create(name=monitor['id'],
                                      mon_type=monitor['type'],
-                                     interval=monitor['interval'],
+                                     interval=monitor['delay'],
                                      timeout=timeout,
                                      send_text=None,
                                      recv_text=None,
                                      folder=monitor['tenant_id']):
                     # make sure monitor attributes are correct
                     bigip.monitor.set_interval(name=monitor['id'],
-                                     interval=monitor['interval'])
+                                     interval=monitor['delay'])
                     bigip.monitor.set_timeout(name=monitor['id'],
                                               timeout=timeout)
 
             existing_monitors = bigip.pool.get_monitors()
-            for monitor in service['pool']['health_monitors']:
+            for monitor in service['health_monitors']:
                 if not bigip.pool.add_monitor(name=service['pool']['id'],
                                     monitor_name=monitor['id'],
                                     folder=service['pool']['tenant_id']):
