@@ -53,9 +53,14 @@ class SNAT(object):
                              folder=folder)
             return True
         else:
-            self.create_pool(name=snat_pool_name,
+            try:
+                self.create_pool(name=snat_pool_name,
                              member_name=name,
                              folder=folder)
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                    'tried to create a SNATPool when exists again..fix me!'))
             return True
         return False
 
