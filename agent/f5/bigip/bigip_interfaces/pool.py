@@ -58,7 +58,7 @@ class Pool(object):
                                                 folder=folder)
             self.lb_pool.delete_pool([name])
             if len(nodes) > 0:
-                self.lb_node.delete_node_address([nodes])
+                self.lb_node.delete_node_address(nodes)
             return True
         else:
             return False
