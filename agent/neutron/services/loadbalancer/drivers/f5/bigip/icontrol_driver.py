@@ -247,15 +247,15 @@ class iControlDriver(object):
             LOG.debug(_("Pool: %s before assurance has monitors: %s"
                         % (service['pool']['id'], existing_monitors)))
 
-            health_monitor_status = {}
-            for monitor in service['pool']['health_monitor_status']:
-                health_monitor_status[monitor['monitor_id']] = \
+            health_monitors_status = {}
+            for monitor in service['pool']['health_monitors_status']:
+                health_monitors_status[monitor['monitor_id']] = \
                                                            monitor['status']
 
             # Current monitor associations according to Neutron
             for monitor in service['health_monitors']:
-                if monitor['id'] in health_monitor_status and \
-                   health_monitor_status[monitor['id']] == 'PENDING_DELETE':
+                if monitor['id'] in health_monitors_status and \
+                   health_monitors_status[monitor['id']] == 'PENDING_DELETE':
                     bigip.pool.remove_monitor(
                                           name=service['pool']['id'],
                                           monitor_name=monitor['id'],
