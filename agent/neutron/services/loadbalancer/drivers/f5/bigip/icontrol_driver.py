@@ -206,9 +206,9 @@ class iControlDriver(object):
                                  folder=monitor['tenant_id'])
 
     def _assure_service(self, service):
-        bigip = self._get_bigip()
-
         if 'id' in service['vip']:
+
+            bigip = self._get_bigip()
 
             #
             # Provision Pool - Create/Update
@@ -436,7 +436,8 @@ class iControlDriver(object):
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
-        for bigip in self.__bigips.values():
+        for hostname in self.__bigips.values():
+            bigip = self.__bigips[hostname]
             if network['provider:network_type'] == 'vlan':
                 if network['shared']:
                     network_folder = 'Common'
@@ -478,10 +479,11 @@ class iControlDriver(object):
 
     def _assure_local_selfip_snat(self, service_object, service):
         # Setup non-floating Self IPs on all BigIPs
-        for bigip in self.__bigips.values():
+        for hostname in self.__bigips:
+            bigip = self.__bigips[hostname]
             ip_address = None
             local_selfip_name = \
-                bigip.hostname.encode('base64', 'strict') + \
+                hostname.encode('base64', 'strict') + \
                 "-local-" + service_object['subnet']['id']
             if 'subnet_ports' in service_object:
                 for port in service_object['subnet_ports']:
