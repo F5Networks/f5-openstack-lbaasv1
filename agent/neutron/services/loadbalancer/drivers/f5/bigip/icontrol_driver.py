@@ -68,6 +68,9 @@ class iControlDriver(object):
             intmap = maps.split(':')
             self.interface_mapping[intmap[0]] = intmap[1]
             self.tagging_mapping[intmap[0]] = intmap[2]
+            LOG.debug(_('physical_network %s = BigIP interface %s, tagged %s'
+                        % (intmap[0], intmap[1], intmap[2])
+                        ))
 
     @am.is_connected
     @log.log
@@ -436,15 +439,15 @@ class iControlDriver(object):
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
-        for hostname in self.__bigips.values():
-            bigip = self.__bigips[hostname]
+        for bigip in self.__bigips.values():
             if network['provider:network_type'] == 'vlan':
                 if network['shared']:
                     network_folder = 'Common'
                 else:
-                    network_folder = network['id']
+                    network_folder = network['tenant_id']
 
                 interface = self.interface_mapping['default']
+                tagged = True
                 vlanid = 0
                 if network['provider:physical_network'] in \
                                             self.interface_mapping:
@@ -454,11 +457,19 @@ class iControlDriver(object):
                               network['provider:physical_network']]
                     if tagged:
                         vlanid = network['provider:segmentation_id']
+
+                LOG.debug(_('creating BigIP VLAN %s/%s : %s: %d'
+                            % (network_folder,
+                               network['id'],
+                               interface,
+                               vlanid)
+                            ))
                 bigip.vlan.create(name=network['id'],
                                            vlanid=vlanid,
                                            interface=interface,
                                            folder=network_folder,
                                            description=network['name'])
+
             if network['provider:network_type'] == 'flat':
                 if network['shared']:
                     network_folder = 'Common'
@@ -471,6 +482,12 @@ class iControlDriver(object):
                     interface = self.interface_mapping[
                               network['provider:physical_network']]
 
+                LOG.debug(_('creating BigIP VLAN %s/%s : %s: %d'
+                            % (network_folder,
+                               network['id'],
+                               interface,
+                               vlanid)
+                            ))
                 bigip.vlan.create(name=network['id'],
                                            vlanid=0,
                                            interface=interface,
@@ -479,12 +496,10 @@ class iControlDriver(object):
 
     def _assure_local_selfip_snat(self, service_object, service):
         # Setup non-floating Self IPs on all BigIPs
-        for hostname in self.__bigips:
-            bigip = self.__bigips[hostname]
+        for bigip in self.__bigips.values():
             ip_address = None
             local_selfip_name = \
-                hostname.encode('base64', 'strict') + \
-                "-local-" + service_object['subnet']['id']
+                "local-" + service_object['subnet']['id']
             if 'subnet_ports' in service_object:
                 for port in service_object['subnet_ports']:
                     if port['name'] == local_selfip_name:
