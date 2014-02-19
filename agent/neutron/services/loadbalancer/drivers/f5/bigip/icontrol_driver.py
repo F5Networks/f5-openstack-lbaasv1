@@ -279,7 +279,8 @@ class iControlDriver(object):
                     bigip.pool.add_monitor(name=service['pool']['id'],
                                         monitor_name=monitor['id'],
                                         folder=service['pool']['tenant_id'])
-                existing_monitors.remove(monitor['id'])
+                if monitor['id'] in existing_monitors:
+                    existing_monitors.remove(monitor['id'])
 
             LOG.debug(_("Pool: %s removing monitors %s"
                         % (service['pool']['id'], existing_monitors)))
