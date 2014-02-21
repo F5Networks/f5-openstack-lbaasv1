@@ -479,8 +479,8 @@ class iControlDriver(object):
                         folder=service['pool']['tenant_id'])
 
     def _assure_service_networks(self, service):
+        assured_networks = []
         if 'id' in service['vip']:
-            assured_networks = []
             self._assure_network(service['pool']['network'])
             assured_networks.append(service['pool']['network']['id'])
             # does the pool network need a self-ip or snat addresses?
@@ -491,7 +491,6 @@ class iControlDriver(object):
                     assured_networks.append(service['vip']['network']['id'])
                 # all VIPs get a non-floating self IP on each device
                 self._assure_local_selfip_snat(service['vip'], service)
-
         for member in service['members']:
             if not member['network']['id'] in assured_networks:
                 self._assure_network(member['network'])
