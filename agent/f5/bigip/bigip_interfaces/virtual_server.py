@@ -327,6 +327,14 @@ class VirtualServer(object):
     def remove_snat(self, name=None, folder='Common'):
         self.lb_vs.set_source_address_translation_none([name])
 
+    @icontrol_folder
+    def get_statisitcs(self, name=None, folder='Common'):
+        stats = self.lb_vs.get_statistics([name])[0][0].statistics
+        return_stats = {}
+        for stat in stats:
+            return_stats[stat.type] = self.bigip.ulong_to_int(stat.value)
+        return return_stats
+
     def _get_protocol_type(self, protocol_str):
         protocol_str = protocol_str.upper()
         protocol_type = self.lb_vs.typefactory.create('Common.ProtocolType')

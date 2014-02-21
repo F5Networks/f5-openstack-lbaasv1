@@ -164,29 +164,40 @@ class iControlDriver(object):
 
     # @am.is_connected
     @log.log
-    def get_stats(self, logical_service):
-
-        bytecount = 0
-        connections = 0
+    def get_stats(self, service):
+        # use pool stats because the pool_id is the
+        # the service definition... not the vip
+        #
         stats = {}
-        stats[lb_const.STATS_IN_BYTES] = bytecount
-        stats[lb_const.STATS_OUT_BYTES] = bytecount * 5
-        stats[lb_const.STATS_ACTIVE_CONNECTIONS] = connections
-        stats[lb_const.STATS_TOTAL_CONNECTIONS] = connections * 10
 
-        #example
-        # stats['members'] = {'members':
-        #                     {
-        #                      member['uuid']:{'status':member['status']},
-        #                      member['uuid']:{'status': member['status']}
-        #                     }          }
-        #                    }
+        bigip = self._get_bigip()
+        bigip_stats = bigip.pool.get_statistics(name=service['pool']['id'],
+                                          folder=service['pool']['tenant_id'])
+        # do we add PVA + SERVER?
+        stats[lb_const.STATS_IN_BYTES] = \
+          bigip_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
+        stats[lb_const.STATS_OUT_BYTES] = \
+          bigip_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
+        stats[lb_const.STATS_ACTIVE_CONNECTIONS] = \
+          bigip_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
+        stats[lb_const.STATS_TOTAL_CONNECTIONS] = \
+          bigip_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
 
         # need to get members for this pool and update their status
+        states = bigip.pool.get_members_monitor_status(
+                                        name=service['pool']['id'],
+                                        folder=service['pool']['tenant_id'])
+        # members of format data = {'members': { uuid:{'status':'state1'},
+        #                                        uuid:{'status':'state2'}} }
         members = {'members': {}}
-        if hasattr(logical_service, 'members'):
-            for member in logical_service['members']:
-                members['members'][member['uuid']:{'status':member['status']}]
+        if hasattr(service, 'members'):
+            for member in service['members']:
+                for state in states:
+
+                    if state == 'MONITOR_STATUS_UP':
+                        members['members'][member['id']] = 'ACTIVE'
+                    else:
+                        members['members'][member['id']] = 'DOWN'
         stats['members'] = members
         return stats
 
@@ -338,11 +349,11 @@ class iControlDriver(object):
                                         folder=service['pool']['tenant_id'])
                     # Do we have weights for ratios?
                     if member['weight'] > 0:
-                        bigip.pool.set_member_ration(
+                        bigip.pool.set_member_ratio(
                                         name=service['pool']['id'],
                                         ip_address=ip_address,
                                         port=int(member['protocol_port']),
-                                        ratio=int(member['ratio']),
+                                        ratio=int(member['weight']),
                                         folder=service['pool']['tenant_id']
                                        )
                     using_ratio = True
@@ -534,7 +545,7 @@ class iControlDriver(object):
                 # the folder name, so we name them foolish things.
 
                 interface = self.interface_mapping['default']
-                tagged = True
+                tagged = self.tagging_mapping['default']
                 vlanid = 0
 
                 if network['provider:physical_network'] in \
@@ -543,8 +554,11 @@ class iControlDriver(object):
                               network['provider:physical_network']]
                     tagged = self.tagging_mapping[
                               network['provider:physical_network']]
-                    if tagged:
-                        vlanid = network['provider:segmentation_id']
+
+                if tagged:
+                    vlanid = network['provider:segmentation_id']
+                else:
+                    vlanid = 0
 
                 vlan_name = self._get_vlan_name(network)
 
@@ -573,6 +587,10 @@ class iControlDriver(object):
                                   interface=interface,
                                   folder=network_folder,
                                   description=network['id'])
+
+            # TODO: add vxlan
+
+            # TODO: add gre
 
     def _assure_local_selfip_snat(self, service_object, service):
 
@@ -631,9 +649,11 @@ class iControlDriver(object):
                     index_snat_name = snat_name + "_" + str(i)
                     if 'subnet_ports' in service_object:
                         for port in service_object['subnet_ports']:
+                            LOG.debug(_('PORT CHECK: IS %s = %s' % (port['name'], index_snat_name)))
                             if port['name'] == index_snat_name:
                                 if port['fixed_ips'][0]['subnet_id'] == \
                                    service_object['subnet']['id']:
+                                    LOG.debug(_('PORT SUBNET CHECK: IS %s = %s' % (port['fixed_ips'][0]['subnet_id'], service_object['subnet']['id'])))
                                     ip_address = \
                                        port['fixed_ips'][0]['ip_address']
                     if not ip_address:
@@ -824,13 +844,19 @@ class iControlDriver(object):
 
     def _get_vlan_name(self, network):
         interface = self.interface_mapping['default']
-        vlanid = 0
+        vlanid = self.tagging_mapping['default']
 
         if network['provider:physical_network'] in \
                                             self.interface_mapping:
             interface = self.interface_mapping[
                               network['provider:physical_network']]
+            tagged = self.tagging_mapping[
+                              network['provider:physical_network']]
+
+        if tagged:
             vlanid = network['provider:segmentation_id']
+        else:
+            vlanid = 0
 
         return "vlan-" + str(interface).replace(".", "-") + "-" + str(vlanid)
 

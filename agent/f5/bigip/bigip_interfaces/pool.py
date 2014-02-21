@@ -73,6 +73,39 @@ class Pool(object):
         return members
 
     @icontrol_folder
+    def get_members_monitor_status(self, name=None, folder='Common'):
+        return_members = []
+        members = self.lb_pool.get_member_v2([name])[0]
+        member_types = [None] * len(members)
+        members_seq = self.lb_pool.typefactory.create(
+                                            'Common.StringSequence')
+        members_seq_seq = self.lb_pool.typefactory.create(
+                                            'Common.StringSequenceSequence')
+        for i in range(len(members)):
+            member_types[i] = self._get_addr_port_seq(members[i].address,
+                                                      members[i].port)
+            member_types[i] = member_types[i]['item']
+        members_seq.values = member_types
+        members_seq_seq.values = [members_seq]
+        states = self.lb_pool.get_member_monitor_status([name],
+                                                       members_seq_seq)[0]
+        for i in range(len(members)):
+            addr = os.path.basename(members[i].address).split('%')[0]
+            port = int(members[i].port)
+            return_members.append({'addr': addr,
+                                   'port': port,
+                                   'state': states[0]})
+        return return_members
+
+    @icontrol_folder
+    def get_statisitcs(self, name=None, folder='Common'):
+        stats = self.lb_pool.get_statistics([name])[0][0].statistics
+        return_stats = {}
+        for stat in stats:
+            return_stats[stat.type] = self.bigip.ulong_to_int(stat.value)
+        return return_stats
+
+    @icontrol_folder
     def _get_nodes_for_members(self, name=None, folder='Common'):
         nodes = self.lb_node.get_list()
         if not len(nodes) > 0:
