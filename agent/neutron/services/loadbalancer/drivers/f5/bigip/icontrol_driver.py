@@ -186,33 +186,36 @@ class iControlDriver(object):
         bigip = self._get_bigip()
         bigip_stats = bigip.pool.get_statisitcs(name=service['pool']['id'],
                                           folder=service['pool']['tenant_id'])
-        # do we add PVA + SERVER?
-        stats[lb_const.STATS_IN_BYTES] = \
-          bigip_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
-        stats[lb_const.STATS_OUT_BYTES] = \
-          bigip_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
-        stats[lb_const.STATS_ACTIVE_CONNECTIONS] = \
-          bigip_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
-        stats[lb_const.STATS_TOTAL_CONNECTIONS] = \
-          bigip_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
+        if 'STATISTIC_SERVER_SIDE_BYTES_IN' in bigip_stats:
+            # do we add PVA + SERVER?
+            stats[lb_const.STATS_IN_BYTES] = \
+              bigip_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
+            stats[lb_const.STATS_OUT_BYTES] = \
+              bigip_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
+            stats[lb_const.STATS_ACTIVE_CONNECTIONS] = \
+              bigip_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
+            stats[lb_const.STATS_TOTAL_CONNECTIONS] = \
+              bigip_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
 
-        # need to get members for this pool and update their status
-        states = bigip.pool.get_members_monitor_status(
+            # need to get members for this pool and update their status
+            states = bigip.pool.get_members_monitor_status(
                                         name=service['pool']['id'],
                                         folder=service['pool']['tenant_id'])
-        # members of format data = {'members': { uuid:{'status':'state1'},
-        #                                        uuid:{'status':'state2'}} }
-        members = {'members': {}}
-        if hasattr(service, 'members'):
-            for member in service['members']:
-                for state in states:
+            # format is data = {'members': { uuid:{'status':'state1'},
+            #                             uuid:{'status':'state2'}} }
+            members = {'members': {}}
+            if hasattr(service, 'members'):
+                for member in service['members']:
+                    for state in states:
+                        if state == 'MONITOR_STATUS_UP':
+                            members['members'][member['id']] = 'ACTIVE'
+                        else:
+                            members['members'][member['id']] = 'DOWN'
+            stats['members'] = members
 
-                    if state == 'MONITOR_STATUS_UP':
-                        members['members'][member['id']] = 'ACTIVE'
-                    else:
-                        members['members'][member['id']] = 'DOWN'
-        stats['members'] = members
-        return stats
+            return stats
+        else:
+            return None
 
     @log.log
     def remove_orphans(self, known_pool_ids):
@@ -812,7 +815,7 @@ class iControlDriver(object):
         if 'id' in service['vip']:
             subnet = netaddr.IPNetwork(service['vip']['subnet']['cidr'])
             virtual_services = \
-                    bigip.virtual_service.get_virtual_service_insertion(
+                    bigip.virtual_server.get_virtual_service_insertion(
                                         folder=service['vip']['tenant_id'])
             for vs in virtual_services:
                 name, dest = vs.items()
@@ -843,7 +846,7 @@ class iControlDriver(object):
             delete_member_objects = True
             subnet = netaddr.IPNetwork(member['subnet']['cidr'])
             virtual_services = \
-                    bigip.virtual_service.get_virtual_service_insertion(
+                    bigip.virtual_server.get_virtual_service_insertion(
                                         folder=member['tenant_id'])
             for vs in virtual_services:
                 name, dest = vs.items()
