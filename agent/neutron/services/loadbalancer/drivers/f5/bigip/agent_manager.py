@@ -279,10 +279,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def refresh_service(self, pool_id):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id)
-            if 'id' in service['vip']:
-                # update is create or update
-                self.driver.sync(service)
-                self.cache.put(service)
+            # update is create or update
+            self.driver.sync(service)
+            self.cache.put(service)
         except Exception:
             LOG.exception(_('Unable to refresh service for pool: %s'), pool_id)
             self.needs_resync = True
