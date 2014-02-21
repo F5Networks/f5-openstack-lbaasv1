@@ -33,18 +33,25 @@ class Vlan(object):
                 mem_entry.member_name = interface
                 mem_entry.member_type = self.net_vlan.typefactory.create(
                                 'Networking.MemberType').MEMBER_INTERFACE
+                if vlanid > 0:
+                    mem_entry.tag_state = self.net_vlan.typefactory.create(
+                                'Networking.MemberTagType').MEMBER_TAGGED
+                else:
+                    mem_entry.tag_state = self.net_vlan.typefactory.create(
+                                'Networking.MemberTagType').MEMBER_UNTAGGED
+                mem_seq.item = mem_entry
 
                 # use tagged interface for hardware platforms,
                 # untagged for VE
-                if self.bigip.system.get_platform().startswith(
-                                    const.BIGIP_VE_PLATFORM_ID):
-                    mem_entry.tag_state = self.net_vlan.typefactory.create(
-                                'Networking.MemberTagType').MEMBER_UNTAGGED
-                else:
-                    mem_entry.tag_state = self.net_vlan.typefactory.create(
-                                'Networking.MemberTagType').MEMBER_TAGGED
+                #if self.bigip.system.get_platform().startswith(
+                #                    const.BIGIP_VE_PLATFORM_ID):
+                #    mem_entry.tag_state = self.net_vlan.typefactory.create(
+                #                'Networking.MemberTagType').MEMBER_UNTAGGED
+                #else:
+                #    mem_entry.tag_state = self.net_vlan.typefactory.create(
+                #                'Networking.MemberTagType').MEMBER_TAGGED
+                # mem_seq.item = mem_entry
 
-                mem_seq.item = mem_entry
             self.net_vlan.create_v2([name],
                                     [int(vlanid)],
                                     [mem_seq],
