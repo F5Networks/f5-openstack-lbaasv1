@@ -520,8 +520,13 @@ def is_connected(method):
     def wrapper(*args, **kwargs):
         instance = args[0]
         if instance.connected:
-            return method(*args, **kwargs)
+            try:
+                return method(*args, **kwargs)
+            except IOError as ioe:
+                instance.not_connected()
+                raise ioe
         else:
+            instance.not_connected()
             LOG.error(_('Can not execute %s. Not connected.'
                         % method.__name__))
     return wrapper

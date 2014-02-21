@@ -11,6 +11,7 @@ from f5.bigip import exceptions as f5ex
 
 import urllib2
 import netaddr
+import datetime
 
 import threading
 
@@ -31,6 +32,11 @@ OPTS = [
     cfg.StrOpt(
         'icontrol_password',
         help=_('The password to use for iControl access'),
+    ),
+    cfg.IntOpt(
+        'icontrol_connection_retry_interval',
+        default=10,
+        help=_('How many seconds to wait between retry connection attempts'),
     )
 ]
 
@@ -99,7 +105,13 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def delete_vip(self, vip, service):
-        self._delete_vip(service)
+        # remove service elements which
+        # must remain for pool statistics
+        service['pool'] = {}
+        service['health_monitors'] = []
+        service['members'] = []
+        self._delete_service(service)
+        self._delete_service_networks(service)
         return True
 
     @am.is_connected
@@ -120,6 +132,7 @@ class iControlDriver(object):
     @log.log
     def delete_pool(self, pool, service):
         self._delete_service(service)
+        self._delete_service_networks(service)
         return True
 
     @am.is_connected
@@ -206,11 +219,18 @@ class iControlDriver(object):
         raise NotImplementedError()
 
     @log.log
+    def non_connected(self):
+        now = datetime.datetime.now()
+        if (now - self.__last_connect_attempt).total_seconds()  \
+                         > self.conf.icontrol_connection_retry_interval:
+            self._init_connection()
+
+    @log.log
     def _delete_service(self, service):
         bigip = self._get_bigip()
         if 'id' in service['vip']:
             bigip.virtual_server.delete(name=service['vip']['id'],
-                                        folder=service['pool']['tenant_id'])
+                                        folder=service['vip']['tenant_id'])
             if service['vip']['id'] in self.__vips_to_traffic_group:
                 tg = self.__vips_to_traffic_group[service['vip']['id']]
                 self.__vips_on_traffic_groups[tg] = \
@@ -225,18 +245,6 @@ class iControlDriver(object):
         for monitor in service['health_monitors']:
             bigip.monitor.delete(name=monitor['id'],
                                  folder=monitor['tenant_id'])
-
-    @log.log
-    def _delete_vip(self, service):
-        bigip = self._get_bigip()
-        if 'id' in service['vip']:
-            bigip.virtual_server.delete(name=service['vip']['id'],
-                                        folder=service['pool']['tenant_id'])
-            if service['vip']['id'] in self.__vips_to_traffic_group:
-                tg = self.__vips_to_traffic_group[service['vip']['id']]
-                self.__vips_on_traffic_groups[tg] = \
-                                  self.__vips_on_traffic_groups[tg] - 1
-                del(self.__vips_to_traffic_groups[service['vip']['id']])
 
     @log.log
     def _assure_service(self, service):
@@ -483,10 +491,10 @@ class iControlDriver(object):
         assured_subnet_local_and_snats = []
         assured_floating_default_gateway = []
         if 'id' in service['vip']:
-            self._assure_network(service['pool']['network'])
-            assured_networks.append(service['pool']['network']['id'])
+            self._assure_network(service['vip']['network'])
+            assured_networks.append(service['vip']['network']['id'])
             # does the pool network need a self-ip or snat addresses?
-            assured_networks.append(service['pool']['network']['id'])
+            assured_networks.append(service['vip']['network']['id'])
             if 'id' in service['vip']['network']:
                 if not service['vip']['network']['id'] in assured_networks:
                     self._assure_network(service['vip']['network'])
@@ -507,48 +515,6 @@ class iControlDriver(object):
                member['subnet']['id'] not in assured_floating_default_gateway:
                 self._assure_floating_default_gateway(member, service)
                 assured_floating_default_gateway.append(member['subnet']['id'])
-
-    def _delete_service_networks(self, service):
-        bigip = self._get_bigip()
-        cleaned_subnets = []
-        # vip subnet
-        vips_left = bigip.virtual_service.get_virtual_services(
-                                          folder=service['vip']['tenant_id'])
-        nodes_left = bigip.pool.get_nodes(folder=service['vip']['tenant_id'])
-        if len(vips_left) == 0 and len(nodes_left) == 0:
-            # remove ip_forwarding vs for this subnet
-            # remove floating Self IP for this subnet
-            # remove snats from this subnet
-            # remove non-floating SelfIP from all device on this subnet
-            pass
-        # try to remove L2 associated with vip['network']
-        cleaned_subnets.append(service['vip']['subnet']['id'])
-        # clean up member network
-        for member in service['members']:
-            if not member['subnet']['id'] in cleaned_subnets:
-                vips_left = bigip.virtual_service.get_virtual_services(
-                                                   folder=member['tenant_id'])
-                nodes_left = bigip.pool.get_nodes(folder=member['tenant_id'])
-                if len(vips_left) == 0 and len(nodes_left) == 0:
-                    # remove ip_forwarding vs for this subnet
-                    # remove floating Self IP for this subnet
-                    # remove snats from this subnet
-                    # remove non-floating SelfIP from all devices on this subnet
-                    pass
-                cleaned_subnets.append(member['subnet']['id'])
-                # try to remove L2 associated with member['network']
-        # clean up pool network
-        if not service['pool']['subnet']['id'] in cleaned_subnets:
-            vips_left = bigip.virtual_service.get_virtual_services(
-                                              folder=service['pool']['tenant_id'])
-            nodes_left = bigip.pool.get_nodes(folder=service['pool']['tenant_id'])
-            if len(vips_left) == 0 and len(nodes_left) == 0:
-                # remove ip_forwarding vs for this subnet
-                # remove floating Self IP for this subnet
-                # remove snats from this subnet
-                # remove non-floating SelfIP from all device on this subnet
-                pass
-        # try to remove L2 associated with pool['network']
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
@@ -659,7 +625,6 @@ class iControlDriver(object):
             # failover mode dictates SNAT placement on traffic-groups
             if self.conf.f5_ha_type == 'standalone':
                 # Create SNATs on traffic-group-local-only
-                bigip = self._get_bigip()
                 snat_name = 'snat-traffic-group-local-only-' + \
                  service_object['subnet']['id']
                 snat_name = snat_name[0:60]
@@ -694,7 +659,6 @@ class iControlDriver(object):
 
             elif self.conf.f5_ha_type == 'ha':
                 # Create SNATs on traffic-group-1
-                bigip = self._get_bigip()
                 snat_name = 'snat-traffic-group-1' + \
                  service_object['subnet']['id']
                 snat_name = snat_name[0:60]
@@ -726,7 +690,6 @@ class iControlDriver(object):
                     )
             elif self.conf.f5_ha_type == 'scalen':
                 # create SNATs on all provider defined traffic groups
-                bigip = self._get_bigip()
                 for traffic_group in self.__traffic_groups:
                     for i in range(self.conf.f5_snat_addresses_per_subnet):
                         snat_name = "snat-" + traffic_group + "-" + \
@@ -827,7 +790,7 @@ class iControlDriver(object):
                                 folder=service_object['subnet']['tenant_id'])
 
         # Setup a wild card ip forwarding virtual service for this subnet
-        bigip.virtual_server.create_ip_forwarder(self,
+        bigip.virtual_server.create_ip_forwarder(
                             name=gw_name, ip_address='0.0.0.0',
                             mask='0.0.0.0',
                             vlan_name=vlan_name,
@@ -838,6 +801,226 @@ class iControlDriver(object):
         # as the forwarding SNAT addresses
         bigip.virtual_server.set_snat_automap(name=gw_name,
                             folder=network_folder)
+
+    def _delete_service_networks(self, service):
+        bigip = self._get_bigip()
+        cleaned_default_gateway = []
+        cleaned_subnets = []
+        cleaned_networks = []
+        # vip_networks
+        delete_vip_objects = True
+        if 'id' in service['vip']:
+            subnet = netaddr.IPNetwork(service['vip']['subnet']['cidr'])
+            virtual_services = \
+                    bigip.virtual_service.get_virtual_service_insertion(
+                                        folder=service['vip']['tenant_id'])
+            for vs in virtual_services:
+                name, dest = vs.items()
+                if netaddr.IPAddress(dest['address']) in subnet:
+                    delete_vip_objects = False
+                    break
+            if delete_vip_objects:
+                # get nodes
+                nodes = self.pool.get_node_addresses(
+                                        folder=service['vip']['tenant_id'])
+                for node in nodes:
+                    if netaddr(node) in subnet:
+                        delete_vip_objects = False
+                        break
+            if delete_vip_objects:
+                self._delete_local_selfip_snat(service['vip'], service)
+                cleaned_subnets.append(service['vip']['subnet']['id'])
+                try:
+                    cleaned_networks.append(service['vip']['network']['id'])
+                    self._delete_network(service['vip']['network'])
+                    bigip.route.delete_domain(
+                                    folder=service['vip']['tenant_id'])
+                except:
+                    pass
+            # delete selfips
+
+        for member in service['members']:
+            delete_member_objects = True
+            subnet = netaddr.IPNetwork(member['subnet']['cidr'])
+            virtual_services = \
+                    bigip.virtual_service.get_virtual_service_insertion(
+                                        folder=member['tenant_id'])
+            for vs in virtual_services:
+                name, dest = vs.items()
+                if netaddr.IPAddress(dest['address']) in subnet:
+                    delete_member_objects = False
+                    break
+            if delete_member_objects:
+                # get nodes
+                nodes = self.pool.get_node_addresses(
+                                        folder=member['tenant_id'])
+                for node in nodes:
+                    if netaddr(node) in subnet:
+                        delete_member_objects = False
+                        break
+            if delete_member_objects:
+                if not self.conf.f5_snat_mode and \
+                   member['subnet']['id'] not in cleaned_default_gateway:
+                    self._delete_floating_default_gateway(member, service)
+                    cleaned_default_gateway.append(member['subnet']['id'])
+                if not member['subnet']['id'] in cleaned_subnets:
+                    self._delete_local_selfip_snat(member, service)
+                    cleaned_subnets.append(member['subnet']['id'])
+                if not member['network']['id'] in cleaned_networks:
+                    try:
+                        cleaned_networks.append(member['network']['id'])
+                        self._delete_network(member['network'])
+                        bigip.route.delete_domain(folder=member['tenant_id'])
+                    except:
+                        pass
+
+    def _delete_network(self, network):
+        # setup all needed L2 network segments on all BigIPs
+        for bigip in self.__bigips.values():
+            if network['provider:network_type'] == 'vlan':
+                if network['shared']:
+                    network_folder = 'Common'
+                else:
+                    network_folder = network['tenant_id']
+                vlan_name = self._get_vlan_name(network)
+                bigip.vlan.delete(name=vlan_name,
+                                  folder=network_folder)
+
+            if network['provider:network_type'] == 'flat':
+                if network['shared']:
+                    network_folder = 'Common'
+                else:
+                    network_folder = network['id']
+                vlan_name = self._get_vlan_name(network)
+                bigip.vlan.delete(name=vlan_name,
+                                  folder=network_folder)
+
+            # TODO: add vxlan
+
+            # TODO: add gre
+
+    def _delete_local_selfip_snat(self, service_object, service):
+        bigip = self._get_bigip()
+        network_folder = service_object['subnet']['tenant_id']
+        if service_object['network']['shared']:
+            network_folder = 'Common'
+        snat_pool_name = service_object['subnet']['tenant_id']
+        # Setup required SNAT addresses on this subnet
+        # based on the HA requirements
+        if self.conf.f5_snat_addresses_per_subnet > 0:
+            # failover mode dictates SNAT placement on traffic-groups
+            if self.conf.f5_ha_type == 'standalone':
+                # Create SNATs on traffic-group-local-only
+                snat_name = 'snat-traffic-group-local-only-' + \
+                 service_object['subnet']['id']
+                snat_name = snat_name[0:60]
+                for i in range(self.conf.f5_snat_addresses_per_subnet):
+                    index_snat_name = snat_name + "_" + str(i)
+                    bigip.snat.remove_from_pool(name=snat_pool_name,
+                                                member_name=index_snat_name,
+                                                folder=network_folder)
+                    if 'subnet_ports' in service_object:
+                        for port in service_object['subnet_ports']:
+                            if port['name'] == index_snat_name:
+                                if port['fixed_ips'][0]['subnet_id'] == \
+                                   service_object['subnet']['id']:
+                                    self.plugin_rcp.delete_port(
+                                                        port_id=port['id'],
+                                                        mac_address=None)
+            elif self.conf.f5_ha_type == 'ha':
+                # Create SNATs on traffic-group-1
+                snat_name = 'snat-traffic-group-1' + \
+                 service_object['subnet']['id']
+                snat_name = snat_name[0:60]
+                for i in range(self.conf.f5_snat_addresses_per_subnet):
+                    index_snat_name = snat_name + "_" + str(i)
+                    bigip.snat.remove_from_pool(name=snat_pool_name,
+                                                member_name=index_snat_name,
+                                                folder=network_folder)
+                    if 'subnet_ports' in service_object:
+                        for port in service_object['subnet_ports']:
+                            if port['name'] == index_snat_name:
+                                if port['fixed_ips'][0]['subnet_id'] == \
+                                   service_object['subnet']['id']:
+                                    self.plugin_rcp.delete_port(
+                                                        port_id=port['id'],
+                                                        mac_address=None)
+            elif self.conf.f5_ha_type == 'scalen':
+                # create SNATs on all provider defined traffic groups
+                for traffic_group in self.__traffic_groups:
+                    for i in range(self.conf.f5_snat_addresses_per_subnet):
+                        snat_name = "snat-" + traffic_group + "-" + \
+                         service_object['subnet']['id']
+                        snat_name = snat_name[0:60]
+                        index_snat_name = snat_name + "_" + str(i)
+                        bigip.snat.remove_from_pool(name=snat_pool_name,
+                                                member_name=index_snat_name,
+                                                folder=network_folder)
+                        if 'subnet_ports' in service_object:
+                            for port in service_object['subnet_ports']:
+                                if port['name'] == index_snat_name:
+                                    if port['fixed_ips'][0]['subnet_id'] == \
+                                       service_object['subnet']['id']:
+                                        self.plugin_rcp.delete_port(
+                                                            port_id=port['id'],
+                                                            mac_address=None)
+        # On each BIG-IP delete the local Self IP for this subnet
+        for bigip in self.__bigips.values():
+
+            local_selfip_name = "local-" \
+            + bigip.device_name \
+            + "-" + service_object['subnet']['id']
+
+            bigip.selfip.delete(name=local_selfip_name,
+                                folder=network_folder)
+
+    def _delete_floating_default_gateway(self, service_object, service):
+
+        bigip = self._get_bigip()
+
+        # Create a name for the port and for the IP Forwarding Virtual Server
+        # as well as the floating Self IP which will answer ARP for the members
+        gw_name = "gw-" + service_object['subnet']['id']
+        floating_selfip_name = "gw-" + service_object['subnet']['id']
+
+        # Go ahead and setup a floating SelfIP with the subnet's
+        # gateway_ip address on this agent's device service group
+
+        network_folder = service_object['subnet']['tenant_id']
+        if service_object['network']['shared']:
+            network_folder = 'Common'
+
+        bigip.selfip.delete(name=floating_selfip_name,
+                            folder=network_folder)
+
+        # Setup a wild card ip forwarding virtual service for this subnet
+        bigip.virtual_server.delete(name=gw_name,
+                                    folder=network_folder)
+
+        # remove neutron default gateway port if the device id is
+        # f5_lbass
+        gateway_port_id = None
+        for port in service_object['subnet_ports']:
+            if gateway_port_id:
+                break
+            for fixed_ips in port['fixed_ips']:
+                if fixed_ips['ip_address'] == \
+                    service_object['subnet']['gateway_ip']:
+                    gateway_port_id = port['id']
+                    break
+
+        # There was not port on this agent's host, so get one from Neutron
+        if gateway_port_id:
+            try:
+                self.plugin_rpc.delete_port(port_id=gateway_port_id,
+                                            mac_address=None)
+            except Exception as e:
+                ermsg = 'Error on delete gateway port for subnet %s:%s - %s.' \
+                % (service_object['subnet']['id'],
+                   service_object['subnet']['gateway_ip'],
+                   e.message)
+                ermsg += " You will need to delete this manually"
+                LOG.error(_(ermsg))
 
     def _get_least_vips_traffic_group(self):
         traffic_group = '/Common/traffic-group-1'
@@ -888,6 +1071,8 @@ class iControlDriver(object):
     def _init_connection(self):
         try:
             if not self.connected:
+                self.__last_connect_attempt = datetime.datetime.now()
+
                 if not self.conf.icontrol_hostname:
                     raise InvalidConfigurationOption(
                                  opt_name='icontrol_hostname',
@@ -985,5 +1170,6 @@ class iControlDriver(object):
                 self.connected = True
 
         except Exception as e:
+            self.non_connected()
             LOG.error(_('Could not communicate with all iControl devices: %s'
                            % e.message))

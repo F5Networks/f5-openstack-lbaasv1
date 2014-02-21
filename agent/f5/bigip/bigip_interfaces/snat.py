@@ -67,7 +67,7 @@ class SNAT(object):
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            self.lb_snatpool.delete_snat_pool([name])
+            self.lb_snataddress.delete_translation_address([name])
             return True
         else:
             return False
@@ -97,6 +97,21 @@ class SNAT(object):
             string_seq.values = member_name
             string_seq_seq.values = [string_seq]
             self.lb_snatpool.add_member_v2([name], string_seq_seq)
+
+    @icontrol_folder
+    def remove_from_pool(self, name=None, member_name=None, folder='Common'):
+        existing_members = self.lb_snatpool.get_member_v2([name])[0]
+        if member_name in existing_members:
+            string_seq = \
+             self.lb_snatpool.typefactory.create('Common.StringSequence')
+            string_seq_seq = \
+        self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
+            string_seq.values = member_name
+            string_seq_seq.values = [string_seq]
+            self.lb_snatpool.remove_member_v2([name], string_seq_seq)
+            existing_members.remove(member_name)
+            if len(existing_members) == 0:
+                self.lb_snatpool.delete_snat_pool([name])
 
     @icontrol_folder
     def pool_exists(self, name=None, folder='Common'):

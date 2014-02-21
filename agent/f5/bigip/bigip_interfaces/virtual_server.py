@@ -60,6 +60,14 @@ class VirtualServer(object):
                 'LocalLB.VirtualServer.VirtualServerProfileSequence')
             profiles = [prof_seq]
 
+            # explicitly create the virtual address first...
+            # otherwise there can be timing issues
+            self.lb_va.create([ip_address], [ip_address], [mask])
+            if not traffic_group:
+                traffic_group = \
+                  const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+            self.lb_va.set_traffic_group([ip_address], [traffic_group])
+
             # virtual server creation
             self.lb_vs.create(vs_defs, [mask], resources, profiles)
 
@@ -76,16 +84,6 @@ class VirtualServer(object):
                 filter_list.vlans = [vlan_name]
 
                 self.lb_vs.set_vlan([name], [filter_list])
-
-            if not traffic_group:
-                traffic_group = \
-                  const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-            try:
-                # HACK for demo... The address is not always available right
-                # after you create the virtual server. 
-                self.lb_va.set_traffic_group([ip_address], [traffic_group])
-            except:
-                pass
 
     @icontrol_folder
     def create_ip_forwarder(self, name=None, ip_address=None,
@@ -116,6 +114,14 @@ class VirtualServer(object):
                 'LocalLB.VirtualServer.VirtualServerProfileSequence')
             profiles = [prof_seq]
 
+            # explicitly create the virtual address first...
+            # otherwise there can be timing issues
+            self.lb_va.create([ip_address], [ip_address], [mask])
+            if not traffic_group:
+                traffic_group = \
+                  const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+            self.lb_va.set_traffic_group([ip_address], [traffic_group])
+
             # virtual server creation
             self.lb_vs.create(vs_defs, [mask], resources, profiles)
 
@@ -129,11 +135,6 @@ class VirtualServer(object):
                 filter_list.vlans = [vlan_name]
 
                 self.lb_vs.set_vlan([name], [filter_list])
-
-            if not traffic_group:
-                traffic_group = \
-                  const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-            self.lb_va.set_traffic_group([ip_address], [traffic_group])
 
     @icontrol_folder
     def create_fastl4(self, name=None, ip_address=None,
@@ -164,6 +165,14 @@ class VirtualServer(object):
                 'LocalLB.VirtualServer.VirtualServerProfileSequence')
             profiles = [prof_seq]
 
+            # explicitly create the virtual address first...
+            # otherwise there can be timing issues
+            self.lb_va.create([ip_address], [ip_address], [mask])
+            if not traffic_group:
+                traffic_group = \
+                  const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+            self.lb_va.set_traffic_group([ip_address], [traffic_group])
+
             # virtual server creation
             self.lb_vs.create(vs_defs, [mask], resources, profiles)
 
@@ -177,11 +186,6 @@ class VirtualServer(object):
                 filter_list.vlans = [vlan_name]
 
                 self.lb_vs.set_vlan([name], [filter_list])
-
-            if not traffic_group:
-                traffic_group = \
-                  const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-            self.lb_va.set_traffic_group([ip_address], [traffic_group])
 
     @icontrol_folder
     def enable_virtual_server(self, name=None, folder='Common'):
@@ -334,6 +338,32 @@ class VirtualServer(object):
         for stat in stats:
             return_stats[stat.type] = self.bigip.ulong_to_int(stat.value)
         return return_stats
+
+    @icontrol_folder
+    def get_virtual_service_insertion(self, folder='Common'):
+        virtual_services = []
+        vs = self.lb_vs.get_list()
+        vd = self.lb_vs.get_destination_v2([vs])
+        vn = self.lb_vs.get_wildmask([vs])
+        vp = self.lb_vs.get_protocol([vs])
+        for i in range(len(vs)):
+            protocols = {'PROTOCOL_ANY': 'any',
+                         'PROTOCOL_TCP': 'tcp',
+                         'PROTOCOL_UDP': 'udp',
+                         'PROTOCOL_ICMP': 'icmp',
+                         'PROTOCOL_SCTP': 'sctp'
+                         }
+            virtual_services.append(
+        {
+         strip_folder_and_prefix(vs[i]):
+         {
+          'address': strip_folder_and_prefix(vd[i]['address']).split('%')[0],
+          'netmask': vn[i],
+          'protocol': protocols[vp[i]],
+          'port': vd[i]['port']
+         }
+        })
+        return virtual_services
 
     def _get_protocol_type(self, protocol_str):
         protocol_str = protocol_str.upper()

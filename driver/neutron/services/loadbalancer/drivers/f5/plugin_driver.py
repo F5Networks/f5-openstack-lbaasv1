@@ -276,6 +276,7 @@ class LoadBalancerCallbacks(object):
                 'admin_state_up': True,
                 'device_id': host,
                 'device_owner': 'network:f5lbaas',
+                'status': q_const.PORT_STATUS_ACTIVE,
                 'fixed_ips': fixed_ips
             }
             port = self.plugin._core_plugin.create_port(context,
@@ -303,6 +304,7 @@ class LoadBalancerCallbacks(object):
                 'admin_state_up': True,
                 'device_id': host,
                 'device_owner': 'network:f5lbaas',
+                'status': q_const.PORT_STATUS_ACTIVE,
                 'fixed_ips': [fixed_ip]
             }
             port = self.plugin._core_plugin.create_port(context,
