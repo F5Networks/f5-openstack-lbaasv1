@@ -74,12 +74,9 @@ class LoadBalancerCallbacks(object):
     @log.log
     def get_active_pending_pool_ids(self, context, tenant_ids=None):
         with context.session.begin(subtransactions=True):
-            qry = (context.session.query(ldb.Pool.id).
-                   join(ldb.Vip))
-            qry = qry.filter(ldb.Vip.status.in_(ACTIVE_PENDING))
+            qry = (context.session.query(ldb.Pool.id))
             qry = qry.filter(ldb.Pool.status.in_(ACTIVE_PENDING))
-            up = True  # makes pep8 and sqlalchemy happy
-            qry = qry.filter(ldb.Vip.admin_state_up == up)
+            up = True
             qry = qry.filter(ldb.Pool.admin_state_up == up)
             agents = self.plugin.get_lbaas_agents(context)
             if not agents:
