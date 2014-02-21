@@ -171,7 +171,7 @@ class iControlDriver(object):
         stats = {}
 
         bigip = self._get_bigip()
-        bigip_stats = bigip.pool.get_statistics(name=service['pool']['id'],
+        bigip_stats = bigip.pool.get_statisitcs(name=service['pool']['id'],
                                           folder=service['pool']['tenant_id'])
         # do we add PVA + SERVER?
         stats[lb_const.STATS_IN_BYTES] = \
@@ -617,6 +617,7 @@ class iControlDriver(object):
                         if port['fixed_ips'][0]['subnet_id'] == \
                            service_object['subnet']['id']:
                             ip_address = port['fixed_ips'][0]['ip_address']
+                            break
                 if not ip_address:
                     new_port = self.plugin_rpc.create_port_on_subnet(
                                 subnet_id=service_object['subnet']['id'],
@@ -656,6 +657,7 @@ class iControlDriver(object):
                                     LOG.debug(_('PORT SUBNET CHECK: IS %s = %s' % (port['fixed_ips'][0]['subnet_id'], service_object['subnet']['id'])))
                                     ip_address = \
                                        port['fixed_ips'][0]['ip_address']
+                                    break
                     if not ip_address:
                         new_port = self.plugin_rpc.create_port_on_subnet(
                             subnet_id=service_object['subnet']['id'],
@@ -688,6 +690,7 @@ class iControlDriver(object):
                                    service_object['subnet']['id']:
                                     ip_address = \
                                        port['fixed_ips'][0]['ip_address']
+                                    break
                     if not ip_address:
                         new_port = self.plugin_rpc.create_port_on_subnet(
                             subnet_id=service_object['subnet']['id'],
@@ -721,6 +724,7 @@ class iControlDriver(object):
                                        service_object['subnet']['id']:
                                         ip_address = \
                                         port['fixed_ips'][0]['ip_address']
+                                        break
                         if not ip_address:
                             new_port = \
                               self.plugin_rpc.create_port_on_subnet(
@@ -747,10 +751,13 @@ class iControlDriver(object):
         # to this agent's host?
         need_port_for_gateway = True
         for port in service_object['subnet_ports']:
+            if not need_port_for_gateway:
+                break
             for fixed_ips in port['fixed_ips']:
                 if fixed_ips['ip_address'] == \
                     service_object['subnet']['gateway_ip']:
                     need_port_for_gateway = False
+                    break
 
         # Create a name for the port and for the IP Forwarding Virtual Server
         # as well as the floating Self IP which will answer ARP for the members
