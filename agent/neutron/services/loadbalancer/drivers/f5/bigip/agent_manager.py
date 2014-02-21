@@ -238,7 +238,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @periodic_task.periodic_task(spacing=6)
     def collect_stats(self, context):
-        for pool_id in self.cache.get_pool_ids():
+        pool_ids = self.cache.get_pool_ids()
+        LOG.debug('collecting stats on pools: %s' % pool_ids)
+        for pool_id in pool_ids:
             try:
                 stats = self.driver.get_stats(
                         self.plugin_rpc.get_service_by_pool_id(pool_id))
@@ -265,10 +267,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             LOG.debug(_('currently known pool ids are: %s' % known_services))
             for deleted_id in known_services - ready_pool_ids:
                 self.destroy_service(deleted_id)
-
             for pool_id in ready_pool_ids:
                 self.refresh_service(pool_id)
-
         except Exception:
             LOG.exception(_('Unable to retrieve ready services'))
             self.needs_resync = True
@@ -333,6 +333,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.plugin_rpc.update_vip_status(vip['id'],
                                                   plugin_const.ACTIVE,
                                                   'VIP created')
+                self.cache.put(service)
         except Exception as e:
             message = 'could not create VIP:' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
@@ -343,10 +344,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to update_vip"""
         try:
             if self.driver.update_vip(old_vip, vip, service):
-                # TODO: jgruber - check vip admin_status to change status
                 self.plugin_rpc.update_vip_status(vip['id'],
                                                   plugin_const.ACTIVE,
                                                   'VIP updated')
+                self.cache.put(service)
         except Exception as e:
             message = 'could not update VIP: ' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
@@ -358,6 +359,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             if self.driver.delete_vip(vip, service):
                 self.plugin_rpc.vip_destroyed(vip['id'])
+                self.cache.put(service)
         except Exception as e:
             message = 'could not delete VIP:' + e.message
             self.plugin_rpc.update_vip_status(vip['id'],
@@ -371,7 +373,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.plugin_rpc.update_pool_status(pool['id'],
                                                    plugin_const.ACTIVE,
                                                   'pool created')
-                self.refresh_service(pool['id'])
+                self.cache.put(service)
         except Exception as e:
             message = 'could not create pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
@@ -386,6 +388,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.plugin_rpc.update_pool_status(pool['id'],
                                                   plugin_const.ACTIVE,
                                                   'pool updated')
+                self.cache.put(service)
         except Exception as e:
             message = 'could not update pool:' + e.message
             self.plugin_rpc.update_pool_status(old_pool['id'],
@@ -411,6 +414,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.plugin_rpc.update_member_status(member['id'],
                                                      plugin_const.ACTIVE,
                                                      'member created')
+                self.cache.put(service)
         except Exception as e:
             message = 'could not create member:' + e.message
             self.plugin_rpc.update_member_status(member['id'],
@@ -426,6 +430,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.plugin_rpc.update_member_status(member['id'],
                                                      plugin_const.ACTIVE,
                                                      'member updated')
+                self.cache.put(service)
         except Exception as e:
             message = 'could not update member:' + e.message
             self.plugin_rpc.update_member_status(old_member['id'],

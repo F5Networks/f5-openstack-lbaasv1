@@ -162,7 +162,7 @@ class iControlDriver(object):
         self._assure_service(service)
         return True
 
-    # @am.is_connected
+    @am.is_connected
     @log.log
     def get_stats(self, service):
         # use pool stats because the pool_id is the
