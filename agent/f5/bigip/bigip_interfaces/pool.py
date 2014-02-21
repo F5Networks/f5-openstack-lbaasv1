@@ -99,11 +99,14 @@ class Pool(object):
 
     @icontrol_folder
     def get_statisitcs(self, name=None, folder='Common'):
-        stats = self.lb_pool.get_statistics([name])[0][0].statistics
-        return_stats = {}
-        for stat in stats:
-            return_stats[stat.type] = self.bigip.ulong_to_int(stat.value)
-        return return_stats
+        if self.exists(name=name, folder=folder):
+            stats = self.lb_pool.get_statistics([name])[0][0].statistics
+            return_stats = {}
+            for stat in stats:
+                return_stats[stat.type] = self.bigip.ulong_to_int(stat.value)
+            return return_stats
+        else:
+            return {}
 
     @icontrol_folder
     def _get_nodes_for_members(self, name=None, folder='Common'):
