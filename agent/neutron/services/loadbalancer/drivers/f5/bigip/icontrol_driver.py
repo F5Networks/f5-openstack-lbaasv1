@@ -480,6 +480,8 @@ class iControlDriver(object):
 
     def _assure_service_networks(self, service):
         assured_networks = []
+        assured_subnet_local_and_snats = []
+        assured_floating_default_gateway = []
         if 'id' in service['vip']:
             self._assure_network(service['pool']['network'])
             assured_networks.append(service['pool']['network']['id'])
@@ -491,17 +493,20 @@ class iControlDriver(object):
                     assured_networks.append(service['vip']['network']['id'])
                 # all VIPs get a non-floating self IP on each device
                 self._assure_local_selfip_snat(service['vip'], service)
+                assured_subnet_local_and_snats.append(
+                                             service['vip']['subnet']['id'])
         for member in service['members']:
             if not member['network']['id'] in assured_networks:
                 self._assure_network(member['network'])
-            if 'id'in service['vip']['network'] and \
-            (not service['vip']['subnet']['id'] == member['subnet']['id']):
+            if not member['subnet']['id'] in assured_subnet_local_and_snats:
                 # each member gets a local self IP on each device
                 self._assure_local_selfip_snat(member, service)
             # if we are not using SNATS, attempt to become
             # the subnet's default gateway.
-            if not self.conf.f5_snat_mode:
+            if not self.conf.f5_snat_mode and \
+               member['subnet']['id'] not in assured_floating_default_gateway:
                 self._assure_floating_default_gateway(member, service)
+                assured_floating_default_gateway.append(member['subnet']['id'])
 
     def _delete_service_networks(self, service):
         bigip = self._get_bigip()
