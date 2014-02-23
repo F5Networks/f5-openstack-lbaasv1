@@ -105,13 +105,8 @@ class iControlDriver(object):
     @am.is_connected
     @log.log
     def delete_vip(self, vip, service):
-        # remove service elements which
-        # must remain for pool statistics
-        service['pool'] = {}
-        service['health_monitors'] = []
-        service['members'] = []
-        self._delete_service(service)
-        self._delete_service_networks(service)
+        self._assure_service_networks(service)
+        self._assure_service(service)
         return True
 
     @am.is_connected
@@ -348,6 +343,33 @@ class iControlDriver(object):
                                   ip_address=ip_address,
                                   port=int(member['protocol_port']),
                                   folder=service['pool']['tenant_id'])
+                delete_member_objects = True
+                subnet = netaddr.IPNetwork(member['subnet']['cidr'])
+                virtual_services = \
+                    bigip.virtual_server.get_virtual_service_insertion(
+                                        folder=member['tenant_id'])
+                for vs in virtual_services:
+                    (_, dest) = vs.items()[0]
+                    if netaddr.IPAddress(dest['address']) in subnet:
+                        delete_member_objects = False
+                        break
+                if delete_member_objects:
+                    # get nodes
+                    nodes = self.pool.get_node_addresses(
+                                            folder=member['tenant_id'])
+                    for node in nodes:
+                        if netaddr(node) in subnet:
+                            delete_member_objects = False
+                            break
+                if delete_member_objects:
+                    if not self.conf.f5_snat_mode:
+                        self._delete_floating_default_gateway(member, service)
+                    self._delete_local_selfip_snat(member, service)
+                    try:
+                        self._delete_network(member['network'])
+                        bigip.route.delete_domain(folder=member['tenant_id'])
+                    except:
+                        pass
             else:
                 # See if we need to added it orginially
                 if bigip.pool.add_member(name=service['pool']['id'],
@@ -421,73 +443,110 @@ class iControlDriver(object):
             if service['vip']['network']['shared']:
                 vlan_name = '/Common/' + vlan_name
                 ip_address = ip_address + "%0"
+            if service['vip']['status'] == 'PENDING_DELETE':
+                bigip.virtual_server.delete(name=service['vip']['id'],
+                                        folder=service['vip']['tenant_id'])
+                if service['vip']['id'] in self.__vips_to_traffic_group:
+                    tg = self.__vips_to_traffic_group[service['vip']['id']]
+                    self.__vips_on_traffic_groups[tg] = \
+                                  self.__vips_on_traffic_groups[tg] - 1
+                    del(self.__vips_to_traffic_groups[service['vip']['id']])
 
-            tg = self._get_least_vips_traffic_group()
-
-            if bigip.virtual_server.create(
-                                name=service['vip']['id'],
-                                ip_address=ip_address,
-                                mask='255.255.255.255',
-                                port=int(service['vip']['protocol_port']),
-                                protocol=service['vip']['protocol'],
-                                vlan_name=vlan_name,
-                                traffic_group=tg,
-                                folder=service['pool']['tenant_id']
-                               ):
-                # created update driver traffic group mapping
-                tg = bigip.virtual_server.get_traffic_group(
-                                      name=service['vip']['ip'],
-                                      folder=service['pool']['tenant_id'])
-                self.__vips_to_traffic_group[service['vip']['ip']] = tg
-
-            bigip.virtual_server.set_description(name=service['vip']['id'],
-                                     description=service['vip']['name'] + \
-                                     ':' + service['vip']['description'])
-
-            bigip.virtual_server.set_pool(name=service['vip']['id'],
-                                      pool_name=service['pool']['id'],
-                                      folder=service['pool']['tenant_id'])
-
-            if service['vip']['admin_state_up']:
-                bigip.virtual_server.enable_virtual_server(
-                                    name=service['vip']['id'],
-                                    folder=service['pool']['tenant_id'])
+                    subnet = netaddr.IPNetwork(
+                                           service['vip']['subnet']['cidr'])
+                    virtual_services = \
+                            bigip.virtual_server.get_virtual_service_insertion(
+                                           folder=service['vip']['tenant_id'])
+                    for vs in virtual_services:
+                        (_, dest) = vs.items()[0]
+                        if netaddr.IPAddress(dest['address']) in subnet:
+                            delete_vip_objects = False
+                            break
+                    if delete_vip_objects:
+                        # get nodes
+                        nodes = self.pool.get_node_addresses(
+                                           folder=service['vip']['tenant_id'])
+                        for node in nodes:
+                            if netaddr(node) in subnet:
+                                delete_vip_objects = False
+                                break
+                    if delete_vip_objects:
+                        self._delete_local_selfip_snat(service['vip'], service)
+                        try:
+                            self._delete_network(service['vip']['network'])
+                            bigip.route.delete_domain(
+                                            folder=service['vip']['tenant_id'])
+                        except:
+                            pass
             else:
-                bigip.virtual_server.disable_virtual_server(
+
+                tg = self._get_least_vips_traffic_group()
+
+                if bigip.virtual_server.create(
                                     name=service['vip']['id'],
-                                    folder=service['pool']['tenant_id'])
+                                    ip_address=ip_address,
+                                    mask='255.255.255.255',
+                                    port=int(service['vip']['protocol_port']),
+                                    protocol=service['vip']['protocol'],
+                                    vlan_name=vlan_name,
+                                    traffic_group=tg,
+                                    folder=service['pool']['tenant_id']
+                                   ):
+                    # created update driver traffic group mapping
+                    tg = bigip.virtual_server.get_traffic_group(
+                                          name=service['vip']['ip'],
+                                          folder=service['pool']['tenant_id'])
+                    self.__vips_to_traffic_group[service['vip']['ip']] = tg
 
-            #TODO: fix session peristence
-            if 'session_persistence' in service:
-                type = service['vip']['session_persistence']['type']
-                if type == 'HTTP_COOKIE':
-                    pass
-                elif type == 'APP_COOKIE':
-                    pass
-                elif type == 'SOURCE_IP':
-                    pass
+                bigip.virtual_server.set_description(name=service['vip']['id'],
+                                         description=service['vip']['name'] + \
+                                         ':' + service['vip']['description'])
 
-            #TODO: fix vitual service protocol
-            if 'protocol' in service['vip']:
-                protocol = service['vip']['protocol']
-                if protocol == 'HTTP':
-                    pass
-                if protocol == 'HTTPS':
-                    pass
-                if protocol == 'TCP':
-                    pass
+                bigip.virtual_server.set_pool(name=service['vip']['id'],
+                                          pool_name=service['pool']['id'],
+                                          folder=service['pool']['tenant_id'])
 
-            if service['vip']['connection_limit'] > 0:
-                bigip.virtual_server.set_connection_limit(
-                        name=service['vip']['id'],
-                        connection_limit=int(
-                                service['vip']['connection_limit']),
-                        folder=service['pool']['tenant_id'])
-            else:
-                bigip.virtual_server.set_connection_limit(
-                        name=service['vip']['id'],
-                        connection_limit=0,
-                        folder=service['pool']['tenant_id'])
+                if service['vip']['admin_state_up']:
+                    bigip.virtual_server.enable_virtual_server(
+                                        name=service['vip']['id'],
+                                        folder=service['pool']['tenant_id'])
+                else:
+                    bigip.virtual_server.disable_virtual_server(
+                                        name=service['vip']['id'],
+                                        folder=service['pool']['tenant_id'])
+
+                #TODO: fix session peristence
+                if 'session_persistence' in service:
+                    persistence_type = \
+                               service['vip']['session_persistence']['type']
+                    if persistence_type == 'HTTP_COOKIE':
+                        pass
+                    elif persistence_type == 'APP_COOKIE':
+                        pass
+                    elif persistence_type == 'SOURCE_IP':
+                        pass
+
+                #TODO: fix vitual service protocol
+                if 'protocol' in service['vip']:
+                    protocol = service['vip']['protocol']
+                    if protocol == 'HTTP':
+                        pass
+                    if protocol == 'HTTPS':
+                        pass
+                    if protocol == 'TCP':
+                        pass
+
+                if service['vip']['connection_limit'] > 0:
+                    bigip.virtual_server.set_connection_limit(
+                            name=service['vip']['id'],
+                            connection_limit=int(
+                                    service['vip']['connection_limit']),
+                            folder=service['pool']['tenant_id'])
+                else:
+                    bigip.virtual_server.set_connection_limit(
+                            name=service['vip']['id'],
+                            connection_limit=0,
+                            folder=service['pool']['tenant_id'])
 
     def _assure_service_networks(self, service):
         assured_networks = []
@@ -818,7 +877,7 @@ class iControlDriver(object):
                     bigip.virtual_server.get_virtual_service_insertion(
                                         folder=service['vip']['tenant_id'])
             for vs in virtual_services:
-                name, dest = vs.items()
+                (_, dest) = vs.items()[0]
                 if netaddr.IPAddress(dest['address']) in subnet:
                     delete_vip_objects = False
                     break
@@ -840,7 +899,6 @@ class iControlDriver(object):
                                     folder=service['vip']['tenant_id'])
                 except:
                     pass
-            # delete selfips
 
         for member in service['members']:
             delete_member_objects = True
@@ -849,7 +907,7 @@ class iControlDriver(object):
                     bigip.virtual_server.get_virtual_service_insertion(
                                         folder=member['tenant_id'])
             for vs in virtual_services:
-                name, dest = vs.items()
+                (_, dest) = vs.items()[0]
                 if netaddr.IPAddress(dest['address']) in subnet:
                     delete_member_objects = False
                     break
