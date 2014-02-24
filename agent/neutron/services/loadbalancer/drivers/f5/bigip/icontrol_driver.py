@@ -225,488 +225,492 @@ class iControlDriver(object):
 
     def _assure_service(self, service):
 
-        self._lock(service)
-        try:
-            bigip = self._get_bigip()
+        bigip = self._get_bigip()
 
-            assured_subnets = []
-            deleted_subnets = []
-            delete_vip_service_networks = False
-            delete_member_service_networks = False
+        assured_subnets = []
+        deleted_subnets = []
+        delete_vip_service_networks = False
+        delete_member_service_networks = False
 
-            #
-            # Provision Pool - Create/Update
-            #
-            if service['pool']['status'] == plugin_const.PENDING_DELETE:
-                self._delete_service(service)
-                self._delete_service_networks(service)
-                try:
-                    self.plugin_rpc.pool_destroyed(service['pool']['id'])
-                except Exception as e:
-                        LOG.error(_("Plugin delete pool %s error: %s"
-                                    % (service['pool']['id'], e.message)
-                                    ))
-                return
+        #
+        # Provision Pool - Create/Update
+        #
+        if service['pool']['status'] == plugin_const.PENDING_DELETE:
+            # Everything needs to be go with the pool, so overwrite
+            # service state to appropriately remove all elements
+            service['vip']['status'] = plugin_const.PENDING_DELETE
+            for member in service['members']:
+                member['status'] = plugin_const.PENDING_DELETE
+            for monitor in service['pool']['health_monitors_status']:
+                monitor['status'] = plugin_const.PENDING_DELETE
+        else:
+            if not bigip.pool.create(name=service['pool']['id'],
+                              lb_method=service['pool']['lb_method'],
+                              description=service['pool']['name'] + \
+                              ':' + service['pool']['description'],
+                              folder=service['pool']['tenant_id']):
+
+                if service['pool']['status'] == \
+                                               plugin_const.PENDING_UPDATE:
+                    # make sure pool attributes are correct
+                    bigip.pool.set_lb_method(name=service['pool']['id'],
+                                    lb_method=service['pool']['lb_method'])
+                    bigip.pool.set_description(name=service['pool']['id'],
+                                    description=service['pool']['name'] + \
+                                    ':' + service['pool']['description'])
+                    self.plugin_rpc.update_pool_status(
+                                    service['pool']['id'],
+                                    status=plugin_const.ACTIVE,
+                                    status_description='pool updated'
+                                  )
+
             else:
-                if not bigip.pool.create(name=service['pool']['id'],
-                                  lb_method=service['pool']['lb_method'],
-                                  description=service['pool']['name'] + \
-                                  ':' + service['pool']['description'],
-                                  folder=service['pool']['tenant_id']):
-
-                    if service['pool']['status'] == \
-                                                   plugin_const.PENDING_UPDATE:
-                        # make sure pool attributes are correct
-                        bigip.pool.set_lb_method(name=service['pool']['id'],
-                                        lb_method=service['pool']['lb_method'])
-                        bigip.pool.set_description(name=service['pool']['id'],
-                                        description=service['pool']['name'] + \
-                                        ':' + service['pool']['description'])
-                        self.plugin_rpc.update_pool_status(
+                self.plugin_rpc.update_pool_status(
                                         service['pool']['id'],
                                         status=plugin_const.ACTIVE,
-                                        status_description='pool updated'
-                                      )
+                                        status_description='pool created'
+                                       )
+        #
+        # Provision Health Monitors - Create/Update
+        #
 
-                else:
-                    self.plugin_rpc.update_pool_status(
-                                            service['pool']['id'],
-                                            status=plugin_const.ACTIVE,
-                                            status_description='pool created'
-                                           )
-            #
-            # Provision Health Monitors - Create/Update
-            #
+        # Current monitors on the pool according to BigIP
+        existing_monitors = bigip.pool.get_monitors(
+                                name=service['pool']['id'],
+                                folder=service['pool']['tenant_id'])
+        LOG.debug(_("Pool: %s before assurance has monitors: %s"
+                    % (service['pool']['id'], existing_monitors)))
 
-            # Current monitors on the pool according to BigIP
-            existing_monitors = bigip.pool.get_monitors(
-                                    name=service['pool']['id'],
+        health_monitors_status = {}
+        for monitor in service['pool']['health_monitors_status']:
+            health_monitors_status[monitor['monitor_id']] = \
+                                                       monitor['status']
+
+        # Current monitor associations according to Neutron
+        for monitor in service['health_monitors']:
+            if monitor['id'] in health_monitors_status and \
+               health_monitors_status[monitor['id']] == \
+                                            plugin_const.PENDING_DELETE:
+                bigip.pool.remove_monitor(
+                                      name=service['pool']['id'],
+                                      monitor_name=monitor['id'],
+                                      folder=service['pool']['tenant_id']
+                                    )
+                self.plugin_rpc.health_monitor_destroyed(
+                                      health_monitor_id=monitor['id'],
+                                      pool_id=service['pool']['id'])
+            else:
+                timeout = int(monitor['max_retries']) \
+                        * int(monitor['timeout'])
+                bigip.monitor.create(name=monitor['id'],
+                                     mon_type=monitor['type'],
+                                     interval=monitor['delay'],
+                                     timeout=timeout,
+                                     send_text=None,
+                                     recv_text=None,
+                                     folder=monitor['tenant_id'])
+                # make sure monitor attributes are correct
+                bigip.monitor.set_interval(name=monitor['id'],
+                                     interval=monitor['delay'])
+                bigip.monitor.set_timeout(name=monitor['id'],
+                                              timeout=timeout)
+                bigip.pool.add_monitor(name=service['pool']['id'],
+                                    monitor_name=monitor['id'],
                                     folder=service['pool']['tenant_id'])
-            LOG.debug(_("Pool: %s before assurance has monitors: %s"
-                        % (service['pool']['id'], existing_monitors)))
+                self.plugin_rpc.update_health_monitor_status(
+                                    pool_id=service['pool']['id'],
+                                    health_monitor_id=monitor['id'],
+                                    status=plugin_const.ACTIVE,
+                                    status_description='monitor active'
+                                 )
+            if monitor['id'] in existing_monitors:
+                existing_monitors.remove(monitor['id'])
 
-            health_monitors_status = {}
-            for monitor in service['pool']['health_monitors_status']:
-                health_monitors_status[monitor['monitor_id']] = \
-                                                           monitor['status']
+        LOG.debug(_("Pool: %s removing monitors %s"
+                    % (service['pool']['id'], existing_monitors)))
+        # get rid of monitors no long in service definition
+        for monitor in existing_monitors:
+            bigip.monitor.delete(name=monitor,
+                                 folder=service['pool']['tenant_id'])
+        #
+        # Provision Members - Create/Update
+        #
 
-            # Current monitor associations according to Neutron
-            for monitor in service['health_monitors']:
-                if monitor['id'] in health_monitors_status and \
-                   health_monitors_status[monitor['id']] == \
-                                                plugin_const.PENDING_DELETE:
-                    bigip.pool.remove_monitor(
-                                          name=service['pool']['id'],
-                                          monitor_name=monitor['id'],
-                                          folder=service['pool']['tenant_id']
-                                        )
-                    self.plugin_rpc.health_monitor_destroyed(
-                                          health_monitor_id=monitor['id'],
-                                          pool_id=service['pool']['id'])
-                else:
-                    timeout = int(monitor['max_retries']) \
-                            * int(monitor['timeout'])
-                    bigip.monitor.create(name=monitor['id'],
-                                         mon_type=monitor['type'],
-                                         interval=monitor['delay'],
-                                         timeout=timeout,
-                                         send_text=None,
-                                         recv_text=None,
-                                         folder=monitor['tenant_id'])
-                    # make sure monitor attributes are correct
-                    bigip.monitor.set_interval(name=monitor['id'],
-                                         interval=monitor['delay'])
-                    bigip.monitor.set_timeout(name=monitor['id'],
-                                                  timeout=timeout)
-                    bigip.pool.add_monitor(name=service['pool']['id'],
-                                        monitor_name=monitor['id'],
-                                        folder=service['pool']['tenant_id'])
-                    self.plugin_rpc.update_health_monitor_status(
-                                        pool_id=service['pool']['id'],
-                                        health_monitor_id=monitor['id'],
-                                        status=plugin_const.ACTIVE,
-                                        status_description='monitor active'
-                                     )
-                if monitor['id'] in existing_monitors:
-                    existing_monitors.remove(monitor['id'])
+        # Current members on the BigIP
+        existing_members = bigip.pool.get_members(
+                                name=service['pool']['id'],
+                                folder=service['pool']['tenant_id'])
+        LOG.debug(_("Pool: %s before assurance has membership: %s"
+                    % (service['pool']['id'], existing_members)))
 
-            LOG.debug(_("Pool: %s removing monitors %s"
-                        % (service['pool']['id'], existing_monitors)))
-            # get rid of monitors no long in service definition
-            for monitor in existing_monitors:
-                bigip.monitor.delete(name=monitor,
-                                     folder=service['pool']['tenant_id'])
-            #
-            # Provision Members - Create/Update
-            #
+        # Flag if we need to change the pool's LB method to
+        # include weighting by the ratio attribute
+        using_ratio = False
+        # Members according to Neutron
+        for member in service['members']:
+            LOG.debug(_("Pool %s assuring member %s:%d - status %s"
+                        % (service['pool']['id'],
+                           member['address'],
+                           member['protocol_port'],
+                           member['status'])
+                        ))
 
-            # Current members on the BigIP
-            existing_members = bigip.pool.get_members(
-                                    name=service['pool']['id'],
-                                    folder=service['pool']['tenant_id'])
-            LOG.debug(_("Pool: %s before assurance has membership: %s"
-                        % (service['pool']['id'], existing_members)))
+            ip_address = member['address']
+            if member['network']['shared']:
+                ip_address = ip_address + '%0'
 
-            # Flag if we need to change the pool's LB method to
-            # include weighting by the ratio attribute
-            using_ratio = False
-            # Members according to Neutron
-            for member in service['members']:
-                LOG.debug(_("Pool %s assuring member %s:%d - status %s"
-                            % (service['pool']['id'],
-                               member['address'],
-                               member['protocol_port'],
-                               member['status'])
-                            ))
-
-                ip_address = member['address']
-                if member['network']['shared']:
-                    ip_address = ip_address + '%0'
-
-                # Delete those pending delete
-                if member['status'] == plugin_const.PENDING_DELETE:
-                    bigip.pool.remove_member(name=service['pool']['id'],
+            # Delete those pending delete
+            if member['status'] == plugin_const.PENDING_DELETE:
+                bigip.pool.remove_member(name=service['pool']['id'],
+                                  ip_address=ip_address,
+                                  port=int(member['protocol_port']),
+                                  folder=service['pool']['tenant_id'])
+                try:
+                    self.plugin_rpc.member_destroyed(member['id'])
+                except Exception as e:
+                    LOG.error(_("Plugin delete member %s error: %s"
+                                % (member['id'], e.message)
+                                ))
+                    pass
+                delete_member_service_networks = True
+            else:
+                if bigip.pool.add_member(name=service['pool']['id'],
                                       ip_address=ip_address,
                                       port=int(member['protocol_port']),
-                                      folder=service['pool']['tenant_id'])
-                    try:
-                        self.plugin_rpc.member_destroyed(member['id'])
-                    except Exception as e:
-                        LOG.error(_("Plugin delete member %s error: %s"
-                                    % (member['id'], e.message)
-                                    ))
-                        pass
-                    delete_member_service_networks = True
-                else:
-                    if bigip.pool.add_member(name=service['pool']['id'],
-                                          ip_address=ip_address,
-                                          port=int(member['protocol_port']),
-                                          folder=service['pool']['tenant_id']):
-                        LOG.debug(_("Pool: %s added member: %s:%d"
-                        % (service['pool']['id'],
-                           member['address'],
-                           member['protocol_port'])))
-                        self.plugin_rpc.update_member_status(
-                                            member['id'],
-                                            status=plugin_const.ACTIVE,
-                                            status_description='member created'
-                                           )
-                    if member['status'] == plugin_const.PENDING_CREATE or \
-                       member['status'] == plugin_const.PENDING_UPDATE:
-                        # Is it enabled or disabled?
-                        if member['admin_state_up']:
-                            bigip.pool.enable_member(name=member['id'],
-                                        ip_address=ip_address,
-                                        port=int(member['protocol_port']),
-                                        folder=service['pool']['tenant_id'])
-                        else:
-                            bigip.pool.disable_member(name=member['id'],
-                                        ip_address=ip_address,
-                                        port=int(member['protocol_port']),
-                                        folder=service['pool']['tenant_id'])
-                        # Do we have weights for ratios?
-                        if member['weight'] > 0:
-                            bigip.pool.set_member_ratio(
-                                        name=service['pool']['id'],
-                                        ip_address=ip_address,
-                                        port=int(member['protocol_port']),
-                                        ratio=int(member['weight']),
-                                        folder=service['pool']['tenant_id']
-                                       )
-                            using_ratio = True
-
-                        self.plugin_rpc.update_member_status(
+                                      folder=service['pool']['tenant_id']):
+                    LOG.debug(_("Pool: %s added member: %s:%d"
+                    % (service['pool']['id'],
+                       member['address'],
+                       member['protocol_port'])))
+                    self.plugin_rpc.update_member_status(
                                         member['id'],
                                         status=plugin_const.ACTIVE,
-                                        status_description='member updated'
+                                        status_description='member created'
                                        )
-                    assured_subnets.append(member['subnet']['id'])
-
-                # Remove them from the one's BigIP needs to
-                # handle.. leaving on those that are needed to
-                # delete from the BigIP
-                for existing_member in existing_members:
-                    if member['address'] == existing_member['addr'] and \
-                       member['protocol_port'] == existing_member['port']:
-                        existing_members.remove(existing_member)
-                        LOG.debug(_("Pool: %s assured member: %s:%d"
-                        % (service['pool']['id'],
-                           member['address'],
-                           member['protocol_port'])))
-
-            # remove any members which are not long in the service
-            LOG.debug(_("Pool: %s removing members %s"
-                        % (service['pool']['id'], existing_members)))
-            for need_to_delete in existing_members:
-                bigip.pool.remove_member(
-                                     name=service['pool']['id'],
-                                     ip_address=need_to_delete['addr'],
-                                     port=int(need_to_delete['port']),
-                                     folder=service['pool']['tenant_id']
-                                    )
-            # if members are using weights, change the LB to RATIO
-            if using_ratio:
-                LOG.debug(_("Pool: %s changing to ratio based lb"
-                        % service['pool']['id']))
-                bigip.pool.set_lb_method(
-                                    name=service['pool']['id'],
-                                    lb_method='RATIO',
-                                    folder=service['pool']['tenant_id'])
-
-                self.plugin_rpc.update_pool_status(
-                                service['pool']['id'],
-                                status=plugin_const.ACTIVE,
-                                status_description='pool now using ratio lb'
-                               )
-
-            if 'id' in service['vip']:
-                #
-                # Provision Virtual Service - Create/Update
-                #
-                vlan_name = self._get_vlan_name(service['vip']['network'])
-                ip_address = service['vip']['address']
-                if service['vip']['network']['shared']:
-                    vlan_name = '/Common/' + vlan_name
-                    ip_address = ip_address + "%0"
-                if service['vip']['status'] == plugin_const.PENDING_DELETE:
-                    LOG.debug(_('Vip: deleting VIP %s' % service['vip']['id']))
-                    bigip.virtual_server.delete(name=service['vip']['id'],
-                                            folder=service['vip']['tenant_id'])
-                    if service['vip']['id'] in self.__vips_to_traffic_group:
-                        tg = self.__vips_to_traffic_group[service['vip']['id']]
-                        self.__vips_on_traffic_groups[tg] = \
-                                      self.__vips_on_traffic_groups[tg] - 1
-                        del(self.__vips_to_traffic_groups[
-                                                         service['vip']['id']])
-                    delete_vip_service_networks = True
-                    try:
-                        self.plugin_rpc.vip_destroyed(service['vip']['id'])
-                    except Exception as e:
-                        LOG.error(_("Plugin delete vip %s error: %s"
-                                    % (service['vip']['id'], e.message)
-                                    ))
-                else:
-                    tg = self._get_least_vips_traffic_group()
-                    if bigip.virtual_server.create(
-                                    name=service['vip']['id'],
+                if member['status'] == plugin_const.PENDING_CREATE or \
+                   member['status'] == plugin_const.PENDING_UPDATE:
+                    # Is it enabled or disabled?
+                    if member['admin_state_up']:
+                        bigip.pool.enable_member(name=member['id'],
                                     ip_address=ip_address,
-                                    mask='255.255.255.255',
-                                    port=int(service['vip']['protocol_port']),
-                                    protocol=service['vip']['protocol'],
-                                    vlan_name=vlan_name,
-                                    traffic_group=tg,
+                                    port=int(member['protocol_port']),
+                                    folder=service['pool']['tenant_id'])
+                    else:
+                        bigip.pool.disable_member(name=member['id'],
+                                    ip_address=ip_address,
+                                    port=int(member['protocol_port']),
+                                    folder=service['pool']['tenant_id'])
+                    # Do we have weights for ratios?
+                    if member['weight'] > 0:
+                        bigip.pool.set_member_ratio(
+                                    name=service['pool']['id'],
+                                    ip_address=ip_address,
+                                    port=int(member['protocol_port']),
+                                    ratio=int(member['weight']),
                                     folder=service['pool']['tenant_id']
-                                   ):
-                        # created update driver traffic group mapping
-                        tg = bigip.virtual_server.get_traffic_group(
-                                        name=service['vip']['ip'],
-                                        folder=service['pool']['tenant_id'])
-                        self.__vips_to_traffic_group[service['vip']['ip']] = tg
-                        self.plugin_rpc.update_vip_status(
-                                            service['vip']['id'],
-                                            status=plugin_const.ACTIVE,
-                                            status_description='vip created'
-                                           )
-                    if service['vip']['status'] == \
-                            plugin_const.PENDING_CREATE or \
-                       service['vip']['status'] == \
-                            plugin_const.PENDING_UPDATE:
+                                   )
+                        using_ratio = True
 
-                        bigip.virtual_server.set_description(
-                                        name=service['vip']['id'],
-                                        description=service['vip']['name'] + \
-                                        ':' + service['vip']['description'])
-                        bigip.virtual_server.set_pool(
-                                        name=service['vip']['id'],
-                                        pool_name=service['pool']['id'],
-                                        folder=service['pool']['tenant_id'])
-                        if service['vip']['admin_state_up']:
-                            bigip.virtual_server.enable_virtual_server(
-                                        name=service['vip']['id'],
-                                        folder=service['pool']['tenant_id'])
-                        else:
-                            bigip.virtual_server.disable_virtual_server(
-                                        name=service['vip']['id'],
-                                        folder=service['pool']['tenant_id'])
+                    self.plugin_rpc.update_member_status(
+                                    member['id'],
+                                    status=plugin_const.ACTIVE,
+                                    status_description='member updated'
+                                   )
+                assured_subnets.append(member['subnet']['id'])
 
-                        #TODO: fix session peristence
-                        if 'session_persistence' in service:
-                            persistence_type = \
-                                   service['vip']['session_persistence']['type']
-                            if persistence_type == 'HTTP_COOKIE':
-                                pass
-                            elif persistence_type == 'APP_COOKIE':
-                                pass
-                            elif persistence_type == 'SOURCE_IP':
-                                pass
+            # Remove them from the one's BigIP needs to
+            # handle.. leaving on those that are needed to
+            # delete from the BigIP
+            for existing_member in existing_members:
+                if member['address'] == existing_member['addr'] and \
+                   member['protocol_port'] == existing_member['port']:
+                    existing_members.remove(existing_member)
+                    LOG.debug(_("Pool: %s assured member: %s:%d"
+                    % (service['pool']['id'],
+                       member['address'],
+                       member['protocol_port'])))
 
-                        #TODO: fix vitual service protocol
-                        if 'protocol' in service['vip']:
-                            protocol = service['vip']['protocol']
-                            if protocol == 'HTTP':
-                                pass
-                            if protocol == 'HTTPS':
-                                pass
-                            if protocol == 'TCP':
-                                pass
+        # remove any members which are not long in the service
+        LOG.debug(_("Pool: %s removing members %s"
+                    % (service['pool']['id'], existing_members)))
+        for need_to_delete in existing_members:
+            bigip.pool.remove_member(
+                                 name=service['pool']['id'],
+                                 ip_address=need_to_delete['addr'],
+                                 port=int(need_to_delete['port']),
+                                 folder=service['pool']['tenant_id']
+                                )
+        # if members are using weights, change the LB to RATIO
+        if using_ratio:
+            LOG.debug(_("Pool: %s changing to ratio based lb"
+                    % service['pool']['id']))
+            bigip.pool.set_lb_method(
+                                name=service['pool']['id'],
+                                lb_method='RATIO',
+                                folder=service['pool']['tenant_id'])
 
-                        if service['vip']['connection_limit'] > 0:
-                            bigip.virtual_server.set_connection_limit(
-                                    name=service['vip']['id'],
-                                    connection_limit=int(
-                                            service['vip']['connection_limit']),
-                                    folder=service['pool']['tenant_id'])
-                        else:
-                            bigip.virtual_server.set_connection_limit(
-                                    name=service['vip']['id'],
-                                    connection_limit=0,
-                                    folder=service['pool']['tenant_id'])
+            self.plugin_rpc.update_pool_status(
+                            service['pool']['id'],
+                            status=plugin_const.ACTIVE,
+                            status_description='pool now using ratio lb'
+                           )
 
-                        self.plugin_rpc.update_vip_status(
-                                                service['vip']['id'],
-                                                status=plugin_const.ACTIVE,
-                                                status_description='vip updated'
-                                               )
-                    assured_subnets.append(service['vip']['subnet']['id'])
-
-            # Clean up an Self IP, SNATs, networks, and folder for
-            # services items that we deleted.
-            if delete_vip_service_networks:
-                # Don't delete network objects if you just created
-                # or updated objects on those networks
-                if not service['vip']['subnet']['id'] in assured_subnets:
-                    delete_vip_objects = True
-                    subnet = netaddr.IPNetwork(
-                                              service['vip']['subnet']['cidr'])
-                    # Are there any virtual addresses on this subnet
-                    virtual_services = \
-                            bigip.virtual_server.get_virtual_service_insertion(
-                                            folder=service['vip']['tenant_id'])
-                    for vs in virtual_services:
-                        (vs_name, dest) = vs.items()[0]
-                        if netaddr.IPAddress(dest['address']) in subnet:
-                            delete_vip_objects = False
-                            break
-                    if delete_vip_objects:
-                        # If there aren't any virtual addresses, are there
-                        # node addresses on this subnet
-                        nodes = bigip.pool.get_node_addresses(
+        if 'id' in service['vip']:
+            #
+            # Provision Virtual Service - Create/Update
+            #
+            vlan_name = self._get_vlan_name(service['vip']['network'])
+            ip_address = service['vip']['address']
+            if service['vip']['network']['shared']:
+                vlan_name = '/Common/' + vlan_name
+                ip_address = ip_address + "%0"
+            if service['vip']['status'] == plugin_const.PENDING_DELETE:
+                LOG.debug(_('Vip: deleting VIP %s' % service['vip']['id']))
+                bigip.virtual_server.delete(name=service['vip']['id'],
                                         folder=service['vip']['tenant_id'])
-                        for node in nodes:
-                            if netaddr.IPAddress(node) in subnet:
-                                delete_vip_objects = False
-                                break
-                    if delete_vip_objects:
-                        # Since no virtual addresses or nodes found
-                        # go ahead and try to delete the Self IP
-                        # and SNATs
-                        self._delete_local_selfip_snat(service['vip'],
-                                                                   service)
-                        # Flag this network so we won't try to go through
-                        # this same process if a deleted member is on
-                        # this same subnet.
-                        deleted_subnets.append(service['vip']['subnet']['id'])
-                        try:
-                            self._delete_network(service['vip']['network'])
-                            bigip.route.delete_domain(
-                                        folder=service['vip']['tenant_id'])
-                        except:
+                if service['vip']['id'] in self.__vips_to_traffic_group:
+                    tg = self.__vips_to_traffic_group[service['vip']['id']]
+                    self.__vips_on_traffic_groups[tg] = \
+                                  self.__vips_on_traffic_groups[tg] - 1
+                    del(self.__vips_to_traffic_groups[
+                                                     service['vip']['id']])
+                delete_vip_service_networks = True
+                try:
+                    self.plugin_rpc.vip_destroyed(service['vip']['id'])
+                except Exception as e:
+                    LOG.error(_("Plugin delete vip %s error: %s"
+                                % (service['vip']['id'], e.message)
+                                ))
+            else:
+                tg = self._get_least_vips_traffic_group()
+                if bigip.virtual_server.create(
+                                name=service['vip']['id'],
+                                ip_address=ip_address,
+                                mask='255.255.255.255',
+                                port=int(service['vip']['protocol_port']),
+                                protocol=service['vip']['protocol'],
+                                vlan_name=vlan_name,
+                                traffic_group=tg,
+                                folder=service['pool']['tenant_id']
+                               ):
+                    # created update driver traffic group mapping
+                    tg = bigip.virtual_server.get_traffic_group(
+                                    name=service['vip']['ip'],
+                                    folder=service['pool']['tenant_id'])
+                    self.__vips_to_traffic_group[service['vip']['ip']] = tg
+                    self.plugin_rpc.update_vip_status(
+                                        service['vip']['id'],
+                                        status=plugin_const.ACTIVE,
+                                        status_description='vip created'
+                                       )
+                if service['vip']['status'] == \
+                        plugin_const.PENDING_CREATE or \
+                   service['vip']['status'] == \
+                        plugin_const.PENDING_UPDATE:
+
+                    bigip.virtual_server.set_description(
+                                    name=service['vip']['id'],
+                                    description=service['vip']['name'] + \
+                                    ':' + service['vip']['description'])
+                    bigip.virtual_server.set_pool(
+                                    name=service['vip']['id'],
+                                    pool_name=service['pool']['id'],
+                                    folder=service['pool']['tenant_id'])
+                    if service['vip']['admin_state_up']:
+                        bigip.virtual_server.enable_virtual_server(
+                                    name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+                    else:
+                        bigip.virtual_server.disable_virtual_server(
+                                    name=service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+
+                    #TODO: fix session peristence
+                    if 'session_persistence' in service:
+                        persistence_type = \
+                               service['vip']['session_persistence']['type']
+                        if persistence_type == 'HTTP_COOKIE':
+                            pass
+                        elif persistence_type == 'APP_COOKIE':
+                            pass
+                        elif persistence_type == 'SOURCE_IP':
                             pass
 
-            if delete_member_service_networks:
-                for member in service['members']:
-                    # Only need to bother if the member is deleted
-                    if member['status'] == plugin_const.PENDING_DELETE:
-                        # Only attempt to delete network object on networks
-                        # that did not have object created or updated, and
-                        # that have not already had their network objects
-                        # deleted by the VIP delete process.
-                        if not member['subnet']['id'] in assured_subnets and \
-                           not member['subnet']['id'] in deleted_subnets:
-                            delete_member_objects = True
-                            subnet = netaddr.IPNetwork(\
-                                                  member['subnet']['cidr'])
-                            # Are there any virtual addresses on this subnet
-                            virtual_services = \
+                    #TODO: fix vitual service protocol
+                    if 'protocol' in service['vip']:
+                        protocol = service['vip']['protocol']
+                        if protocol == 'HTTP':
+                            pass
+                        if protocol == 'HTTPS':
+                            pass
+                        if protocol == 'TCP':
+                            pass
+
+                    if service['vip']['connection_limit'] > 0:
+                        bigip.virtual_server.set_connection_limit(
+                                name=service['vip']['id'],
+                                connection_limit=int(
+                                        service['vip']['connection_limit']),
+                                folder=service['pool']['tenant_id'])
+                    else:
+                        bigip.virtual_server.set_connection_limit(
+                                name=service['vip']['id'],
+                                connection_limit=0,
+                                folder=service['pool']['tenant_id'])
+
+                    self.plugin_rpc.update_vip_status(
+                                            service['vip']['id'],
+                                            status=plugin_const.ACTIVE,
+                                            status_description='vip updated'
+                                           )
+                assured_subnets.append(service['vip']['subnet']['id'])
+
+        # Remove the pool if it is pending delete
+        if service['pool']['status'] == plugin_const.PENDING_DELETE:
+            LOG.debug(_('Deleting Pool %s' % service['pool']['id']))
+            bigip.pool.delete(name=service['pool']['id'],
+                              folder=service['pool']['tenant_id'])
+            try:
+                self.plugin_rpc.pool_destroyed(service['pool']['id'])
+            except Exception as e:
+                    LOG.error(_("Plugin delete pool %s error: %s"
+                                % (service['pool']['id'], e.message)
+                                ))
+
+        # Clean up an Self IP, SNATs, networks, and folder for
+        # services items that we deleted.
+        if delete_vip_service_networks:
+            # Don't delete network objects if you just created
+            # or updated objects on those networks
+            if not service['vip']['subnet']['id'] in assured_subnets:
+                delete_vip_objects = True
+                subnet = netaddr.IPNetwork(
+                                          service['vip']['subnet']['cidr'])
+                # Are there any virtual addresses on this subnet
+                virtual_services = \
                         bigip.virtual_server.get_virtual_service_insertion(
+                                        folder=service['vip']['tenant_id'])
+                for vs in virtual_services:
+                    (vs_name, dest) = vs.items()[0]
+                    if netaddr.IPAddress(dest['address']) in subnet:
+                        delete_vip_objects = False
+                        break
+                if delete_vip_objects:
+                    # If there aren't any virtual addresses, are there
+                    # node addresses on this subnet
+                    nodes = bigip.pool.get_node_addresses(
+                                    folder=service['vip']['tenant_id'])
+                    for node in nodes:
+                        if netaddr.IPAddress(node) in subnet:
+                            delete_vip_objects = False
+                            break
+                if delete_vip_objects:
+                    # Since no virtual addresses or nodes found
+                    # go ahead and try to delete the Self IP
+                    # and SNATs
+                    self._delete_local_selfip_snat(service['vip'],
+                                                               service)
+                    # Flag this network so we won't try to go through
+                    # this same process if a deleted member is on
+                    # this same subnet.
+                    deleted_subnets.append(service['vip']['subnet']['id'])
+                    try:
+                        self._delete_network(service['vip']['network'])
+                        bigip.route.delete_domain(
+                                    folder=service['vip']['tenant_id'])
+                    except:
+                        pass
+
+        if delete_member_service_networks:
+            for member in service['members']:
+                # Only need to bother if the member is deleted
+                if member['status'] == plugin_const.PENDING_DELETE:
+                    # Only attempt to delete network object on networks
+                    # that did not have object created or updated, and
+                    # that have not already had their network objects
+                    # deleted by the VIP delete process.
+                    if not member['subnet']['id'] in assured_subnets and \
+                       not member['subnet']['id'] in deleted_subnets:
+                        delete_member_objects = True
+                        subnet = netaddr.IPNetwork(\
+                                              member['subnet']['cidr'])
+                        # Are there any virtual addresses on this subnet
+                        virtual_services = \
+                    bigip.virtual_server.get_virtual_service_insertion(
+                                        folder=member['tenant_id'])
+                        for vs in virtual_services:
+                            (vs_name, dest) = vs.items()[0]
+                            if netaddr.IPAddress(dest['address']) in subnet:
+                                delete_member_objects = False
+                                break
+                        if delete_member_objects:
+                            # If there aren't any virtual addresses, are
+                            # there node addresses on this subnet
+                            nodes = bigip.pool.get_node_addresses(
                                             folder=member['tenant_id'])
-                            for vs in virtual_services:
-                                (vs_name, dest) = vs.items()[0]
-                                if netaddr.IPAddress(dest['address']) in subnet:
+                            for node in nodes:
+                                if netaddr.IPAddress(node) in subnet:
                                     delete_member_objects = False
                                     break
-                            if delete_member_objects:
-                                # If there aren't any virtual addresses, are
-                                # there node addresses on this subnet
-                                nodes = bigip.pool.get_node_addresses(
-                                                folder=member['tenant_id'])
-                                for node in nodes:
-                                    if netaddr.IPAddress(node) in subnet:
-                                        delete_member_objects = False
-                                        break
-                            if delete_member_objects:
-                                # Since no virtual addresses or nodes found
-                                # go ahead and try to delete the Self IP
-                                # and SNATs
-                                if not self.conf.f5_snat_mode:
-                                    self._delete_floating_default_gateway(
-                                                                  member,
-                                                                  service)
-                                self._delete_local_selfip_snat(member, service)
-                                try:
-                                    self._delete_network(member['network'])
-                                    bigip.route.delete_domain(
-                                                folder=member['tenant_id'])
-                                except:
-                                    pass
-                                # Flag this network so we won't try to go
-                                # through this same process if a deleted
-                                # another member is delete on this subnet
-                                deleted_subnets.append(member['subnet']['id'])
-        finally:
-            self._release_lock(service)
+                        if delete_member_objects:
+                            # Since no virtual addresses or nodes found
+                            # go ahead and try to delete the Self IP
+                            # and SNATs
+                            if not self.conf.f5_snat_mode:
+                                self._delete_floating_default_gateway(
+                                                              member,
+                                                              service)
+                            self._delete_local_selfip_snat(member, service)
+                            try:
+                                self._delete_network(member['network'])
+                                bigip.route.delete_domain(
+                                            folder=member['tenant_id'])
+                            except:
+                                pass
+                            # Flag this network so we won't try to go
+                            # through this same process if a deleted
+                            # another member is delete on this subnet
+                            deleted_subnets.append(member['subnet']['id'])
+
 
     def _assure_service_networks(self, service):
-        self._lock(service)
-        try:
-            assured_networks = []
-            assured_subnet_local_and_snats = []
-            assured_floating_default_gateway = []
 
-            if 'id' in service['vip']:
-                if not service['vip']['status'] == plugin_const.PENDING_DELETE:
-                    self._assure_network(service['vip']['network'])
-                    assured_networks.append(service['vip']['network']['id'])
-                    # does the pool network need a self-ip or snat addresses?
-                    assured_networks.append(service['vip']['network']['id'])
-                    if 'id' in service['vip']['network']:
-                        if not service['vip']['network']['id'] in assured_networks:
-                            self._assure_network(
-                                            service['vip']['network'])
-                            assured_networks.append(
-                                            service['vip']['network']['id'])
-                        self._assure_local_selfip_snat(
-                                            service['vip'], service)
-                        assured_subnet_local_and_snats.append(
-                                            service['vip']['subnet']['id'])
+        assured_networks = []
+        assured_subnet_local_and_snats = []
+        assured_floating_default_gateway = []
 
-            for member in service['members']:
-                if not member['status'] == plugin_const.PENDING_DELETE:
-                    network_id = member['network']['id']
-                    subnet_id = member['subnet']['id']
-                    if not network_id in assured_networks:
-                        self._assure_network(member['network'])
-                    if not subnet_id in assured_subnet_local_and_snats:
-                        # each member gets a local self IP on each device
-                        self._assure_local_selfip_snat(member, service)
-                    # if we are not using SNATS, attempt to become
-                    # the subnet's default gateway.
-                    if not self.conf.f5_snat_mode and \
-                        subnet_id not in assured_floating_default_gateway:
-                        self._assure_floating_default_gateway(member, service)
-                        assured_floating_default_gateway.append(subnet_id)
-        finally:
-            self._release_lock(service)
+        if 'id' in service['vip']:
+            if not service['vip']['status'] == plugin_const.PENDING_DELETE:
+                self._assure_network(service['vip']['network'])
+                assured_networks.append(service['vip']['network']['id'])
+                # does the pool network need a self-ip or snat addresses?
+                assured_networks.append(service['vip']['network']['id'])
+                if 'id' in service['vip']['network']:
+                    if not service['vip']['network']['id'] in assured_networks:
+                        self._assure_network(
+                                        service['vip']['network'])
+                        assured_networks.append(
+                                        service['vip']['network']['id'])
+                    self._assure_local_selfip_snat(
+                                        service['vip'], service)
+                    assured_subnet_local_and_snats.append(
+                                        service['vip']['subnet']['id'])
+
+        for member in service['members']:
+            if not member['status'] == plugin_const.PENDING_DELETE:
+                network_id = member['network']['id']
+                subnet_id = member['subnet']['id']
+                if not network_id in assured_networks:
+                    self._assure_network(member['network'])
+                if not subnet_id in assured_subnet_local_and_snats:
+                    # each member gets a local self IP on each device
+                    self._assure_local_selfip_snat(member, service)
+                # if we are not using SNATS, attempt to become
+                # the subnet's default gateway.
+                if not self.conf.f5_snat_mode and \
+                    subnet_id not in assured_floating_default_gateway:
+                    self._assure_floating_default_gateway(member, service)
+                    assured_floating_default_gateway.append(subnet_id)
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
