@@ -75,7 +75,11 @@ class Monitor(object):
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            self.lb_monitor.delete_template([name])
+            try:
+                self.lb_monitor.delete_template([name])
+            except WebFault as wf:
+                if "is in use" in str(wf.message):
+                    return False
             return True
         else:
             return False

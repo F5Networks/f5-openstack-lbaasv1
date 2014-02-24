@@ -40,7 +40,8 @@ __VERSION__ = '0.1.1'
 ACTIVE_PENDING = (
     constants.ACTIVE,
     constants.PENDING_CREATE,
-    constants.PENDING_UPDATE
+    constants.PENDING_UPDATE,
+    constants.ERROR
 )
 
 OPTS = [
@@ -72,38 +73,30 @@ class LoadBalancerCallbacks(object):
             [self, agents_db.AgentExtRpcCallback(self.plugin)])
 
     @log.log
-    def get_active_pending_pool_ids(self, context, tenant_ids=None):
+    def get_active_pending_pool_ids(self, context, host=None):
         with context.session.begin(subtransactions=True):
             qry = (context.session.query(ldb.Pool.id))
             qry = qry.filter(ldb.Pool.status.in_(ACTIVE_PENDING))
             up = True
+
             qry = qry.filter(ldb.Pool.admin_state_up == up)
+
             agents = self.plugin.get_lbaas_agents(context)
             if not agents:
                 return []
-            pool_ids = []
-            for agent in agents:
-                pools = self.plugin.list_pools_on_lbaas_agent(context,
-                                                          agent.id)
-                LOG.debug('looking through %s for tenant_ids %s'
-                          % (pools, tenant_ids))
-
-                for pool in pools['pools']:
-                    if tenant_ids:
-                        if not isinstance(tenant_ids, list):
-                            tenant_ids = [tenant_ids]
-                        if pool['tenant_id'] in tenant_ids:
-                            pool_ids.append(pool['id'])
-                    else:
-                        if pool['id']:
-                            pool_ids.append(pool['id'])
-                        return pool_ids
-
-            if len(pool_ids) > 0:
-                qry = qry.filter(ldb.Pool.id.in_(pool_ids))
-                return [pool_id for pool_id, in qry]
-            else:
+            agents = self.plugin.get_lbaas_agents(context,
+                                                  filters={'host': [host]})
+            LOG.debug(_('Looking for pools assigned to agent.host: %s' % host))
+            if not agents:
                 return []
+            elif len(agents) > 1:
+                LOG.warning(_('Multiple lbaas agents found on host %s'), host)
+
+            pools = self.plugin.list_pools_on_lbaas_agent(context,
+                                                          agents[0].id)
+            pool_ids = [pool['id'] for pool in pools['pools']]
+            qry = qry.filter(ldb.Pool.id.in_(pool_ids))
+            return [id for id, in qry]
 
     @log.log
     def get_service_by_pool_id(self, context, pool_id=None,
@@ -134,8 +127,7 @@ class LoadBalancerCallbacks(object):
             retval['pool']['subnet'] = subnet_dict
             pool_subnet_fixed_ip_filters = {'network_id':
                                             [subnet_dict['network_id']],
-                             'tenant_id': [subnet_dict['tenant_id']],
-                             'device_id': [host]}
+                                            'device_id': [host]}
             retval['pool']['subnet_ports'] = \
                                self.plugin._core_plugin.get_ports(context,
                                       filters=pool_subnet_fixed_ip_filters)
@@ -158,7 +150,6 @@ class LoadBalancerCallbacks(object):
                     retval['vip']['address'] = fixed_ip['ip_address']
                 vip_subnet_fixed_ip_filters = {'network_id':
                         [retval['vip']['subnet']['network_id']],
-                        'tenant_id': [retval['vip']['subnet']['tenant_id']],
                         'device_id': [host]}
                 retval['vip']['subnet_ports'] = \
                              self.plugin._core_plugin.get_ports(context,
@@ -183,7 +174,6 @@ class LoadBalancerCallbacks(object):
                                              context, allocated['network_id'])
                 member_subnet_fixed_ip_filters = {'network_id':
                                             [member['subnet']['network_id']],
-                             'tenant_id': [member['subnet']['tenant_id']],
                              'device_id': [host]}
                 member['subnet_ports'] = self.plugin._core_plugin.get_ports(
                                                                    context,
@@ -312,11 +302,26 @@ class LoadBalancerCallbacks(object):
             return port
 
     @log.log
+    def get_port_by_name(self, context, port_name=None):
+        if port_name:
+            filters = {'name': [port_name]}
+            return self.plugin._core_plugin.get_ports(context,
+                                                        filters=filters)
+    @log.log
     def delete_port(self, context, port_id=None, mac_address=None):
         if port_id:
             self.plugin._core_plugin.delete_port(context, port_id)
         elif mac_address:
             filters = {'mac_address': [mac_address]}
+            ports = self.plugin._core_plugin.get_ports(context,
+                                                        filters=filters)
+            for port in ports:
+                self.plugin._core_plugin.delete_port(context, port['id'])
+
+    @log.log
+    def delete_port_by_name(self, context, port_name=None):
+        if port_name:
+            filters = {'name': [port_name]}
             ports = self.plugin._core_plugin.get_ports(context,
                                                         filters=filters)
             for port in ports:
@@ -434,6 +439,9 @@ class LoadBalancerCallbacks(object):
                            status=constants.ERROR, status_description=None,
                            host=None):
         """Agent confirmation hook to update VIP status."""
+        vip = self.plugin.get_vip(context, vip_id)
+        if vip['status'] == constants.PENDING_DELETE:
+            status = constants.PENDING_DELETE
         self.plugin.update_status(context,
                                   ldb.Vip,
                                   vip_id,
@@ -468,6 +476,9 @@ class LoadBalancerCallbacks(object):
                            status=constants.ERROR, status_description=None,
                            host=None):
         """Agent confirmation hook to update member status."""
+        member = self.plugin.get_member(context, member_id)
+        if member['status'] == constants.PENDING_DELETE:
+            status = constants.PENDING_DELETE
         self.plugin.update_status(context,
                                   ldb.Member,
                                   member_id,

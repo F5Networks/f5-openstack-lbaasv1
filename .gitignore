@@ -8,6 +8,7 @@
 
 ### added with RM's Makefile
 **/deb_dist/**
+./localutils
 
 ### auto-added by Github
 

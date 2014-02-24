@@ -108,10 +108,16 @@ class SNAT(object):
         self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
             string_seq.values = member_name
             string_seq_seq.values = [string_seq]
-            self.lb_snatpool.remove_member_v2([name], string_seq_seq)
-            existing_members.remove(member_name)
-            if len(existing_members) == 0:
-                self.lb_snatpool.delete_snat_pool([name])
+            try:
+                self.lb_snatpool.remove_member_v2([name], string_seq_seq)
+            except WebFault as wf:
+                if "must reference at least one translation address" \
+                                                           in str(wf.message):
+                    LOG.error(_(
+                    'removing SNATPool because last member is being removed'))
+                    self.lb_snatpool.delete_snat_pool([name])
+            return True
+        return False
 
     @icontrol_folder
     def pool_exists(self, name=None, folder='Common'):

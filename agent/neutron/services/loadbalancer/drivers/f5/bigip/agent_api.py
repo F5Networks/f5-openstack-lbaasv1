@@ -31,20 +31,13 @@ class LbaasAgentApi(proxy.RpcProxy):
         self.host = host
 
     @log.log
-    def get_active_pending_pool_ids(self, tenant_ids=None):
-        if tenant_ids:
-            return self.call(
-                self.context,
-                self.make_msg('get_active_pending_pool_ids',
-                              tenant_ids=tenant_ids),
-                topic=self.topic
-            )
-        else:
-            return self.call(
-                self.context,
-                self.make_msg('get_active_pending_pool_ids'),
-                topic=self.topic
-            )
+    def get_active_pending_pool_ids(self):
+        return self.call(
+               self.context,
+               self.make_msg('get_active_pending_pool_ids',
+                             host=self.host),
+               topic=self.topic
+        )
 
     @log.log
     def get_service_by_pool_id(self, pool_id):
@@ -93,6 +86,17 @@ class LbaasAgentApi(proxy.RpcProxy):
                 )
 
     @log.log
+    def get_port_by_name(self, port_name=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'get_port_by_name',
+                                       port_name=port_name
+                                      ),
+                         topic=self.topic
+                )
+
+    @log.log
     def delete_port(self, port_id=None, mac_address=None):
         return self.call(
                          self.context,
@@ -103,6 +107,17 @@ class LbaasAgentApi(proxy.RpcProxy):
                                       ),
                          topic=self.topic
                 )
+
+    @log.log
+    def delete_port_by_name(self, port_name=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                        'delete_port_by_name',
+                                        port_name=port_name
+                                       ),
+                         topic=self.topic
+                        )
 
     @log.log
     def allocate_fixed_address_on_subnet(self, subnet_id=None,
