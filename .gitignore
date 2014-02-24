@@ -8,7 +8,8 @@
 
 ### added with RM's Makefile
 **/deb_dist/**
-./localutils
+localutils/**
+agent/f5/bigip/pycontrol/wsdl/**
 
 ### auto-added by Github
 
