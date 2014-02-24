@@ -236,15 +236,13 @@ class iControlDriver(object):
         # Provision Pool - Create/Update
         #
         if service['pool']['status'] == plugin_const.PENDING_DELETE:
-            self._delete_service(service)
-            self._delete_service_networks(service)
-            try:
-                self.plugin_rpc.pool_destroyed(service['pool']['id'])
-            except Exception as e:
-                    LOG.error(_("Plugin delete pool %s error: %s"
-                                % (service['pool']['id'], e.message)
-                                ))
-            return
+            # Everything needs to be go with the pool, so overwrite
+            # service state to appropriately remove all elements
+            service['vip']['status'] = plugin_const.PENDING_DELETE
+            for member in service['members']:
+                member['status'] = plugin_const.PENDING_DELETE
+            for monitor in service['pool']['health_monitors_status']:
+                monitor['status'] = plugin_const.PENDING_DELETE
         else:
             if not bigip.pool.create(name=service['pool']['id'],
                               lb_method=service['pool']['lb_method'],
@@ -567,6 +565,18 @@ class iControlDriver(object):
                                            )
                 assured_subnets.append(service['vip']['subnet']['id'])
 
+        # Remove the pool if it is pending delete
+        if service['pool']['status'] == plugin_const.PENDING_DELETE:
+            LOG.debug(_('Deleting Pool %s' % service['pool']['id']))
+            bigip.pool.delete(name=service['pool']['id'],
+                              folder=service['pool']['tenant_id'])
+            try:
+                self.plugin_rpc.pool_destroyed(service['pool']['id'])
+            except Exception as e:
+                    LOG.error(_("Plugin delete pool %s error: %s"
+                                % (service['pool']['id'], e.message)
+                                ))
+
         # Clean up an Self IP, SNATs, networks, and folder for
         # services items that we deleted.
         if delete_vip_service_networks:
@@ -661,6 +671,7 @@ class iControlDriver(object):
                             # through this same process if a deleted
                             # another member is delete on this subnet
                             deleted_subnets.append(member['subnet']['id'])
+
 
     def _assure_service_networks(self, service):
 
