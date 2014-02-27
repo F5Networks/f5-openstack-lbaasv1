@@ -311,12 +311,62 @@ class iControlDriver(object):
                                      folder=monitor['tenant_id'])
                 # make sure monitor attributes are correct
                 bigip.monitor.set_interval(name=monitor['id'],
-                                     interval=monitor['delay'])
+                                     interval=monitor['delay'],
+                                     folder=monitor['tenant_id'])
                 bigip.monitor.set_timeout(name=monitor['id'],
-                                              timeout=timeout)
+                                          timeout=timeout,
+                                          folder=monitor['tenant_id'])
+
+                if monitor['type'] == 'HTTP' or monitor['type'] == 'HTTPS':
+                    if 'url_path' in monitor:
+                        send_text = "GET " + monitor['url_path'] + "\\r\\n"
+                    else:
+                        send_text = "GET /\\r\\n"
+                    if 'expected_codes' in monitor:
+                        try:
+                            if monitor['expected_codes'].find(",") > 0:
+                                status_codes = \
+                                    monitor['expected_codes'].split(',')
+                                recv_text = "^HTTP\/1\.[10]\s["
+                                for status in status_codes:
+                                    int(status)
+                                    recv_text += "status|"
+                                recv_text = recv_text[:-1]
+                                recv_text += "]"
+                            elif monitor['expected_codes'].find("-") > 0:
+                                status_range = \
+                                    monitor['expected_codes'].split('-')
+                                start_range = status_range[0]
+                                int(start_range)
+                                stop_range = status_range[1]
+                                int(stop_range)
+                                recv_text = \
+                                    "^HTTP\/1\.[10]\s[" + \
+                                    start_range + "-" + \
+                                    stop_range + "]"
+                            else:
+                                int(monitor['expected_codes'])
+                                recv_text = "^HTTP.1.1\s" + \
+                                            monitor['expected_codes']
+                        except:
+                            LOG.error(_(
+                            "invalid monitor expected_codes %s, setting to 200"
+                            % monitor['expected_codes']))
+                            recv_text = "^HTTP.1.1\s200"
+                    else:
+                        recv_text = "^HTTP.1.1\s200"
+
+                    bigip.monitor.set_send_string(name=monitor['id'],
+                                                  send_text=send_text,
+                                                  folder=monitor['tenant_id'])
+                    bigip.monitor.set_recv_string(name=monitor['id'],
+                                                  recv_text=recv_text,
+                                                  folder=monitor['tenant_id'])
+
                 bigip.pool.add_monitor(name=service['pool']['id'],
-                                    monitor_name=monitor['id'],
-                                    folder=service['pool']['tenant_id'])
+                                       monitor_name=monitor['id'],
+                                       folder=service['pool']['tenant_id'])
+
                 self.plugin_rpc.update_health_monitor_status(
                                     pool_id=service['pool']['id'],
                                     health_monitor_id=monitor['id'],
@@ -525,16 +575,53 @@ class iControlDriver(object):
                                     name=service['vip']['id'],
                                     folder=service['pool']['tenant_id'])
 
-                    #TODO: fix session peristence
-                    if 'session_persistence' in service:
+                    if 'session_persistence' in service['vip']:
                         persistence_type = \
                                service['vip']['session_persistence']['type']
                         if persistence_type == 'HTTP_COOKIE':
-                            pass
+                            # add cookie persistence profile
+                            bigip.virtual_server.set_persistence_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/cookie',
+                                folder=service['pool']['tenant_id'])
                         elif persistence_type == 'APP_COOKIE':
-                            pass
-                        elif persistence_type == 'SOURCE_IP':
-                            pass
+                            # create and add iRule
+                            if 'cookie_name' in \
+                          service['vip']['session_persistence']['cookie_name']:
+                                cookie_name = \
+                          service['vip']['session_persistence']['cookie_name']
+                                rule_definition = \
+                          self._create_app_cookie_persist_rule(cookie_name)
+                                if bigip.rule.create(
+                                        name='cookie_uie_' +
+                                             service['vip']['id'],
+                                        rule_definition=rule_definition,
+                                        folder=service['pool']['tenant_id']):
+                                    # create universal persistence profile
+                                    bigip.virtual_server.create_uie_profile(
+                                        name='uie_persist_' + \
+                                              service['vip']['id'],
+                                        rule_name='cookie_uie_' + \
+                                                  service['vip']['id'],
+                                        folder=service['pool']['tenant_id'])
+                                    # set persistence profile
+                                    bigip.virtual_server.set_persist_profile(
+                                       name=service['vip']['id'],
+                                       profile_name='/Common/cookie',
+                                       folder=service['pool']['tenant_id'])
+                            else:
+                                bigip.virtual_server.set_persist_profile(
+                                    name=service['vip']['id'],
+                                    profile_name='uie_persist_' + \
+                                                 service['vip']['id'],
+                                    folder=service['pool']['tenant_id'])
+                        elif persistence_type == 'SOURCE_IP' or \
+                             service['pool']['lb_method'] == 'SOURCE_IP':
+                            # add source_addr persistence profile
+                            bigip.virtual_server.set_persist_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/source_addr',
+                                folder=service['pool']['tenant_id'])
 
                     #TODO: fix vitual service protocol
                     if 'protocol' in service['vip']:
@@ -1255,6 +1342,21 @@ class iControlDriver(object):
             vlanid = 0
 
         return "vlan-" + str(interface).replace(".", "-") + "-" + str(vlanid)
+
+    def _create_app_cookie_persist_rule(self, cookiename):
+        rule_text = "when HTTP_REQUEST {\n"
+        rule_text += " if { [HTTP::cookie " + cookiename + "] ne \"\" }{\n"
+        rule_text += "     persist uie [string tolower [HTTP::cookie \""
+        rule_text += cookiename + "\"]] 3600\n"
+        rule_text += " }\n"
+        rule_text += "}\n\n"
+        rule_text += "when HTTP_RESPONSE {\n"
+        rule_text += " if { [HTTP::cookie \"" + cookiename + "\"] ne \"\" }{\n"
+        rule_text += "     persist add uie [string tolower [HTTP::cookie \""
+        rule_text += cookiename + "\"]] 3600\n"
+        rule_text += " }\n"
+        rule_text += "}\n\n"
+        return rule_text
 
     def _init_connection(self):
         try:

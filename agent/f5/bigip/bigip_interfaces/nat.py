@@ -1,11 +1,16 @@
-import os
 from f5.common import constants as const
-
+from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
-# Networking - Self-IP
-from neutron.common import log
+from suds import WebFault
+import os
+import netaddr
+
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class NAT(object):
@@ -20,7 +25,6 @@ class NAT(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def create(self, name=None, ip_address=None, orig_ip_address=None,
                traffic_group=None, vlan_name=None, folder='Common'):
         if not self.exists(name=name, folder=folder):
@@ -31,13 +35,21 @@ class NAT(object):
             VLAN_filter_list.state = self.lb_nat.typefactory.create(
                                            'Common.EnabledState').STATE_ENABLED
             VLAN_filter_list.vlans = [vlan_name]
-            self.lb_nat.create([name],
+            try:
+                self.lb_nat.create([name],
                                [orig_ip_address],
                                [ip_address],
                                [vlan_name],
                                [traffic_group],
                                [VLAN_filter_list])
-            return True
+                return True
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a NAT when exists'))
+                    return False
+                else:
+                    raise wf
         else:
             return False
 

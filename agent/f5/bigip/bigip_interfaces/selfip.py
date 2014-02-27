@@ -1,11 +1,16 @@
-import os
 from f5.common import constants as const
-
+from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
-# Networking - Self-IP
-from neutron.common import log
+from suds import WebFault
+import os
+import netaddr
+
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class SelfIP(object):
@@ -20,7 +25,6 @@ class SelfIP(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def create(self, name=None, ip_address=None, netmask=None,
                vlan_name=None, floating=False, traffic_group=None,
                folder='Common'):
@@ -33,13 +37,21 @@ class SelfIP(object):
                 if floating:
                     traffic_group = \
                        const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-            self.net_self.create([name],
+            try:
+                self.net_self.create([name],
                                  [vlan_name],
                                  [ip_address],
                                  [netmask],
                                  [traffic_group],
                                  [enabled_state])
-            return True
+                return True
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a SelfIP when exists'))
+                    return False
+                else:
+                    raise wf
         else:
             return False
 

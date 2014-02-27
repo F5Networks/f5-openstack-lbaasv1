@@ -1,10 +1,12 @@
 from f5.common import constants as const
+from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
-# Networking - Self-IP
-from neutron.common import log
 from suds import WebFault
+import os
+import netaddr
 
 import logging
 
@@ -28,7 +30,6 @@ class SNAT(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def create(self, name=None, ip_address=None,
                traffic_group=None, snat_pool_name=None,
                folder='Common'):
@@ -45,7 +46,9 @@ class SNAT(object):
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
                     LOG.error(_(
-                        'tried to create a SNAT when exists again..fix me!'))
+                        'tried to create a SNAT when exists'))
+                else:
+                    raise wf
 
         if self.pool_exists(name=snat_pool_name, folder=folder):
             self.add_to_pool(name=snat_pool_name,
@@ -57,11 +60,13 @@ class SNAT(object):
                 self.create_pool(name=snat_pool_name,
                              member_name=name,
                              folder=folder)
+                return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
                     LOG.error(_(
-                    'tried to create a SNATPool when exists again..fix me!'))
-            return True
+                    'tried to create a SNATPool when exists'))
+                else:
+                    raise wf
         return False
 
     @icontrol_folder

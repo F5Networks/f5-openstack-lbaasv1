@@ -1,9 +1,16 @@
-from netaddr import ip
-from suds import WebFault
-
+from f5.common import constants as const
+from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
-# Networking - Routing
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+
+from suds import WebFault
+import os
+import netaddr
+
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class Route(object):
@@ -21,7 +28,8 @@ class Route(object):
     def create(self, name=None, dest_ip_address=None, dest_mask=None,
                gw_ip_address=None, folder='Common'):
         if not self.exists(name=None, folder=folder) and \
-           ip(dest_ip_address) and ip(gw_ip_address):
+           netaddr.IPAddress(dest_ip_address) and \
+           netaddr.IPAddress(gw_ip_address):
             dest = self.net_route.typefactory.create(
                     'Networking.RouteTableV2.RouteDestination')
             dest.address = dest_ip_address
@@ -29,8 +37,16 @@ class Route(object):
             attr = self.net_route.typefactory.create(
                     'Networking.RouteTableV2.RouteAttribute')
             attr.gateway = gw_ip_address
-            self.net_route2.create_static_route([name], [dest], [attr])
-            return True
+            try:
+                self.net_route2.create_static_route([name], [dest], [attr])
+                return True
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a Route when exists'))
+                    return False
+                else:
+                    raise wf
         else:
             return False
 

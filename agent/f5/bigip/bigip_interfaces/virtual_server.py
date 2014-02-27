@@ -1,27 +1,35 @@
+from f5.common import constants as const
+from f5.bigip import exceptions
+from f5.bigip.bigip_interfaces import domain_address
+from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+
+from suds import WebFault
 import os
+import netaddr
 import time
 
-from f5.common import constants as const
+import logging
 
-from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
-    strip_folder_and_prefix
-
-from neutron.common import log
-
-# Local Traffic - Virtual Server
+LOG = logging.getLogger(__name__)
 
 
 class VirtualServer(object):
+
     def __init__(self, bigip):
         self.bigip = bigip
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(
                                            ['LocalLB.VirtualServer',
-                                            'LocalLB.VirtualAddressV2']
+                                            'LocalLB.VirtualAddressV2',
+                                            'LocalLB.ProfilePersistence',
+                                            'LocalLB.ProfileHttp']
                                            )
         # iControl helper objects
         self.lb_vs = self.bigip.icontrol.LocalLB.VirtualServer
         self.lb_va = self.bigip.icontrol.LocalLB.VirtualAddressV2
+        self.lb_persist = self.bigip.icontrol.LocalLB.ProfilePersistence
+        self.lb_http = self.bigip.icontrol.LocalLB.ProfileHttp
 
     @icontrol_folder
     @domain_address
@@ -30,6 +38,8 @@ class VirtualServer(object):
                traffic_group=None, folder='Common'):
 
         if not self.exists(name=name, folder=folder):
+            print "creating definition"
+
             # virtual server definition
             vs_def = self.lb_vs.typefactory.create(
                 'Common.VirtualServerDefinition')
@@ -48,6 +58,8 @@ class VirtualServer(object):
             vs_def.protocol = self._get_protocol_type(protocol)
             vs_defs = [vs_def]
 
+            print "creating type"
+
             # virtual server resources
             res = self.lb_vs.typefactory.create(
                 'LocalLB.VirtualServer.VirtualServerResource')
@@ -62,7 +74,15 @@ class VirtualServer(object):
             profiles = [prof_seq]
 
             # virtual server creation
-            self.lb_vs.create(vs_defs, [mask], resources, profiles)
+            try:
+                self.lb_vs.create(vs_defs, [mask], resources, profiles)
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a Virtual Server when exists'))
+                    return False
+                else:
+                    raise wf
 
             # TODO: remove SNAT automap for all VIPs when routing is finished
             self.lb_vs.set_snat_automap([name])
@@ -78,9 +98,11 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
-            while not self.virtual_address_exists(name=ip_address,
-                                                  folder=folder):
-                time.sleep(2)
+            #while not self.virtual_address_exists(name=ip_address,
+            #                                      folder=folder):
+            #    time.sleep(2)
+
+            print "setting traffic_group"
 
             if self.virtual_address_exists(name=ip_address, folder=folder):
                 if not traffic_group:
@@ -118,7 +140,15 @@ class VirtualServer(object):
             profiles = [prof_seq]
 
             # virtual server creation
-            self.lb_vs.create(vs_defs, [mask], resources, profiles)
+            try:
+                self.lb_vs.create(vs_defs, [mask], resources, profiles)
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a Virtual Server when exists'))
+                    return False
+                else:
+                    raise wf
 
             if self.bigip.vlan.exists(name=vlan_name, folder=folder):
                 # add enabled VLANs
@@ -131,9 +161,9 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
-            while not self.virtual_address_exists(name=ip_address,
-                                                  folder=folder):
-                time.sleep(2)
+            #while not self.virtual_address_exists(name=ip_address,
+            #                                      folder=folder):
+            #    time.sleep(2)
 
             if self.virtual_address_exists(name=ip_address, folder=folder):
                 if not traffic_group:
@@ -171,7 +201,15 @@ class VirtualServer(object):
             profiles = [prof_seq]
 
             # virtual server creation
-            self.lb_vs.create(vs_defs, [mask], resources, profiles)
+            try:
+                self.lb_vs.create(vs_defs, [mask], resources, profiles)
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a Virtual Server when exists'))
+                    return False
+                else:
+                    raise wf
 
             if self.bigip.vlan.exists(name=vlan_name, folder=folder):
                 # add enabled VLANs
@@ -184,15 +222,226 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
-            while not self.virtual_address_exists(name=ip_address,
-                                                  folder=folder):
-                time.sleep(2)
+            #while not self.virtual_address_exists(name=ip_address,
+            #                                      folder=folder):
+            #    time.sleep(2)
 
             if self.virtual_address_exists(name=ip_address, folder=folder):
                 if not traffic_group:
                     traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
                 self.lb_va.set_traffic_group([ip_address], [traffic_group])
+
+    @icontrol_folder
+    def add_profile(self, name=None, profile_name=None,
+                    client_context=True, service_context=True,
+                    folder='Common'):
+        #TODO build chain
+        pass
+
+    @icontrol_folder
+    def remove_profile(self, name=None, profile_name=None,
+                       folder='Common'):
+        #TODO build chain
+        pass
+
+    @icontrol_folder
+    def profile_exists(self, name=None, profile_name=None,
+                       client_context=True,
+                       server_context=True,
+                       folder='Common'):
+        if self.exists(name, folder):
+            profiles = self.lb_vs.get_profile([name])[0]
+            for profile in profiles:
+                print "%s:%s" % (profile.profile_name, profile_name)
+                if profile.profile_name == profile_name:
+                    if profile.profile_context == \
+                        "PROFILE_CONTEXT_TYPE_ALL":
+                        return True
+                    if client_context:
+                        if profile.profile_context == \
+                           "PROFILE_CONTXT_TYPE_CLIENT":
+                            return True
+                    if server_context:
+                        if profile.profile_context == \
+                           "PROFILE_CONTXT_TYPE_SERVER":
+                            return True
+            return False
+        else:
+            return False
+
+    @icontrol_folder
+    def get_profiles(self, name=None, folder='Common'):
+        return_profiles = []
+        if self.exists(name, folder):
+            profiles = self.lb_vs.get_profile([name])[0]
+            for profile in profiles:
+                p = {}
+                profile_name = profile.profile_name
+                if not profile.profile_name.startswith("/Common"):
+                    profile_name = \
+                           strip_folder_and_prefix(profile.profile_name)
+                p[profile_name] = {}
+                if profile.profile_context == "PROFILE_CONTEXT_TYPE_ALL":
+                    p[profile_name]['client_context'] = True
+                    p[profile_name]['server_context'] = True
+                elif profile.profile_context == "PROFILE_CONTEXT_TYPE_CLIENT":
+                    p[profile_name]['client_context'] = True
+                    p[profile_name]['server_context'] = False
+                elif profile.profile_context == "PROFILE_CONTEXT_TYPE_SERVER":
+                    p[profile_name]['client_context'] = False
+                    p[profile_name]['server_context'] = True
+                p[profile_name]['type'] = profile.profile_type
+                return_profiles.append(p)
+        return return_profiles
+
+    @icontrol_folder
+    def create_http_profile(self, name=None, xff=True, pipelining=False,
+                            unknown_verbs=False, server_agent='BigIP',
+                            folder='Common'):
+        try:
+            self.lb_http.create([name])
+        except WebFault as wf:
+            if "already exists in partition" in str(wf.message):
+                LOG.error(_(
+                    'tried to create a HTTP Profile when exists'))
+                return False
+            else:
+                raise wf
+        enabled_mode = self.lb_http.typefactory.create(
+                                    'LocalLB.ProfileProfileMode')
+        enabled_mode.value = 'PROFILE_MODE_ENABLED'
+        enabled_mode.default_flag = False
+
+        disabled_mode = self.lb_http.typefactory.create(
+                                    'LocalLB.ProfileProfileMode')
+        disabled_mode.value = 'PROFILE_MODE_ENABLED'
+        disabled_mode.default_flag = False
+
+        if xff:
+            self.lb_http.set_insert_xforwarded_for_header_mode([name],
+                                                               [enabled_mode])
+        else:
+            self.lb_http.set_insert_xforwarded_for_header_mode([name],
+                                                               [disabled_mode])
+
+        if not pipelining or not unknown_verbs:
+            major_version = self.bigip.system.get_major_version()
+            minor_version = self.bigip.system.get_minor_version()
+            if major_version < 11:
+                return True
+            if minor_version < 5:
+                return True
+        else:
+            return True
+
+        pt_mode_allow = self.lb_http.typefactory.create(
+                    'LocalLB.ProfileHttp.ProfilePassthroughMode ')
+        pt_mode_allow.value = 'HTTP_PASSTHROUGH_MODE_ALLOW'
+        pt_mode_allow.default_flag = False
+
+        pt_mode_reject = self.lb_http.typefactory.create(
+                    'LocalLB.ProfileHttp.ProfilePassthroughMode ')
+        pt_mode_reject.value = 'HTTP_PASSTHROUGH_MODE_REJECT'
+        pt_mode_reject.default_flag = False
+
+        if pipelining:
+            self.lb_http.set_pipelining_mode_v2([name], [pt_mode_allow])
+        else:
+            self.lb_http.set_pipelining_mode_v2([name], [pt_mode_reject])
+
+        if unknown_verbs:
+            self.lb_http.set_passthrough_unknown_method_mode([name],
+                                                             [pt_mode_allow])
+        else:
+            self.lb_http.set_passthrough_unknown_method_mode([name],
+                                                             [pt_mode_reject])
+        return True
+
+    @icontrol_folder
+    def create_uie_profile(self, name=None, rule_name=None, folder='Common'):
+        try:
+            self.lb_persist.create([name], ['PERSISTENCE_MODE_UIE'])
+            prof_str = \
+                self.lb_persist.typefactory.create('LocalLB.ProfileString')
+            prof_str.value = rule_name
+            prof_str.default_flag = False
+            self.lb_persist.set_rule([name], [prof_str])
+        except WebFault as wf:
+            if "already exists in partition" in str(wf.message):
+                LOG.error(_(
+                    'tried to create a UIE persist profile when exists'))
+                return False
+            else:
+                raise wf
+
+    @icontrol_folder
+    def delete_persist_profile(self, name=None, folder='Common'):
+        try:
+            self.lb_persist.delete_profile([name])
+            return True
+        except WebFault:
+            return False
+        return False
+
+    @icontrol_folder
+    def add_rule(self, name=None, rule_name=None,
+                     priority=500, folder='Common'):
+        if self.exist(name=name, folder=folder):
+            vs_rule = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerRule')
+            vs_rule.rule_name = rule_name
+            vs_rule.priority = priority
+            vs_rule_seq = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerRuleSequence')
+            vs_rule_seq.values = [vs_rule]
+            vs_rule_seq_seq = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerRuleSequenceSequence')
+            vs_rule_seq_seq.values = [vs_rule_seq]
+            self.lb_vs.add_rule([name], vs_rule_seq_seq)
+
+    @icontrol_folder
+    def remove_rule(self, name=None, rule_name=None,
+                    priority=500, folder='Common'):
+        if self.exist(name=name, folder=folder):
+            vs_rule = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerRule')
+            vs_rule.rule_name = rule_name
+            vs_rule.priority = priority
+            vs_rule_seq = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerRuleSequence')
+            vs_rule_seq.values = [vs_rule]
+            vs_rule_seq_seq = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerRuleSequenceSequence')
+            vs_rule_seq_seq.values = [vs_rule_seq]
+            self.lb_vs.remove_rule([name], vs_rule_seq_seq)
+
+    @icontrol_folder
+    def set_persist_profile(self, name=None, profile_name=None,
+                                folder='Common'):
+        if self.exists(name=name, folder=folder):
+            vsp = self.lb_vs.typefactory.create(
+            'LocalLB.VirtualServer.VirtualServerPersistence')
+            vsp.profile_name = profile_name
+            vsp.default_profile = True
+            vsp_seq = self.lb_vs.typefactory.create(
+            'LocalLB.VirtualServer.VirtualServerPersistenceSequence')
+            vsp_seq.values = [vsp]
+            vsp_seq_seq = self.lb_vs.typefactory.create(
+            'LocalLB.VirtualServer.VirtualServerPersistenceSequenceSequence')
+            vsp_seq_seq.values = [vsp_seq]
+            self.lb_vs.add_persistence_profile([name], vsp_seq_seq)
+            return True
+        else:
+            return False
+
+    @icontrol_folder
+    def remove_persist_profile(self, name=None, folder='Common'):
+        if self.exists(name=name, folder=folder):
+            self.lb_vs.remove_all_persistence_profiles([name])
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def enable_virtual_server(self, name=None, folder='Common'):
@@ -210,7 +459,6 @@ class VirtualServer(object):
         else:
             return False
 
-    @log.log
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):

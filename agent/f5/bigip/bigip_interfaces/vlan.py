@@ -1,10 +1,16 @@
 from f5.common import constants as const
-
+from f5.bigip import exceptions
+from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
+from suds import WebFault
 import os
+import netaddr
 
-# Networking - VLAN
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class Vlan(object):
@@ -52,16 +58,25 @@ class Vlan(object):
                 #                'Networking.MemberTagType').MEMBER_TAGGED
                 # mem_seq.item = mem_entry
 
-            self.net_vlan.create_v2([name],
+            try:
+                self.net_vlan.create_v2([name],
                                     [int(vlanid)],
                                     [mem_seq],
                                     [fs_state],
                                     [90])
-            if description:
-                self.net_vlan.set_description([name], [description])
-            if not folder == 'Common':
-                self.bigip.route.add_vlan_to_domain(name=name, folder=folder)
-            return True
+                if description:
+                    self.net_vlan.set_description([name], [description])
+                if not folder == 'Common':
+                    self.bigip.route.add_vlan_to_domain(name=name,
+                                                        folder=folder)
+                return True
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                        'tried to create a VLAN when exists'))
+                    return False
+                else:
+                    raise wf
         else:
             return False
 
