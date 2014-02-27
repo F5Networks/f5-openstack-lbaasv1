@@ -1,6 +1,7 @@
 # Local Traffic - Monitor
 
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip import exceptions
 
 from suds import WebFault
 
@@ -62,7 +63,7 @@ class Monitor(object):
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
                     LOG.error(_(
-                        'tried to create a Monitor when exists again..fix me!'))
+                        'tried to create a Monitor when exists'))
 
             if mon_type.lower() in ['tcp', 'http']:
                 self.set_send_string(name, send_text)
@@ -200,11 +201,17 @@ class Monitor(object):
             return monitor_temp_type.TTYPE_TCP
         elif type_str == 'HTTP':
             return monitor_temp_type.TTYPE_HTTP
+        elif type_str == 'HTTPS':
+            return monitor_temp_type.TTYPE_HTTPS
         elif type_str == 'ICMP':
             return monitor_temp_type.TTYPE_GATEWAY_ICMP
+        elif type_str == 'UDP':
+            return monitor_temp_type.TTYPE_UDP
+        elif type_str == 'INBAND':
+            return monitor_temp_type.TTYPE_INBAND
         else:
-            # TODO: raise exception for unsupported monitor type
-            pass
+            raise exceptions.UnknownMonitorType(
+                                        'Unknown monitor %s' % type_str)
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):

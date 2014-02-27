@@ -370,11 +370,10 @@ class Pool(object):
     @icontrol_folder
     @log.log
     def get_monitors(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
-            return strip_folder_and_prefix(self._get_monitors(name=name,
-                                                              folder=folder))
-        else:
-            return []
+        monitors = self._get_monitors(name=name, folder=folder)
+        if len(monitors) > 0:
+            monitors = strip_folder_and_prefix(monitors)
+        return monitors
 
     @icontrol_folder
     @log.log
@@ -430,6 +429,8 @@ class Pool(object):
                 monitors.remove('/Common/none')
 
             return monitors
+        else:
+            return []
 
     def _get_addr_port_seq(self, addr, port):
         addr_port_seq = self.lb_pool.typefactory.create(

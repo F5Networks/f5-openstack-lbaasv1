@@ -27,3 +27,6 @@ class APICClusterConfig(Exception):
 class BigIPClusterPeerAddFailure(Exception):
     pass
 
+
+class UnknownMonitorType(Exception):
+    pass
