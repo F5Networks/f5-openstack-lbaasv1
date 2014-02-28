@@ -77,6 +77,12 @@ class Pool(object):
 
     @icontrol_folder
     @log.log
+    def get_pools(self, folder='Common'):
+        return self.lb_pool.get_list()
+
+
+    @icontrol_folder
+    @log.log
     def get_members_monitor_status(self, name=None, folder='Common'):
         return_members = []
         members = self.lb_pool.get_member_v2([name])[0]
@@ -229,7 +235,8 @@ class Pool(object):
             # node address might have multiple pool members
             # associated with its, so it might now delete
             try:
-                ip_address = ip_address.split('%')[0]
+                if ip_address[-2:] == '%0':
+                    ip_address = ip_address.split('%')[0]
                 self.remove_node_by_address(node_ip_address=ip_address,
                                                 folder=folder)
             except:
@@ -237,7 +244,8 @@ class Pool(object):
             return True
         else:
             try:
-                ip_address = ip_address.split('%')[0]
+                if ip_address[-2:] == '%0':
+                    ip_address = ip_address.split('%')[0]
                 self.remove_node_by_address(node_ip_address=ip_address,
                                                 folder=folder)
             except:

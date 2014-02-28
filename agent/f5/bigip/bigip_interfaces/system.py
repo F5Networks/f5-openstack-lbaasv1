@@ -1,6 +1,10 @@
 # System
 from suds import WebFault
 
+import logging
+
+LOG = logging.getLogger(__name__)
+
 
 class System(object):
     def __init__(self, bigip):
@@ -48,9 +52,16 @@ class System(object):
             self.sys_session.set_active_folder(folder)
         except WebFault as wf:
             if "was not found" in str(wf.message):
-                self.create_folder(folder, change_to=True)
+                try:
+                    self.create_folder(folder, change_to=True)
+                except WebFault as wf:
+                    LOG.error("System.set_folder:create_folder failed: " + str(wf.message))
                 if self.bigip.route_domain_required:
-                    self.bigip.route.create_domain(folder=folder)
+                    try:
+                        self.bigip.route.create_domain(folder=folder)
+                    except WebFault as wf:
+                        LOG.error("System.set_folder:create_domain failed: " + str(wf.message))
+
 
     def get_hostname(self):
         return self.sys_inet.get_hostname()

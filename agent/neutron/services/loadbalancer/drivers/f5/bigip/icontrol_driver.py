@@ -41,6 +41,25 @@ OPTS = [
     )
 ]
 
+import random
+from eventlet import greenthread
+def serialized(method):
+    """Decorator to serialize calls to configure via iControl"""
+    def wrapper(*args, **kwargs):
+        instance = args[0]
+        my_request_id=random.random()
+        instance.service_queue.append(my_request_id)
+        waitsecs = .05
+        while instance.service_queue[0] != my_request_id:
+            greenthread.sleep(waitsecs)
+            if waitsecs < 1:
+                waitsecs = waitsecs * 2
+        result=method(*args, **kwargs)
+        instance.service_queue.pop(0)
+        return result
+    return wrapper
+
+
 
 class iControlDriver(object):
 
@@ -63,6 +82,7 @@ class iControlDriver(object):
         self.conf.register_opts(OPTS)
         self.pool_to_port_id = {}
         self.connected = False
+        self.service_queue = []
 
         self._init_connection()
 
@@ -82,71 +102,83 @@ class iControlDriver(object):
                         % (intmap[0], intmap[1], intmap[2])
                         ))
 
+    @serialized
     @am.is_connected
     @log.log
     def sync(self, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def create_vip(self, vip, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def update_vip(self, old_vip, vip, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def delete_vip(self, vip, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def create_pool(self, pool, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def update_pool(self, old_pool, pool, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def delete_pool(self, pool, service):
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def create_member(self, member, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def update_member(self, old_member, member, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def delete_member(self, member, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
+    @serialized
     @am.is_connected
     @log.log
     def create_pool_health_monitor(self, health_monitor, pool, service):
         self._assure_service(service)
         return True
 
+    @serialized
     @am.is_connected
     @log.log
     def update_health_monitor(self, old_health_monitor,
@@ -154,12 +186,34 @@ class iControlDriver(object):
         self._assure_service(service)
         return True
 
+    @serialized
     @am.is_connected
     @log.log
     def delete_pool_health_monitor(self, health_monitor, pool, service):
-        self._assure_service(service)
+        delete_monitor_if_unused = False
+        for status in service['pool']['health_monitors_status']:
+            if status['monitor_id'] == health_monitor['id']:
+                # If the pool+monitor association itself is being deleted,
+                # but not the monitor itself, then the PENDING_DELETE will
+                # be set by the plugin on the pool health monitor status.
+                # If the health monitor itself is being deleted, then
+                # the plugin does not set this status, even though the
+                # pool+monitor association _is_ being deleted. We rely on
+                # this difference to decide whether we should delete the
+                # monitor itself.
+                # A better choice might be for the plugin to set a separate
+                # flag for the health monitor itself. Given this should really
+                # be fixed in this authors opinion, relying on the current odd
+                # behavior of the plugin is a risk for this code.
+                if status['status'] != plugin_const.PENDING_DELETE:
+                    delete_monitor_if_unused = True
+                    # Signal to our own code that we should delete the
+                    # pool health monitor. The plugin should do this. 
+                    status['status'] = plugin_const.PENDING_DELETE
+        self._assure_service(service, delete_monitor_if_unused)
         return True
 
+    @serialized
     @am.is_connected
     def get_stats(self, service):
         # use pool stats because the pool_id is the
@@ -223,7 +277,7 @@ class iControlDriver(object):
         if service['pool']['id'] in self.__service_locks:
             self.__service_locks[service['pool']['id']].release()
 
-    def _assure_service(self, service):
+    def _assure_service(self, service, delete_monitor_if_unused=False):
 
         bigip = self._get_bigip()
 
@@ -299,6 +353,13 @@ class iControlDriver(object):
                 self.plugin_rpc.health_monitor_destroyed(
                                       health_monitor_id=monitor['id'],
                                       pool_id=service['pool']['id'])
+                if delete_monitor_if_unused:
+                    try:
+                        bigip.monitor.delete(
+                                      name=monitor['id'],
+                                      folder=service['pool']['tenant_id'])
+                    except:
+                        pass
             else:
                 timeout = int(monitor['max_retries']) \
                         * int(monitor['timeout'])
@@ -616,8 +677,6 @@ class iControlDriver(object):
                     deleted_subnets.append(service['vip']['subnet']['id'])
                     try:
                         self._delete_network(service['vip']['network'])
-                        bigip.route.delete_domain(
-                                    folder=service['vip']['tenant_id'])
                     except:
                         pass
 
@@ -663,14 +722,30 @@ class iControlDriver(object):
                             self._delete_local_selfip_snat(member, service)
                             try:
                                 self._delete_network(member['network'])
-                                bigip.route.delete_domain(
-                                            folder=member['tenant_id'])
                             except:
                                 pass
                             # Flag this network so we won't try to go
                             # through this same process if a deleted
                             # another member is delete on this subnet
                             deleted_subnets.append(member['subnet']['id'])
+
+        # if something was deleted check whether to do domain+folder teardown 
+        if service['pool']['status'] == plugin_const.PENDING_DELETE or \
+             delete_monitor_if_unused or delete_vip_service_networks or \
+             delete_member_service_networks:
+            existing_monitors = bigip.monitor.get_monitors(folder=service['pool']['tenant_id'])
+            existing_pools = bigip.pool.get_pools(folder=service['pool']['tenant_id'])
+            existing_vips = bigip.virtual_server.get_virtual_service_insertion(
+                                            folder=service['pool']['tenant_id'])
+
+            if not existing_monitors and not existing_pools and not existing_vips:
+                try:
+                    bigip.route.delete_domain(folder=service['pool']['tenant_id'])
+                    bigip.system.set_folder(folder='/Common')
+                    bigip.system.delete_folder(folder='uuid_'+service['pool']['tenant_id'])
+                except:
+                    LOG.error("Error cleaning up tenant " + service['pool']['tenant_id'])
+                    pass
 
 
     def _assure_service_networks(self, service):
@@ -711,6 +786,7 @@ class iControlDriver(object):
                     subnet_id not in assured_floating_default_gateway:
                     self._assure_floating_default_gateway(member, service)
                     assured_floating_default_gateway.append(subnet_id)
+
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
@@ -1042,8 +1118,6 @@ class iControlDriver(object):
                 try:
                     cleaned_networks.append(service['vip']['network']['id'])
                     self._delete_network(service['vip']['network'])
-                    bigip.route.delete_domain(
-                                    folder=service['vip']['tenant_id'])
                 except:
                     pass
 
@@ -1078,7 +1152,6 @@ class iControlDriver(object):
                     try:
                         cleaned_networks.append(member['network']['id'])
                         self._delete_network(member['network'])
-                        bigip.route.delete_domain(folder=member['tenant_id'])
                     except:
                         pass
 
@@ -1240,7 +1313,7 @@ class iControlDriver(object):
 
     def _get_vlan_name(self, network):
         interface = self.interface_mapping['default']
-        vlanid = self.tagging_mapping['default']
+        tagged = self.tagging_mapping['default']
 
         if network['provider:physical_network'] in \
                                             self.interface_mapping:

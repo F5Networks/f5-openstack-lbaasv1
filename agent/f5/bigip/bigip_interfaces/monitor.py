@@ -211,3 +211,9 @@ class Monitor(object):
         for template in self.lb_monitor.get_template_list():
             if template.template_name == name:
                 return True
+
+    @icontrol_folder
+    def get_monitors(self, folder='Common'):
+        monitors = self.lb_monitor.get_template_list() 
+        return monitors
+

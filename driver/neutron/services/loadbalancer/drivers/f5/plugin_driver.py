@@ -32,6 +32,8 @@ from neutron.openstack.common import rpc
 from neutron.openstack.common.rpc import proxy
 from neutron.plugins.common import constants
 from neutron.services.loadbalancer.drivers import abstract_driver
+from neutron.context import get_admin_context
+
 
 LOG = logging.getLogger(__name__)
 
@@ -163,22 +165,34 @@ class LoadBalancerCallbacks(object):
             retval['members'] = []
             for m in pool.members:
                 member = self.plugin._make_member_dict(m)
-                alloc_qry = context.session.query(models_v2.IPAllocation)
+                adminctx = get_admin_context()
+                alloc_qry = adminctx.session.query(models_v2.IPAllocation)
                 allocated = alloc_qry.filter_by(
-                                        ip_address=member['address']).first()
-                member['subnet'] = \
+                                        ip_address=member['address']).all()
+                for alloc in allocated:
+                    # It is normal to find a duplicate IP for another tenant,
+                    # so first see if we find its network under this
+                    # tenant context. A NotFound exception is normal if
+                    # the IP belongs to another tenant.
+                    try:
+                        net=self.plugin._core_plugin.get_network(
+                                             adminctx, alloc['network_id'])
+                    except:
+                        LOG.debug("Exception getting network ")
+                        continue
+                    if net['tenant_id'] != pool['tenant_id']:
+                        continue
+                    member['network'] = net
+                    member['subnet'] = \
                         self.plugin._core_plugin.get_subnet(
-                                             context, allocated['subnet_id'])
-                member['network'] = \
-                        self.plugin._core_plugin.get_network(
-                                             context, allocated['network_id'])
-                member_subnet_fixed_ip_filters = {'network_id':
+                                             context, alloc['subnet_id'])
+                    member_subnet_fixed_ip_filters = {'network_id':
                                             [member['subnet']['network_id']],
                              'device_id': [host]}
-                member['subnet_ports'] = self.plugin._core_plugin.get_ports(
+                    member['subnet_ports'] = self.plugin._core_plugin.get_ports(
                                                                    context,
                                       filters=member_subnet_fixed_ip_filters)
-                retval['members'].append(member)
+                    retval['members'].append(member)
 
             retval['health_monitors'] = []
             for hm in retval['pool']['health_monitors']:
@@ -507,9 +521,13 @@ class LoadBalancerCallbacks(object):
                                  pool_id=None, host=None):
         """Agent confirmation hook that a health has been destroyed."""
         # delete the health monitor from the data model
-        self.plugin._delete_db_pool_health_monitor(context,
+        # the plug-in does this sometimes so allow for an error.
+        try:
+            self.plugin._delete_db_pool_health_monitor(context,
                                                    health_monitor_id,
                                                    pool_id)
+        except:
+            pass
 
     @log.log
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):

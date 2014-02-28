@@ -78,11 +78,11 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
-            while not self.virtual_address_exists(name=ip_address,
+            while not self.virtual_address_exists(virt_addr=ip_address,
                                                   folder=folder):
                 time.sleep(2)
 
-            if self.virtual_address_exists(name=ip_address, folder=folder):
+            if self.virtual_address_exists(virt_addr=ip_address, folder=folder):
                 if not traffic_group:
                     traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
@@ -131,11 +131,11 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
-            while not self.virtual_address_exists(name=ip_address,
+            while not self.virtual_address_exists(virt_addr=ip_address,
                                                   folder=folder):
                 time.sleep(2)
 
-            if self.virtual_address_exists(name=ip_address, folder=folder):
+            if self.virtual_address_exists(virt_addr=ip_address, folder=folder):
                 if not traffic_group:
                     traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
@@ -184,11 +184,11 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
-            while not self.virtual_address_exists(name=ip_address,
+            while not self.virtual_address_exists(virt_addr=ip_address,
                                                   folder=folder):
                 time.sleep(2)
 
-            if self.virtual_address_exists(name=ip_address, folder=folder):
+            if self.virtual_address_exists(virt_addr=ip_address, folder=folder):
                 if not traffic_group:
                     traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
@@ -400,8 +400,8 @@ class VirtualServer(object):
             return False
 
     @icontrol_folder
-    def virtual_address_exists(self, name=None, folder='Common'):
-        if name in self.lb_va.get_list():
+    def virtual_address_exists(self, virt_addr=None, folder='Common'):
+        if virt_addr in self.lb_va.get_list():
             return True
         else:
             return False

@@ -28,6 +28,16 @@ def icontrol_folder(method):
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
 
+            if 'virt_addr' in kwargs and kwargs['virt_addr']:
+                if kwargs['virt_addr'].startswith('/Common/'):
+                    kwargs['virt_addr'] = os.path.basename(kwargs['virt_addr'])
+                    kwargs['virt_addr'] = instance.bigip.set_folder(kwargs['virt_addr'],
+                                                               'Common')
+                else:
+                    kwargs['virt_addr'] = os.path.basename(kwargs['virt_addr'])
+                    kwargs['virt_addr'] = instance.bigip.set_folder(kwargs['virt_addr'],
+                                                           kwargs['folder'])
+
             for name in kwargs:
                 if name.find('_name') > 0 and kwargs[name]:
                     if kwargs[name].startswith('/Common/'):
