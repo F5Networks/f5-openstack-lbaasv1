@@ -118,7 +118,13 @@ def domain_address(method):
 
 def strip_folder_and_prefix(path):
     if isinstance(path, list):
-        return map(lambda p: p.replace(OBJ_PREFIX, ''),
+        if path.startswith('/Common'):
+            return map(lambda p: p.replace(OBJ_PREFIX, ''), path)
+        else:
+            return map(lambda p: p.replace(OBJ_PREFIX, ''),
                    map(os.path.basename, path))
     else:
-        return os.path.basename(str(path)).replace(OBJ_PREFIX, '')
+        if path.startswith('/Common'):
+            return str(path).replace(OBJ_PREFIX, '')
+        else:
+            return os.path.basename(str(path)).replace(OBJ_PREFIX, '')

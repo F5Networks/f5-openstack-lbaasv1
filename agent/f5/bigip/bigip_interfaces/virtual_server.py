@@ -251,20 +251,20 @@ class VirtualServer(object):
                        server_context=True,
                        folder='Common'):
         if self.exists(name, folder):
+            profile_name = strip_folder_and_prefix(profile_name)
             profiles = self.lb_vs.get_profile([name])[0]
             for profile in profiles:
-                print "%s:%s" % (profile.profile_name, profile_name)
                 if profile.profile_name == profile_name:
                     if profile.profile_context == \
                         "PROFILE_CONTEXT_TYPE_ALL":
                         return True
                     if client_context:
                         if profile.profile_context == \
-                           "PROFILE_CONTXT_TYPE_CLIENT":
+                           "PROFILE_CONTEXT_TYPE_CLIENT":
                             return True
                     if server_context:
                         if profile.profile_context == \
-                           "PROFILE_CONTXT_TYPE_SERVER":
+                           "PROFILE_CONTEXT_TYPE_SERVER":
                             return True
             return False
         else:
@@ -277,10 +277,8 @@ class VirtualServer(object):
             profiles = self.lb_vs.get_profile([name])[0]
             for profile in profiles:
                 p = {}
-                profile_name = profile.profile_name
-                if not profile.profile_name.startswith("/Common"):
-                    profile_name = \
-                           strip_folder_and_prefix(profile.profile_name)
+                profile_name = \
+                    strip_folder_and_prefix(profile.profile_name)
                 p[profile_name] = {}
                 if profile.profile_context == "PROFILE_CONTEXT_TYPE_ALL":
                     p[profile_name]['client_context'] = True
