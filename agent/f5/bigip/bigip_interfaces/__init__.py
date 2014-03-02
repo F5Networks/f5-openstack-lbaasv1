@@ -31,12 +31,14 @@ def icontrol_folder(method):
             if 'virt_addr' in kwargs and kwargs['virt_addr']:
                 if kwargs['virt_addr'].startswith('/Common/'):
                     kwargs['virt_addr'] = os.path.basename(kwargs['virt_addr'])
-                    kwargs['virt_addr'] = instance.bigip.set_folder(kwargs['virt_addr'],
-                                                               'Common')
+                    kwargs['virt_addr'] = \
+                        instance.bigip.set_folder(kwargs['virt_addr'],
+                                                  'Common')
                 else:
                     kwargs['virt_addr'] = os.path.basename(kwargs['virt_addr'])
-                    kwargs['virt_addr'] = instance.bigip.set_folder(kwargs['virt_addr'],
-                                                           kwargs['folder'])
+                    kwargs['virt_addr'] = \
+                        instance.bigip.set_folder(kwargs['virt_addr'],
+                                                  kwargs['folder'])
 
             for name in kwargs:
                 if name.find('_name') > 0 and kwargs[name]:
@@ -128,7 +130,13 @@ def domain_address(method):
 
 def strip_folder_and_prefix(path):
     if isinstance(path, list):
-        return map(lambda p: p.replace(OBJ_PREFIX, ''),
+        if path.startswith('/Common'):
+            return map(lambda p: p.replace(OBJ_PREFIX, ''), path)
+        else:
+            return map(lambda p: p.replace(OBJ_PREFIX, ''),
                    map(os.path.basename, path))
     else:
-        return os.path.basename(str(path)).replace(OBJ_PREFIX, '')
+        if path.startswith('/Common'):
+            return str(path).replace(OBJ_PREFIX, '')
+        else:
+            return os.path.basename(str(path)).replace(OBJ_PREFIX, '')

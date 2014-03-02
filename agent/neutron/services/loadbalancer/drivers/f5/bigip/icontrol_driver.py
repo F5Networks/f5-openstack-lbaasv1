@@ -10,14 +10,17 @@ from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 
+from eventlet import greenthread
+
+import random
 import urllib2
 import netaddr
 import datetime
 
-import threading
-
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
+APP_COOKIE_RULE_PREFIX = 'app_cookie_'
+RPS_THROTTLE_RULE_PREFIX = 'rps_throttle_'
 
 __VERSION__ = '0.1.1'
 
@@ -41,24 +44,22 @@ OPTS = [
     )
 ]
 
-import random
-from eventlet import greenthread
+
 def serialized(method):
     """Decorator to serialize calls to configure via iControl"""
     def wrapper(*args, **kwargs):
         instance = args[0]
-        my_request_id=random.random()
+        my_request_id = random.random()
         instance.service_queue.append(my_request_id)
         waitsecs = .05
         while instance.service_queue[0] != my_request_id:
             greenthread.sleep(waitsecs)
             if waitsecs < 1:
                 waitsecs = waitsecs * 2
-        result=method(*args, **kwargs)
+        result = method(*args, **kwargs)
         instance.service_queue.pop(0)
         return result
     return wrapper
-
 
 
 class iControlDriver(object):
@@ -193,6 +194,7 @@ class iControlDriver(object):
         delete_monitor_if_unused = False
         for status in service['pool']['health_monitors_status']:
             if status['monitor_id'] == health_monitor['id']:
+
                 # If the pool+monitor association itself is being deleted,
                 # but not the monitor itself, then the PENDING_DELETE will
                 # be set by the plugin on the pool health monitor status.
@@ -201,15 +203,18 @@ class iControlDriver(object):
                 # pool+monitor association _is_ being deleted. We rely on
                 # this difference to decide whether we should delete the
                 # monitor itself.
+
                 # A better choice might be for the plugin to set a separate
                 # flag for the health monitor itself. Given this should really
                 # be fixed in this authors opinion, relying on the current odd
                 # behavior of the plugin is a risk for this code.
+
                 if status['status'] != plugin_const.PENDING_DELETE:
                     delete_monitor_if_unused = True
                     # Signal to our own code that we should delete the
-                    # pool health monitor. The plugin should do this. 
+                    # pool health monitor. The plugin should do this.
                     status['status'] = plugin_const.PENDING_DELETE
+
         self._assure_service(service, delete_monitor_if_unused)
         return True
 
@@ -265,17 +270,6 @@ class iControlDriver(object):
         if (now - self.__last_connect_attempt).total_seconds()  \
                          > self.conf.icontrol_connection_retry_interval:
             self._init_connection()
-
-    def _lock(self, service):
-        if not service['pool']['id'] in self.__service_locks:
-            LOG.debug(_('creating thread lock for service %s'
-                        % service['pool']['id']))
-            self.__service_locks[service['pool']['id']] = threading.Lock()
-        self.__service_locks[service['pool']['id']].acquire()
-
-    def _release_lock(self, service):
-        if service['pool']['id'] in self.__service_locks:
-            self.__service_locks[service['pool']['id']].release()
 
     def _assure_service(self, service, delete_monitor_if_unused=False):
 
@@ -372,12 +366,62 @@ class iControlDriver(object):
                                      folder=monitor['tenant_id'])
                 # make sure monitor attributes are correct
                 bigip.monitor.set_interval(name=monitor['id'],
-                                     interval=monitor['delay'])
+                                     interval=monitor['delay'],
+                                     folder=monitor['tenant_id'])
                 bigip.monitor.set_timeout(name=monitor['id'],
-                                              timeout=timeout)
+                                          timeout=timeout,
+                                          folder=monitor['tenant_id'])
+
+                if monitor['type'] == 'HTTP' or monitor['type'] == 'HTTPS':
+                    if 'url_path' in monitor:
+                        send_text = "GET " + monitor['url_path'] + "\\r\\n"
+                    else:
+                        send_text = "GET /\\r\\n"
+                    if 'expected_codes' in monitor:
+                        try:
+                            if monitor['expected_codes'].find(",") > 0:
+                                status_codes = \
+                                    monitor['expected_codes'].split(',')
+                                recv_text = "^HTTP\/1\.[10]\s["
+                                for status in status_codes:
+                                    int(status)
+                                    recv_text += "status|"
+                                recv_text = recv_text[:-1]
+                                recv_text += "]"
+                            elif monitor['expected_codes'].find("-") > 0:
+                                status_range = \
+                                    monitor['expected_codes'].split('-')
+                                start_range = status_range[0]
+                                int(start_range)
+                                stop_range = status_range[1]
+                                int(stop_range)
+                                recv_text = \
+                                    "^HTTP\/1\.[10]\s[" + \
+                                    start_range + "-" + \
+                                    stop_range + "]"
+                            else:
+                                int(monitor['expected_codes'])
+                                recv_text = "^HTTP.1.1\s" + \
+                                            monitor['expected_codes']
+                        except:
+                            LOG.error(_(
+                            "invalid monitor expected_codes %s, setting to 200"
+                            % monitor['expected_codes']))
+                            recv_text = "^HTTP.1.1\s200"
+                    else:
+                        recv_text = "^HTTP.1.1\s200"
+
+                    bigip.monitor.set_send_string(name=monitor['id'],
+                                                  send_text=send_text,
+                                                  folder=monitor['tenant_id'])
+                    bigip.monitor.set_recv_string(name=monitor['id'],
+                                                  recv_text=recv_text,
+                                                  folder=monitor['tenant_id'])
+
                 bigip.pool.add_monitor(name=service['pool']['id'],
-                                    monitor_name=monitor['id'],
-                                    folder=service['pool']['tenant_id'])
+                                       monitor_name=monitor['id'],
+                                       folder=service['pool']['tenant_id'])
+
                 self.plugin_rpc.update_health_monitor_status(
                                     pool_id=service['pool']['id'],
                                     health_monitor_id=monitor['id'],
@@ -527,8 +571,16 @@ class iControlDriver(object):
                 ip_address = ip_address + "%0"
             if service['vip']['status'] == plugin_const.PENDING_DELETE:
                 LOG.debug(_('Vip: deleting VIP %s' % service['vip']['id']))
+                bigip.virtual_server.remove_and_delete_persist_profile(
+                                        name=service['vip']['id'],
+                                        folder=service['vip']['tenant_id'])
                 bigip.virtual_server.delete(name=service['vip']['id'],
                                         folder=service['vip']['tenant_id'])
+
+                bigip.rule.delete(name=RPS_THROTTLE_RULE_PREFIX + \
+                                  service['vip']['id'],
+                                  folder=service['vip']['tenant_id'])
+
                 if service['vip']['id'] in self.__vips_to_traffic_group:
                     tg = self.__vips_to_traffic_group[service['vip']['id']]
                     self.__vips_on_traffic_groups[tg] = \
@@ -544,26 +596,97 @@ class iControlDriver(object):
                                 ))
             else:
                 tg = self._get_least_vips_traffic_group()
-                if bigip.virtual_server.create(
-                                name=service['vip']['id'],
-                                ip_address=ip_address,
-                                mask='255.255.255.255',
-                                port=int(service['vip']['protocol_port']),
-                                protocol=service['vip']['protocol'],
-                                vlan_name=vlan_name,
-                                traffic_group=tg,
-                                folder=service['pool']['tenant_id']
-                               ):
-                    # created update driver traffic group mapping
-                    tg = bigip.virtual_server.get_traffic_group(
-                                    name=service['vip']['ip'],
-                                    folder=service['pool']['tenant_id'])
-                    self.__vips_to_traffic_group[service['vip']['ip']] = tg
-                    self.plugin_rpc.update_vip_status(
-                                        service['vip']['id'],
-                                        status=plugin_const.ACTIVE,
-                                        status_description='vip created'
-                                       )
+
+                snat_pool_name = None
+                if self.conf.f5_snat_mode and \
+                   self.conf.f5_snat_addresses_per_subnet > 0:
+                        snat_pool_name = service['pool']['tenant_id']
+
+                # This is where you could decide to use a fastl4
+                # or a standard virtual server.  The problem
+                # is making sure that if someone updates the
+                # vip protocol or a session persistence that
+                # required you change virtual service types
+                # would have to make sure a virtual of the
+                # wrong type does not already exist or else
+                # delete it first. That would cause a service
+                # disruption. It would be better if the
+                # specification did not allow you to update
+                # L7 attributes if you already created a
+                # L4 service.  You should have to delete the
+                # vip and then create a new one.  That way
+                # the end user expects the service outage.
+
+                #virtual_type = 'fastl4'
+                #if 'protocol' in service['vip']:
+                #    if service['vip']['protocol'] == 'HTTP' or \
+                #       service['vip']['protocol'] == 'HTTPS':
+                #        virtual_type = 'standard'
+                #if 'session_persistence' in service['vip']:
+                #    if service['vip']['session_persistence'] == \
+                #       'APP_COOKIE':
+                #        virtual_type = 'standard'
+
+                # Hard code to standard until we decide if we
+                # want to handle the check/delete before create
+                # and document the service outage associated
+                # with deleting a virtual service. We'll leave
+                # the steering logic for create in place.
+                # Be aware the check/delete before create
+                # is not in the logic below because it means
+                # another set of interactions with the device
+                # we don't need unless we decided to handle
+                # shifting from L4 to L7 or from L7 to L4
+
+                virtual_type = 'standard'
+
+                if virtual_type == 'standard':
+                    if bigip.virtual_server.create(
+                                    name=service['vip']['id'],
+                                    ip_address=ip_address,
+                                    mask='255.255.255.255',
+                                    port=int(service['vip']['protocol_port']),
+                                    protocol=service['vip']['protocol'],
+                                    vlan_name=vlan_name,
+                                    traffic_group=tg,
+                                    use_snat=self.conf.f5_snat_mode,
+                                    snat_pool_name=snat_pool_name,
+                                    folder=service['pool']['tenant_id']
+                                   ):
+                        # created update driver traffic group mapping
+                        tg = bigip.virtual_server.get_traffic_group(
+                                        name=service['vip']['ip'],
+                                        folder=service['pool']['tenant_id'])
+                        self.__vips_to_traffic_group[service['vip']['ip']] = tg
+                        self.plugin_rpc.update_vip_status(
+                                            service['vip']['id'],
+                                            status=plugin_const.ACTIVE,
+                                            status_description='vip created'
+                                           )
+                else:
+                    if bigip.virtual_server.create_fastl4(
+                                    name=service['vip']['id'],
+                                    ip_address=ip_address,
+                                    mask='255.255.255.255',
+                                    port=int(service['vip']['protocol_port']),
+                                    protocol=service['vip']['protocol'],
+                                    vlan_name=vlan_name,
+                                    traffic_group=tg,
+                                    use_snat=self.conf.f5_snat_mode,
+                                    snat_pool_name=snat_pool_name,
+                                    folder=service['pool']['tenant_id']
+                                   ):
+                        # created update driver traffic group mapping
+                        tg = bigip.virtual_server.get_traffic_group(
+                                        name=service['vip']['ip'],
+                                        folder=service['pool']['tenant_id'])
+                        self.__vips_to_traffic_group[service['vip']['ip']] = tg
+                        self.plugin_rpc.update_vip_status(
+                                            service['vip']['id'],
+                                            status=plugin_const.ACTIVE,
+                                            status_description='vip created'
+                                           )
+
                 if service['vip']['status'] == \
                         plugin_const.PENDING_CREATE or \
                    service['vip']['status'] == \
@@ -586,34 +709,118 @@ class iControlDriver(object):
                                     name=service['vip']['id'],
                                     folder=service['pool']['tenant_id'])
 
-                    #TODO: fix session peristence
-                    if 'session_persistence' in service:
+                    if 'session_persistence' in service['vip']:
+                        # branch on persistence type
                         persistence_type = \
                                service['vip']['session_persistence']['type']
-                        if persistence_type == 'HTTP_COOKIE':
-                            pass
+
+                        if persistence_type == 'SOURCE_IP' or \
+                             service['pool']['lb_method'] == 'SOURCE_IP':
+                            # add source_addr persistence profile
+                            bigip.virtual_server.set_persist_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/source_addr',
+                                folder=service['vip']['tenant_id'])
+                        elif persistence_type == 'HTTP_COOKIE':
+                            # HTTP cooke persistence requires an http profile
+                            bigip.virtual_server.virtual_server.add_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/http',
+                                folder=service['vip']['tenant_id'])
+                            # add standard cookie persistence profile
+                            bigip.virtual_server.set_persistence_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/cookie',
+                                folder=service['pool']['tenant_id'])
                         elif persistence_type == 'APP_COOKIE':
-                            pass
-                        elif persistence_type == 'SOURCE_IP':
-                            pass
+                            # application cookie persistence requires
+                            # an http profile
+                            bigip.virtual_server.virtual_server.add_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/http',
+                                folder=service['vip']['tenant_id'])
+                            # make sure they gave us a cookie_name
+                            if 'cookie_name' in \
+                          service['vip']['session_persistence']['cookie_name']:
+                                cookie_name = \
+                          service['vip']['session_persistence']['cookie_name']
+                                # create and add irule to capture cookie
+                                # from the service response.
+                                rule_definition = \
+                          self._create_app_cookie_persist_rule(cookie_name)
+                                # try to create the irule
+                                if bigip.rule.create(
+                                        name=APP_COOKIE_RULE_PREFIX + \
+                                             service['vip']['id'],
+                                        rule_definition=rule_definition,
+                                        folder=service['vip']['tenant_id']):
+                                    # create universal persistence profile
+                                    bigip.virtual_server.create_uie_profile(
+                                        name=APP_COOKIE_RULE_PREFIX + \
+                                              service['vip']['id'],
+                                        rule_name=APP_COOKIE_RULE_PREFIX + \
+                                                  service['vip']['id'],
+                                        folder=service['vip']['tenant_id'])
+                                # set persistence profile
+                                bigip.virtual_server.set_persist_profile(
+                                        name=service['vip']['id'],
+                                        profile_name=APP_COOKIE_RULE_PREFIX + \
+                                                 service['vip']['id'],
+                                        folder=service['vip']['tenant_id'])
+                            else:
+                                # if they did not supply a cookie_name
+                                # just default to regualar cookie peristence
+                                bigip.virtual_server.set_persist_profile(
+                                       name=service['vip']['id'],
+                                       profile_name='/Common/cookie',
+                                       folder=service['vip']['tenant_id'])
 
-                    #TODO: fix vitual service protocol
-                    if 'protocol' in service['vip']:
-                        protocol = service['vip']['protocol']
-                        if protocol == 'HTTP':
-                            pass
-                        if protocol == 'HTTPS':
-                            pass
-                        if protocol == 'TCP':
-                            pass
+                    rule_name = 'http_throttle_' + service['vip']['id']
 
-                    if service['vip']['connection_limit'] > 0:
-                        bigip.virtual_server.set_connection_limit(
+                    if service['vip']['connection_limit'] > 0 and \
+                       'protocol' in service['vip']:
+                        # spec says you need to do this for HTTP
+                        # and HTTPS, but unless you can decrypt
+                        # you can't measure HTTP rps for HTTPs... Duh..
+                        if service['vip']['protocol'] == 'HTTP':
+                            # add an http profile
+                            bigip.virtual_server.virtual_server.add_profile(
+                                name=service['vip']['id'],
+                                profile_name='/Common/http',
+                                folder=service['vip']['tenant_id'])
+                            # create the rps irule
+                            rule_definition = \
+                              self._create_http_rps_throttle_rule(
+                                            service['vip']['connection_limit'])
+                            # try to create the irule
+                            bigip.rule.create(
+                                    name=RPS_THROTTLE_RULE_PREFIX + \
+                                     service['vip']['id'],
+                                    rule_definition=rule_definition,
+                                    folder=service['vip']['tenant_id'])
+                            # add the throttle to the vip
+                            bigip.virtual_server.add_rule(
+                                        name=service['vip']['id'],
+                                        rule_name=RPS_THROTTLE_RULE_PREFIX + \
+                                              service['vip']['id'],
+                                        priority=500,
+                                        folder=service['vip']['tenant_id'])
+                        else:
+                            # if not HTTP.. use connection limits
+                            bigip.virtual_server.set_connection_limit(
                                 name=service['vip']['id'],
                                 connection_limit=int(
                                         service['vip']['connection_limit']),
                                 folder=service['pool']['tenant_id'])
                     else:
+                        # clear throttle rule
+                        bigip.virtual_server.remove_rule(
+                                            name=RPS_THROTTLE_RULE_PREFIX + \
+                                            service['vip']['id'],
+                                            rule_name=rule_name,
+                                            priority=500,
+                                            folder=service['vip']['tenant_id'])
+                        # clear the connection limits
                         bigip.virtual_server.set_connection_limit(
                                 name=service['vip']['id'],
                                 connection_limit=0,
@@ -729,24 +936,30 @@ class iControlDriver(object):
                             # another member is delete on this subnet
                             deleted_subnets.append(member['subnet']['id'])
 
-        # if something was deleted check whether to do domain+folder teardown 
+        # if something was deleted check whether to do domain+folder teardown
         if service['pool']['status'] == plugin_const.PENDING_DELETE or \
              delete_monitor_if_unused or delete_vip_service_networks or \
              delete_member_service_networks:
-            existing_monitors = bigip.monitor.get_monitors(folder=service['pool']['tenant_id'])
-            existing_pools = bigip.pool.get_pools(folder=service['pool']['tenant_id'])
+            existing_monitors = bigip.monitor.get_monitors(
+                                    folder=service['pool']['tenant_id'])
+            existing_pools = bigip.pool.get_pools(
+                                    folder=service['pool']['tenant_id'])
             existing_vips = bigip.virtual_server.get_virtual_service_insertion(
-                                            folder=service['pool']['tenant_id'])
+                                    folder=service['pool']['tenant_id'])
 
-            if not existing_monitors and not existing_pools and not existing_vips:
+            if not existing_monitors and \
+               not existing_pools and \
+               not existing_vips:
                 try:
-                    bigip.route.delete_domain(folder=service['pool']['tenant_id'])
-                    bigip.system.set_folder(folder='/Common')
-                    bigip.system.delete_folder(folder='uuid_'+service['pool']['tenant_id'])
+                    bigip.route.delete_domain(
+                                folder=service['pool']['tenant_id'])
+                    #bigip.system.set_folder(folder='/Common')
+                    #bigip.system.delete_folder(
+                    #            folder='uuid_' + service['pool']['tenant_id'])
                 except:
-                    LOG.error("Error cleaning up tenant " + service['pool']['tenant_id'])
+                    LOG.error("Error cleaning up tenant " + \
+                                       service['pool']['tenant_id'])
                     pass
-
 
     def _assure_service_networks(self, service):
 
@@ -786,7 +999,6 @@ class iControlDriver(object):
                     subnet_id not in assured_floating_default_gateway:
                     self._assure_floating_default_gateway(member, service)
                     assured_floating_default_gateway.append(subnet_id)
-
 
     def _assure_network(self, network):
         # setup all needed L2 network segments on all BigIPs
@@ -1200,7 +1412,8 @@ class iControlDriver(object):
                     bigip.snat.remove_from_pool(name=snat_pool_name,
                                                 member_name=index_snat_name,
                                                 folder=network_folder)
-                    self.plugin_rpc.delete_port_by_name(port_name=index_snat_name)
+                    self.plugin_rpc.delete_port_by_name(
+                                                port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'ha':
                 # Create SNATs on traffic-group-1
                 snat_name = 'snat-traffic-group-1' + \
@@ -1211,7 +1424,8 @@ class iControlDriver(object):
                     bigip.snat.remove_from_pool(name=snat_pool_name,
                                                 member_name=index_snat_name,
                                                 folder=network_folder)
-                    self.plugin_rpc.delete_port_by_name(port_name=index_snat_name)
+                    self.plugin_rpc.delete_port_by_name(
+                                                port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'scalen':
                 # create SNATs on all provider defined traffic groups
                 for traffic_group in self.__traffic_groups:
@@ -1223,7 +1437,8 @@ class iControlDriver(object):
                         bigip.snat.remove_from_pool(name=snat_pool_name,
                                                 member_name=index_snat_name,
                                                 folder=network_folder)
-                        self.plugin_rpc.delete_port_by_name(port_name=index_snat_name)
+                        self.plugin_rpc.delete_port_by_name(
+                                                port_name=index_snat_name)
         # On each BIG-IP delete the local Self IP for this subnet
         for bigip in self.__bigips.values():
 
@@ -1328,6 +1543,53 @@ class iControlDriver(object):
             vlanid = 0
 
         return "vlan-" + str(interface).replace(".", "-") + "-" + str(vlanid)
+
+    def _create_app_cookie_persist_rule(self, cookiename):
+        rule_text = "when HTTP_REQUEST {\n"
+        rule_text += " if { [HTTP::cookie " + cookiename + "] ne \"\" }{\n"
+        rule_text += "     persist uie [string tolower [HTTP::cookie \""
+        rule_text += cookiename + "\"]] 3600\n"
+        rule_text += " }\n"
+        rule_text += "}\n\n"
+        rule_text += "when HTTP_RESPONSE {\n"
+        rule_text += " if { [HTTP::cookie \"" + cookiename + "\"] ne \"\" }{\n"
+        rule_text += "     persist add uie [string tolower [HTTP::cookie \""
+        rule_text += cookiename + "\"]] 3600\n"
+        rule_text += " }\n"
+        rule_text += "}\n\n"
+        return rule_text
+
+    def _create_http_rps_throttle_rule(self, req_limit):
+        rule_text = "when HTTP_REQUEST {\n"
+        rule_text += " set expiration_time 300\n"
+        rule_text += " set client_ip [IP::client_addr]\n"
+        rule_text += " set req_limit " + req_limit + "\n"
+        rule_text += " set curr_time [clock seconds]\n"
+        rule_text += " set timekey starttime\n"
+        rule_text += " set reqkey reqcount\n"
+        rule_text += " set request_count [session lookup uie $reqkey]\n"
+        rule_text += " if { $request_count eq "" } {\n"
+        rule_text += "   set request_count 1\n"
+        rule_text += "   session add uie $reqkey $request_count "
+        rule_text += "$expiration_time\n"
+        rule_text += "   session add uie $timekey [expr {$curr_time - 2}]"
+        rule_text += "[expr {$expiration_time + 2}]\n"
+        rule_text += " } else {\n"
+        rule_text += "   set start_time [session lookup uie $timekey]\n"
+        rule_text += "   incr request_count\n"
+        rule_text += "   session add uie $reqkey $request_count"
+        rule_text += "$expiration_time\n"
+        rule_text += "   set elapsed_time [expr {$curr_time - $start_time}]\n"
+        rule_text += "   if {$elapsed_time < 60} {\n"
+        rule_text += "     set elapsed_time 60\n"
+        rule_text += "   }\n"
+        rule_text += "   set curr_rate [expr {$request_count /"
+        rule_text += "($elapsed_time/60)}]\n"
+        rule_text += "   if {$curr_rate > $req_limit}{\n"
+        rule_text += "     HTTP::respond 503 throttled \"Retry-After\" 60\n"
+        rule_text += "   }\n"
+        rule_text += " }\n"
+        rule_text += "}\n"
 
     def _init_connection(self):
         try:

@@ -9,6 +9,7 @@ from f5.bigip.bigip_interfaces.device import Device
 from f5.bigip.bigip_interfaces.monitor import Monitor
 from f5.bigip.bigip_interfaces.pool import Pool
 from f5.bigip.bigip_interfaces.route import Route
+from f5.bigip.bigip_interfaces.rule import Rule
 from f5.bigip.bigip_interfaces.selfip import SelfIP
 from f5.bigip.bigip_interfaces.snat import SNAT
 from f5.bigip.bigip_interfaces.nat import NAT
@@ -111,6 +112,15 @@ class BigIP(object):
             route = Route(self)
             self.interfaces['route'] = route
             return route
+
+    @property
+    def rule(self):
+        if 'rule' in self.interfaces:
+            return self.interfaces['rule']
+        else:
+            rule = Rule(self)
+            self.interfaces['rule'] = rule
+            return rule
 
     @property
     def virtual_server(self):

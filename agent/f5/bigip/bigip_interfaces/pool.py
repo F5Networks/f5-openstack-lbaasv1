@@ -1,12 +1,12 @@
-import os
+from f5.common import constants as const
+from f5.bigip import exceptions
+from f5.bigip.bigip_interfaces import domain_address
+from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+
 from suds import WebFault
-
-from f5.bigip.bigip_interfaces import domain_address, icontrol_folder, \
-    strip_folder_and_prefix
-
-# Local Traffic - Pool
-
-from neutron.common import log
+import os
+import netaddr
 
 import logging
 
@@ -26,7 +26,6 @@ class Pool(object):
         self.lb_node = self.bigip.icontrol.LocalLB.NodeAddressV2
 
     @icontrol_folder
-    @log.log
     def create(self, name=None, lb_method=None,
                description=None, folder='Common'):
         if not self.exists(name=name, folder=folder):
@@ -41,18 +40,20 @@ class Pool(object):
                 self.lb_pool.create_v2(pool_names,
                                        lb_methods,
                                        pool_members_seq)
+                if description:
+                    self.lb_pool.set_description([pool_names], [description])
+                return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
                     LOG.error(_(
-                        'tried to create a Pool when exists again..fix me!'))
-            if description:
-                self.lb_pool.set_description([pool_names], [description])
-            return True
+                        'tried to create a Pool when exists'))
+                    return False
+                else:
+                    raise wf
         else:
             return False
 
     @icontrol_folder
-    @log.log
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             nodes = self._get_nodes_for_members(
@@ -66,7 +67,6 @@ class Pool(object):
             return False
 
     @icontrol_folder
-    @log.log
     def get_members(self, name=None, folder='Common'):
         members = []
         for member in self.lb_pool.get_member_v2([name])[0]:
@@ -76,13 +76,10 @@ class Pool(object):
         return members
 
     @icontrol_folder
-    @log.log
     def get_pools(self, folder='Common'):
         return self.lb_pool.get_list()
 
-
     @icontrol_folder
-    @log.log
     def get_members_monitor_status(self, name=None, folder='Common'):
         return_members = []
         members = self.lb_pool.get_member_v2([name])[0]
@@ -109,7 +106,6 @@ class Pool(object):
         return return_members
 
     @icontrol_folder
-    @log.log
     def get_statisitcs(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             stats = self.lb_pool.get_statistics([name])[0][0].statistics
@@ -121,7 +117,6 @@ class Pool(object):
             return {}
 
     @icontrol_folder
-    @log.log
     def _get_nodes_for_members(self, name=None, folder='Common'):
         nodes = self.lb_node.get_list()
         if not len(nodes) > 0:
@@ -137,7 +132,6 @@ class Pool(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def add_member(self, name=None, ip_address=None, port=None,
                    folder='Common'):
         if self.exists(name=name, folder=folder) and \
@@ -153,7 +147,6 @@ class Pool(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def enable_member(self, name=None, ip_address=None, port=None,
                        folder='Common'):
         if self.exists(name=name, folder=folder) and \
@@ -179,7 +172,6 @@ class Pool(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def disable_member(self, name=None, ip_address=None, port=None,
                        folder='Common'):
         if self.exists(name=name, folder=folder) and \
@@ -205,7 +197,6 @@ class Pool(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def set_member_ratio(self, name=None, ip_address=None, port=None,
                          ratio=1, folder='Common'):
         if self.exists(name=name, folder=folder) and \
@@ -223,7 +214,6 @@ class Pool(object):
 
     @icontrol_folder
     @domain_address
-    @log.log
     def remove_member(self, name=None, ip_address=None,
                       port=None, folder='Common'):
         if self.exists(name=name, folder=folder) and \
@@ -253,19 +243,16 @@ class Pool(object):
         return False
 
     @icontrol_folder
-    @log.log
     def remove_node(self, name=None, folder='Common'):
         self.lb_node.delete_node_address([name])
         return True
 
     @icontrol_folder
-    @log.log
     def remove_nodes(self, node_names=None, folder='Common'):
         self.lb_node.delete_node_address([node_names])
         return True
 
     @icontrol_folder
-    @log.log
     def remove_node_by_address(self,
                                node_ip_address=None,
                                folder='Common'):
@@ -279,7 +266,6 @@ class Pool(object):
         return False
 
     @icontrol_folder
-    @log.log
     def get_nodes(self, folder='Common'):
         nodes = self.lb_node.get_list()
         for i in range(len(nodes)):
@@ -287,7 +273,6 @@ class Pool(object):
         return nodes
 
     @icontrol_folder
-    @log.log
     def get_node_addresses(self, folder='Common'):
         nodes = self.lb_node.get_list()
         node_addresses = []
@@ -298,7 +283,6 @@ class Pool(object):
         return node_addresses
 
     @icontrol_folder
-    @log.log
     def get_service_down_action(self, name=None, folder='Common'):
         service_down_action_type = self.lb_pool.typefactory.create(
             'LocalLB.ServiceDownAction')
@@ -318,7 +302,6 @@ class Pool(object):
             return 'NONE'
 
     @icontrol_folder
-    @log.log
     def set_service_down_action(self, name=None,
                                 service_down_action=None, folder='Common'):
         if self.exists(name=name, folder=folder):
@@ -331,7 +314,6 @@ class Pool(object):
             return False
 
     @icontrol_folder
-    @log.log
     def set_lb_method(self, name=None, lb_method=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             lb_method_type = self._get_lb_method_type(lb_method)
@@ -341,7 +323,6 @@ class Pool(object):
             return False
 
     @icontrol_folder
-    @log.log
     def get_lb_method(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             lb_method_type = self.lb_pool.typefactory.create(
@@ -361,7 +342,6 @@ class Pool(object):
                 return 'ROUND_ROBIN'
 
     @icontrol_folder
-    @log.log
     def set_description(self, name=None, description=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             self.lb_pool.set_description([name], [description])
@@ -370,22 +350,18 @@ class Pool(object):
             return False
 
     @icontrol_folder
-    @log.log
     def get_description(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             return self.lb_pool.get_description([name])[0]
 
     @icontrol_folder
-    @log.log
     def get_monitors(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
-            return strip_folder_and_prefix(self._get_monitors(name=name,
-                                                              folder=folder))
-        else:
-            return []
+        monitors = self._get_monitors(name=name, folder=folder)
+        if len(monitors) > 0:
+            monitors = strip_folder_and_prefix(monitors)
+        return monitors
 
     @icontrol_folder
-    @log.log
     def add_monitor(self, name=None, monitor_name=None, folder='Common'):
         monitors = self._get_monitors(name=name, folder=folder)
 
@@ -398,7 +374,6 @@ class Pool(object):
             return False
 
     @icontrol_folder
-    @log.log
     def remove_monitor(self, name=None, monitor_name=None, folder='Common'):
         monitors = self._get_monitors(name=name, folder=folder)
 
@@ -411,7 +386,6 @@ class Pool(object):
             return False
 
     @icontrol_folder
-    @log.log
     def _set_monitor_assoc(self, name=None, monitors=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             monitor_rule_type = self._get_monitor_rule_type(len(monitors))
@@ -428,7 +402,6 @@ class Pool(object):
             self.lb_pool.set_monitor_association([monitor_assoc])
 
     @icontrol_folder
-    @log.log
     def _get_monitors(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             monitors = self.lb_pool.get_monitor_association([name])[
@@ -438,6 +411,8 @@ class Pool(object):
                 monitors.remove('/Common/none')
 
             return monitors
+        else:
+            return []
 
     def _get_addr_port_seq(self, addr, port):
         addr_port_seq = self.lb_pool.typefactory.create(
@@ -492,14 +467,12 @@ class Pool(object):
             return service_down_action_type.SERVICE_DOWN_ACTION_NONE
 
     @icontrol_folder
-    @log.log
     def exists(self, name=None, folder='Common'):
         if name in self.lb_pool.get_list():
             return True
 
     @icontrol_folder
     @domain_address
-    @log.log
     def member_exists(self, name=None, ip_address=None,
                       port=None, folder='Common'):
         members = self.lb_pool.get_member_v2([name])
