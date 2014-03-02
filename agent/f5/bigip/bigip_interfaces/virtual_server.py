@@ -791,7 +791,7 @@ class VirtualServer(object):
 
     @icontrol_folder
     def virtual_address_exists(self, named_address=None, folder='Common'):
-        if name in self.lb_va.get_list():
+        if named_address in self.lb_va.get_list():
             return True
         else:
             return False
