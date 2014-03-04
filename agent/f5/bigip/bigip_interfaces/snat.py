@@ -33,8 +33,6 @@ class SNAT(object):
     def create(self, name=None, ip_address=None,
                traffic_group=None, snat_pool_name=None,
                folder='Common'):
-        if not snat_pool_name:
-            snat_pool_name = folder
 
         if not self.exists(name=name, folder=folder):
             if not traffic_group:
@@ -50,32 +48,44 @@ class SNAT(object):
                 else:
                     raise wf
 
-        if self.pool_exists(name=snat_pool_name, folder=folder):
-            self.add_to_pool(name=snat_pool_name,
-                             member_name=name,
-                             folder=folder)
-            return True
-        else:
-            try:
-                self.create_pool(name=snat_pool_name,
+        if snat_pool_name:
+            if self.pool_exists(name=snat_pool_name, folder=folder):
+                self.add_to_pool(name=snat_pool_name,
                              member_name=name,
                              folder=folder)
                 return True
-            except WebFault as wf:
-                if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                    'tried to create a SNATPool when exists'))
-                else:
-                    raise wf
+            else:
+                try:
+                    self.create_pool(name=snat_pool_name,
+                             member_name=name,
+                             folder=folder)
+                    return True
+                except WebFault as wf:
+                    if "already exists in partition" in str(wf.message):
+                        LOG.error(_('tried to create a SNATPool when exists'))
+                    else:
+                        raise wf
         return False
 
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            self.lb_snataddress.delete_translation_address([name])
+            try:
+                self.lb_snataddress.delete_translation_address([name])
+            except WebFault as wf:
+                if "is still referenced by a snat pool" \
+                                                           in str(wf.message):
+                    LOG.info('Can not delete SNAT address %s ..still in use.'
+                             % name)
+                    return False
+                else:
+                    raise wf
             return True
         else:
-            return False
+            # Odd logic compared to other delete.
+            # we need this because of the dependency
+            # on the SNAT address in other pools
+            return True
 
     @icontrol_folder
     def get_all(self, folder='Common'):
@@ -83,25 +93,40 @@ class SNAT(object):
 
     @icontrol_folder
     def create_pool(self, name=None, member_name=None, folder='Common'):
-        string_seq = \
-         self.lb_snatpool.typefactory.create('Common.StringSequence')
-        string_seq_seq = \
-         self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
-        string_seq.values = [member_name]
-        string_seq_seq.values = [string_seq]
-        self.lb_snatpool.create_v2([name], string_seq_seq)
-
-    @icontrol_folder
-    def add_to_pool(self, name=None, member_name=None, folder='Common'):
-        existing_members = self.lb_snatpool.get_member_v2([name])[0]
-        if not member_name in existing_members:
+        if not self.pool_exists(name=name, folder=folder):
             string_seq = \
              self.lb_snatpool.typefactory.create('Common.StringSequence')
             string_seq_seq = \
-        self.lb_snatpool.typefactory.create('Common.StringSequenceSequence')
-            string_seq.values = member_name
+             self.lb_snatpool.typefactory.create(
+                                         'Common.StringSequenceSequence')
+            string_seq.values = [member_name]
             string_seq_seq.values = [string_seq]
-            self.lb_snatpool.add_member_v2([name], string_seq_seq)
+            self.lb_snatpool.create_v2([name], string_seq_seq)
+        else:
+            existing_members = self.lb_snatpool.get_member_v2([name])[0]
+            if not member_name in existing_members:
+                string_seq = \
+                 self.lb_snatpool.typefactory.create('Common.StringSequence')
+                string_seq_seq = \
+            self.lb_snatpool.typefactory.create(
+                                             'Common.StringSequenceSequence')
+                string_seq.values = member_name
+                string_seq_seq.values = [string_seq]
+                self.lb_snatpool.add_member_v2([name], string_seq_seq)
+
+    @icontrol_folder
+    def add_to_pool(self, name=None, member_name=None, folder='Common'):
+        if self.pool_exists(name=name, folder=folder):
+            existing_members = self.lb_snatpool.get_member_v2([name])[0]
+            if not member_name in existing_members:
+                string_seq = \
+                 self.lb_snatpool.typefactory.create('Common.StringSequence')
+                string_seq_seq = \
+            self.lb_snatpool.typefactory.create(
+                                             'Common.StringSequenceSequence')
+                string_seq.values = member_name
+                string_seq_seq.values = [string_seq]
+                self.lb_snatpool.add_member_v2([name], string_seq_seq)
 
     @icontrol_folder
     def remove_from_pool(self, name=None, member_name=None, folder='Common'):
@@ -118,9 +143,10 @@ class SNAT(object):
             except WebFault as wf:
                 if "must reference at least one translation address" \
                                                            in str(wf.message):
-                    LOG.error(_(
-                    'removing SNATPool because last member is being removed'))
+                    LOG.error(
+                    'removing SNATPool because last member is being removed')
                     self.lb_snatpool.delete_snat_pool([name])
+                    return True
             return True
         return False
 

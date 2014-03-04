@@ -28,16 +28,18 @@ def icontrol_folder(method):
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
 
-            if 'virt_addr' in kwargs and kwargs['virt_addr']:
-                if kwargs['virt_addr'].startswith('/Common/'):
-                    kwargs['virt_addr'] = os.path.basename(kwargs['virt_addr'])
-                    kwargs['virt_addr'] = \
-                        instance.bigip.set_folder(kwargs['virt_addr'],
+            if 'named_address' in kwargs and kwargs['named_address']:
+                if kwargs['named_address'].startswith('/Common/'):
+                    kwargs['named_address'] = \
+                        os.path.basename(kwargs['named_address'])
+                    kwargs['named_address'] = \
+                        instance.bigip.set_folder(kwargs['named_address'],
                                                   'Common')
                 else:
-                    kwargs['virt_addr'] = os.path.basename(kwargs['virt_addr'])
-                    kwargs['virt_addr'] = \
-                        instance.bigip.set_folder(kwargs['virt_addr'],
+                    kwargs['named_address'] = \
+                        os.path.basename(kwargs['named_address'])
+                    kwargs['named_address'] = \
+                        instance.bigip.set_folder(kwargs['named_address'],
                                                   kwargs['folder'])
 
             for name in kwargs:
@@ -128,13 +130,34 @@ def domain_address(method):
     return wrapper
 
 
+def decorate_name(name=None, folder='Common'):
+    folder = os.path.basename(folder)
+    if not folder == 'Common':
+        if not folder.startswith(OBJ_PREFIX):
+            folder = OBJ_PREFIX + folder
+
+    if name.startswith('/Common/'):
+        name = os.path.basename(name)
+        if not name.startswith(OBJ_PREFIX):
+            name = OBJ_PREFIX + name
+        name = '/Common/' + name
+    else:
+        name = os.path.basename(name)
+        if not name.startswith(OBJ_PREFIX):
+            name = OBJ_PREFIX + name
+        name = '/' + folder + '/' + name
+    return name
+
+
 def strip_folder_and_prefix(path):
     if isinstance(path, list):
-        if path.startswith('/Common'):
-            return map(lambda p: p.replace(OBJ_PREFIX, ''), path)
-        else:
-            return map(lambda p: p.replace(OBJ_PREFIX, ''),
-                   map(os.path.basename, path))
+        for i in range(len(path)):
+            if path[i].startswith('/Common'):
+                path[i] = path[i].replace(OBJ_PREFIX, '')
+            else:
+                path[i] = \
+                  os.path.basename(str(path[i])).replace(OBJ_PREFIX, '')
+        return path
     else:
         if path.startswith('/Common'):
             return str(path).replace(OBJ_PREFIX, '')

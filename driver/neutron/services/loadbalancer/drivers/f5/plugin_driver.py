@@ -163,36 +163,54 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port']['subnet'] = None
                 retval['vip']['subnet_ports'] = []
             retval['members'] = []
-            for m in pool.members:
-                member = self.plugin._make_member_dict(m)
-                adminctx = get_admin_context()
-                alloc_qry = adminctx.session.query(models_v2.IPAllocation)
-                allocated = alloc_qry.filter_by(
-                                        ip_address=member['address']).all()
-                for alloc in allocated:
+            #for m in pool.members:
+            #    member = self.plugin._make_member_dict(m)
+                #adminctx = get_admin_context()
+                #alloc_qry = adminctx.session.query(models_v2.IPAllocation)
+                #allocated = alloc_qry.filter_by(
+                #                        ip_address=member['address']).all()
+                #for alloc in allocated:
                     # It is normal to find a duplicate IP for another tenant,
                     # so first see if we find its network under this
                     # tenant context. A NotFound exception is normal if
                     # the IP belongs to another tenant.
-                    try:
-                        net=self.plugin._core_plugin.get_network(
-                                             adminctx, alloc['network_id'])
-                    except:
-                        LOG.debug("Exception getting network ")
-                        continue
-                    if net['tenant_id'] != pool['tenant_id']:
-                        continue
-                    member['network'] = net
-                    member['subnet'] = \
+                #    try:
+                #        net=self.plugin._core_plugin.get_network(
+                #                             adminctx, alloc['network_id'])
+                #    except:
+                #        LOG.debug("Exception getting network ")
+                #        continue
+                #    if net['tenant_id'] != pool['tenant_id']:
+                #        continue
+                #    member['network'] = net
+                #    member['subnet'] = \
+                #        self.plugin._core_plugin.get_subnet(
+                #                             context, alloc['subnet_id'])
+                #    member_subnet_fixed_ip_filters = {'network_id':
+                #                            [member['subnet']['network_id']],
+                #             'device_id': [host]}
+                #    member['subnet_ports'] = self.plugin._core_plugin.get_ports(
+                #                                                   context,
+                #                      filters=member_subnet_fixed_ip_filters)
+
+            for m in pool.members:
+                member = self.plugin._make_member_dict(m)
+                alloc_qry = context.session.query(models_v2.IPAllocation)
+                allocated = alloc_qry.filter_by(
+                                        ip_address=member['address']).first()
+                member['subnet'] = \
                         self.plugin._core_plugin.get_subnet(
-                                             context, alloc['subnet_id'])
-                    member_subnet_fixed_ip_filters = {'network_id':
+                                             context, allocated['subnet_id'])
+                member['network'] = \
+                        self.plugin._core_plugin.get_network(
+                                             context, allocated['network_id'])
+                member_subnet_fixed_ip_filters = {'network_id':
                                             [member['subnet']['network_id']],
                              'device_id': [host]}
-                    member['subnet_ports'] = self.plugin._core_plugin.get_ports(
+                member['subnet_ports'] = self.plugin._core_plugin.get_ports(
                                                                    context,
                                       filters=member_subnet_fixed_ip_filters)
-                    retval['members'].append(member)
+                retval['members'].append(member)
 
             retval['health_monitors'] = []
             for hm in retval['pool']['health_monitors']:

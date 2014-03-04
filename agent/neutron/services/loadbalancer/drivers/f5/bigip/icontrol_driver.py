@@ -9,6 +9,7 @@ from neutron.services.loadbalancer.drivers.f5.bigip \
 from f5.bigip import bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
+from f5.bigip import bigip_interfaces
 
 from eventlet import greenthread
 
@@ -53,9 +54,16 @@ def serialized(method):
         instance.service_queue.append(my_request_id)
         waitsecs = .05
         while instance.service_queue[0] != my_request_id:
+            LOG.debug('%s request %s is blocking for %s secs - queue depth: %d'
+                      % (method.__name__, my_request_id,
+                         waitsecs, len(instance.service_queue)))
             greenthread.sleep(waitsecs)
             if waitsecs < 1:
                 waitsecs = waitsecs * 2
+        else:
+            LOG.debug('%s request %s is running with queue depth: %d'
+                      % (method.__name__, my_request_id,
+                         len(instance.service_queue)))
         result = method(*args, **kwargs)
         instance.service_queue.pop(0)
         return result
@@ -271,6 +279,7 @@ class iControlDriver(object):
                          > self.conf.icontrol_connection_retry_interval:
             self._init_connection()
 
+    @log.log
     def _assure_service(self, service, delete_monitor_if_unused=False):
 
         bigip = self._get_bigip()
@@ -291,6 +300,7 @@ class iControlDriver(object):
                 member['status'] = plugin_const.PENDING_DELETE
             for monitor in service['pool']['health_monitors_status']:
                 monitor['status'] = plugin_const.PENDING_DELETE
+            delete_monitor_if_unused = True
         else:
             if not bigip.pool.create(name=service['pool']['id'],
                               lb_method=service['pool']['lb_method'],
@@ -374,20 +384,22 @@ class iControlDriver(object):
 
                 if monitor['type'] == 'HTTP' or monitor['type'] == 'HTTPS':
                     if 'url_path' in monitor:
-                        send_text = "GET " + monitor['url_path'] + "\\r\\n"
+                        send_text = "GET " + monitor['url_path'] + \
+                                                        " HTTP/1.0\r\n\r\n"
                     else:
-                        send_text = "GET /\\r\\n"
+                        send_text = "GET / HTTP/1.0\r\n\r\n"
+
                     if 'expected_codes' in monitor:
                         try:
                             if monitor['expected_codes'].find(",") > 0:
                                 status_codes = \
                                     monitor['expected_codes'].split(',')
-                                recv_text = "^HTTP\/1\.[10]\s["
+                                recv_text = "HTTP/1\.(0|1) ("
                                 for status in status_codes:
                                     int(status)
-                                    recv_text += "status|"
+                                    recv_text += status + "|"
                                 recv_text = recv_text[:-1]
-                                recv_text += "]"
+                                recv_text += ")"
                             elif monitor['expected_codes'].find("-") > 0:
                                 status_range = \
                                     monitor['expected_codes'].split('-')
@@ -396,20 +408,23 @@ class iControlDriver(object):
                                 stop_range = status_range[1]
                                 int(stop_range)
                                 recv_text = \
-                                    "^HTTP\/1\.[10]\s[" + \
+                                    "HTTP/1\.(0|1) [" + \
                                     start_range + "-" + \
                                     stop_range + "]"
                             else:
                                 int(monitor['expected_codes'])
-                                recv_text = "^HTTP.1.1\s" + \
+                                recv_text = "HTTP/1\.(0|1) " + \
                                             monitor['expected_codes']
                         except:
                             LOG.error(_(
                             "invalid monitor expected_codes %s, setting to 200"
                             % monitor['expected_codes']))
-                            recv_text = "^HTTP.1.1\s200"
+                            recv_text = "HTTP/1\.(0|1) 200"
                     else:
-                        recv_text = "^HTTP.1.1\s200"
+                        recv_text = "HTTP/1\.(0|1) 200"
+
+                    LOG.debug('setting monitor send: %s, receive: %s'
+                              % (send_text, recv_text))
 
                     bigip.monitor.set_send_string(name=monitor['id'],
                                                   send_text=send_text,
@@ -428,6 +443,7 @@ class iControlDriver(object):
                                     status=plugin_const.ACTIVE,
                                     status_description='monitor active'
                                  )
+
             if monitor['id'] in existing_monitors:
                 existing_monitors.remove(monitor['id'])
 
@@ -600,7 +616,9 @@ class iControlDriver(object):
                 snat_pool_name = None
                 if self.conf.f5_snat_mode and \
                    self.conf.f5_snat_addresses_per_subnet > 0:
-                        snat_pool_name = service['pool']['tenant_id']
+                        snat_pool_name = bigip_interfaces.decorate_name(
+                                    service['pool']['tenant_id'],
+                                    service['pool']['tenant_id'])
 
                 # This is where you could decide to use a fastl4
                 # or a standard virtual server.  The problem
@@ -650,7 +668,7 @@ class iControlDriver(object):
                                     vlan_name=vlan_name,
                                     traffic_group=tg,
                                     use_snat=self.conf.f5_snat_mode,
-                                    snat_pool_name=snat_pool_name,
+                                    snat_pool=snat_pool_name,
                                     folder=service['pool']['tenant_id']
                                    ):
                         # created update driver traffic group mapping
@@ -673,7 +691,7 @@ class iControlDriver(object):
                                     vlan_name=vlan_name,
                                     traffic_group=tg,
                                     use_snat=self.conf.f5_snat_mode,
-                                    snat_pool_name=snat_pool_name,
+                                    snat_pool=snat_pool_name,
                                     folder=service['pool']['tenant_id']
                                    ):
                         # created update driver traffic group mapping
@@ -717,12 +735,14 @@ class iControlDriver(object):
                         if persistence_type == 'SOURCE_IP' or \
                              service['pool']['lb_method'] == 'SOURCE_IP':
                             # add source_addr persistence profile
+                            LOG.debug('adding source_addr primary persistence')
                             bigip.virtual_server.set_persist_profile(
                                 name=service['vip']['id'],
                                 profile_name='/Common/source_addr',
                                 folder=service['vip']['tenant_id'])
                         elif persistence_type == 'HTTP_COOKIE':
                             # HTTP cooke persistence requires an http profile
+                            LOG.debug('adding http profile and primary cookie persistence')
                             bigip.virtual_server.virtual_server.add_profile(
                                 name=service['vip']['id'],
                                 profile_name='/Common/http',
@@ -735,6 +755,7 @@ class iControlDriver(object):
                         elif persistence_type == 'APP_COOKIE':
                             # application cookie persistence requires
                             # an http profile
+                            LOG.debug('adding http profile and primary universal persistence')
                             bigip.virtual_server.virtual_server.add_profile(
                                 name=service['vip']['id'],
                                 profile_name='/Common/http',
@@ -783,6 +804,7 @@ class iControlDriver(object):
                         # and HTTPS, but unless you can decrypt
                         # you can't measure HTTP rps for HTTPs... Duh..
                         if service['vip']['protocol'] == 'HTTP':
+                            LOG.debug('adding http profile and RPS throttle rule')
                             # add an http profile
                             bigip.virtual_server.virtual_server.add_profile(
                                 name=service['vip']['id'],
@@ -806,6 +828,7 @@ class iControlDriver(object):
                                         priority=500,
                                         folder=service['vip']['tenant_id'])
                         else:
+                            LOG.debug('setting connection limit')
                             # if not HTTP.. use connection limits
                             bigip.virtual_server.set_connection_limit(
                                 name=service['vip']['id'],
@@ -814,6 +837,7 @@ class iControlDriver(object):
                                 folder=service['pool']['tenant_id'])
                     else:
                         # clear throttle rule
+                        LOG.debug('removing RPS throttle rule if present')
                         bigip.virtual_server.remove_rule(
                                             name=RPS_THROTTLE_RULE_PREFIX + \
                                             service['vip']['id'],
@@ -821,6 +845,7 @@ class iControlDriver(object):
                                             priority=500,
                                             folder=service['vip']['tenant_id'])
                         # clear the connection limits
+                        LOG.debug('removing connection limits')
                         bigip.virtual_server.set_connection_limit(
                                 name=service['vip']['id'],
                                 connection_limit=0,
@@ -1064,7 +1089,7 @@ class iControlDriver(object):
 
         bigip = self._get_bigip()
         # Setup non-floating Self IPs on all BigIPs
-        snat_pool_name = service_object['subnet']['tenant_id']
+        snat_pool_name = service['pool']['tenant_id']
         # Where to put all these objects?
         network_folder = service_object['subnet']['tenant_id']
         if service_object['network']['shared']:
@@ -1107,7 +1132,6 @@ class iControlDriver(object):
                 # Create SNATs on traffic-group-local-only
                 snat_name = 'snat-traffic-group-local-only-' + \
                  service_object['subnet']['id']
-                snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     ip_address = None
                     index_snat_name = snat_name + "_" + str(i)
@@ -1122,19 +1146,25 @@ class iControlDriver(object):
                             name=index_snat_name,
                             fixed_address_count=1)
                         ip_address = new_port['fixed_ips'][0]['ip_address']
-                bigip.snat.create(
+                    if service_object['network']['shared']:
+                        ip_address = ip_address + '%0'
+                    if service_object['network']['shared']:
+                        index_snat_name = '/Common/' + index_snat_name
+                    bigip.snat.create(
                      name=index_snat_name,
                      ip_address=ip_address,
                      traffic_group='/Common/traffic-group-local-only',
-                     snat_pool_name=snat_pool_name,
+                     snat_pool_name=None,
                      folder=network_folder
                     )
+                    bigip.snat.create_pool(name=snat_pool_name,
+                                           member_name=index_snat_name,
+                                           folder=service['pool']['tenant_id'])
 
             elif self.conf.f5_ha_type == 'ha':
                 # Create SNATs on traffic-group-1
                 snat_name = 'snat-traffic-group-1' + \
                  service_object['subnet']['id']
-                snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     ip_address = None
                     index_snat_name = snat_name + "_" + str(i)
@@ -1149,21 +1179,27 @@ class iControlDriver(object):
                             name=index_snat_name,
                             fixed_address_count=1)
                         ip_address = new_port['fixed_ips'][0]['ip_address']
-
+                    if service_object['network']['shared']:
+                            ip_address = ip_address + '%0'
+                    if service_object['network']['shared']:
+                        index_snat_name = '/Common/' + index_snat_name
                     bigip.snat.create(
                      name=index_snat_name,
                      ip_address=ip_address,
                      traffic_group='/Common/traffic-group-1',
-                     snat_pool_name=snat_pool_name,
-                     folder=network_folder
+                     snat_pool_name=None,
+                     folder=service_object['subnet']['tenant_id']
                     )
+                    bigip.snat.create_pool(name=snat_pool_name,
+                                           member_name=index_snat_name,
+                                           folder=service['pool']['tenant_id'])
+
             elif self.conf.f5_ha_type == 'scalen':
                 # create SNATs on all provider defined traffic groups
                 for traffic_group in self.__traffic_groups:
                     for i in range(self.conf.f5_snat_addresses_per_subnet):
                         snat_name = "snat-" + traffic_group + "-" + \
                          service_object['subnet']['id']
-                        snat_name = snat_name[0:60]
                         ip_address = None
                         index_snat_name = snat_name + "_" + str(i)
 
@@ -1178,14 +1214,20 @@ class iControlDriver(object):
                                 name=index_snat_name,
                                 fixed_address_count=1)
                             ip_address = new_port['fixed_ips'][0]['ip_address']
-
+                        if service_object['network']['shared']:
+                            ip_address = ip_address + '%0'
+                        if service_object['network']['shared']:
+                            index_snat_name = '/Common/' + index_snat_name
                         bigip.snat.create(
                          name=index_snat_name,
                          ip_address=ip_address,
                          traffic_group=traffic_group,
-                         snat_pool_name=snat_pool_name,
-                         folder=network_folder
+                         snat_pool_name=None,
+                         folder=service_object['subnet']['tenant_id']
                         )
+                        bigip.snat.create_pool(name=snat_pool_name,
+                                           member_name=index_snat_name,
+                                           folder=service['pool']['tenant_id'])
 
     def _assure_floating_default_gateway(self, service_object, service):
 
@@ -1397,7 +1439,7 @@ class iControlDriver(object):
         network_folder = service_object['subnet']['tenant_id']
         if service_object['network']['shared']:
             network_folder = 'Common'
-        snat_pool_name = service_object['subnet']['tenant_id']
+        snat_pool_name = service['pool']['tenant_id']
         # Setup required SNAT addresses on this subnet
         # based on the HA requirements
         if self.conf.f5_snat_addresses_per_subnet > 0:
@@ -1406,38 +1448,62 @@ class iControlDriver(object):
                 # Create SNATs on traffic-group-local-only
                 snat_name = 'snat-traffic-group-local-only-' + \
                  service_object['subnet']['id']
-                snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
+                    if service_object['network']['shared']:
+                        tmos_snat_name = "/Common/" + index_snat_name
+                    else:
+                        tmos_snat_name = index_snat_name
                     bigip.snat.remove_from_pool(name=snat_pool_name,
-                                                member_name=index_snat_name,
-                                                folder=network_folder)
-                    self.plugin_rpc.delete_port_by_name(
-                                                port_name=index_snat_name)
+                                         member_name=tmos_snat_name,
+                                         folder=service['pool']['tenant_id'])
+                    if bigip.snat.delete(name=tmos_snat_name,
+                                         folder=network_folder):
+                        # Only if it still exists and can be
+                        # deleted because it is not in use can
+                        # we safely delete the neutron port
+                        self.plugin_rpc.delete_port_by_name(
+                                            port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'ha':
                 # Create SNATs on traffic-group-1
                 snat_name = 'snat-traffic-group-1' + \
                  service_object['subnet']['id']
-                snat_name = snat_name[0:60]
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
+                    if service_object['network']['shared']:
+                        tmos_snat_name = "/Common/" + index_snat_name
+                    else:
+                        tmos_snat_name = index_snat_name
                     bigip.snat.remove_from_pool(name=snat_pool_name,
-                                                member_name=index_snat_name,
-                                                folder=network_folder)
-                    self.plugin_rpc.delete_port_by_name(
-                                                port_name=index_snat_name)
+                                        member_name=tmos_snat_name,
+                                        folder=service['pool']['tenant_id'])
+                    if bigip.snat.delete(name=tmos_snat_name,
+                                         folder=network_folder):
+                        # Only if it still exists and can be
+                        # deleted because it is not in use can
+                        # we safely delete the neutron port
+                        self.plugin_rpc.delete_port_by_name(
+                                            port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'scalen':
                 # create SNATs on all provider defined traffic groups
                 for traffic_group in self.__traffic_groups:
                     for i in range(self.conf.f5_snat_addresses_per_subnet):
                         snat_name = "snat-" + traffic_group + "-" + \
                          service_object['subnet']['id']
-                        snat_name = snat_name[0:60]
                         index_snat_name = snat_name + "_" + str(i)
+                        if service_object['network']['shared']:
+                            tmos_snat_name = "/Common/" + index_snat_name
+                        else:
+                            tmos_snat_name = index_snat_name
                         bigip.snat.remove_from_pool(name=snat_pool_name,
-                                                member_name=index_snat_name,
-                                                folder=network_folder)
-                        self.plugin_rpc.delete_port_by_name(
+                                        member_name=tmos_snat_name,
+                                        folder=service['pool']['tenant_id'])
+                        if bigip.snat.delete(name=tmos_snat_name,
+                                                 folder=network_folder):
+                            # Only if it still exists and can be
+                            # deleted because it is not in use can
+                            # we safely delete the neutron port
+                            self.plugin_rpc.delete_port_by_name(
                                                 port_name=index_snat_name)
         # On each BIG-IP delete the local Self IP for this subnet
         for bigip in self.__bigips.values():

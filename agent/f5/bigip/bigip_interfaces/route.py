@@ -87,9 +87,13 @@ class Route(object):
             self.bigip.system.delete_folder(folder)
         except WebFault as wf:
             if "is referenced" in str(wf.message):
-                return
-            if "All objects must be removed" in str(wf.message):
-                return
+                LOG.error('delete route domain %s failed %s'
+                          % (folder, wf.message))
+            elif "All objects must be removed" in str(wf.message):
+                LOG.error('delete route domain %s failed %s'
+                          % (folder, wf.message))
+            else:
+                raise wf
 
     @icontrol_folder
     def get_domain(self, folder='Common'):

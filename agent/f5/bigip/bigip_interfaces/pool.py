@@ -442,7 +442,7 @@ class Pool(object):
         if lb_method == 'LEAST_CONNECTIONS':
             return lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER
         elif lb_method == 'SOURCE_IP':
-            return lb_method_type.LB_METHOD_LEAST_CONNECTION_NODE
+            return lb_method_type.LB_METHOD_LEAST_CONNECTION_NODE_ADDRESS
         elif lb_method == 'OBSERVED_MEMBER':
             return lb_method_type.LB_METHOD_OBSERVED_MEMBER
         elif lb_method == 'PREDICTIVE_MEMBER':

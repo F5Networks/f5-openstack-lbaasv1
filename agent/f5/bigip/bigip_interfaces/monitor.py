@@ -122,7 +122,7 @@ class Monitor(object):
             value = self.lb_monitor.typefactory.create(
                                 'LocalLB.Monitor.IntegerValue')
             value.type = self.lb_monitor.typefactory.create(
-                                'Monitor.IntPropertyType').ITYPE_INTERVAL
+                                'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
             value.value = int(interval)
             self.lb_monitor.set_template_integer_property([name], [value])
             return True
@@ -143,7 +143,7 @@ class Monitor(object):
             value = self.lb_monitor.typefactory.create(
                                 'LocalLB.Monitor.IntegerValue')
             value.type = self.lb_monitor.typefactory.create(
-                                'Monitor.IntPropertyType').ITYPE_TIMEOUT
+                                'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
             value.value = int(timeout)
             self.lb_monitor.set_template_integer_property([name], [value])
             return True
@@ -152,8 +152,7 @@ class Monitor(object):
 
     @icontrol_folder
     def get_send_string(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and \
-           self.get_type(name) in ['TCP', 'HTTP']:
+        if self.exists(name=name, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                          'LocalLB.Monitor.StrPropertyType').STYPE_SEND
             return self.lb_monitor.get_template_string_property(
@@ -161,8 +160,7 @@ class Monitor(object):
 
     @icontrol_folder
     def set_send_string(self, name=None, send_text=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and send_text and \
-           self.get_type(name) in ['TCP', 'HTTP']:
+        if self.exists(name=name, folder=folder) and send_text:
             value = self.lb_monitor.typefactory.create(
                             'LocalLB.Monitor.StringValue')
             value.type = self.lb_monitor.typefactory.create(
@@ -175,8 +173,7 @@ class Monitor(object):
 
     @icontrol_folder
     def get_recv_string(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and \
-           self.get_type(name) in ['TCP', 'HTTP']:
+        if self.exists(name=name, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                          'LocalLB.Monitor.StrPropertyType').STYPE_RECEIVE
             return self.lb_monitor.get_template_string_property(
@@ -184,9 +181,7 @@ class Monitor(object):
 
     @icontrol_folder
     def set_recv_string(self, name=None, recv_text=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and \
-           recv_text and \
-           self.get_type(name) in ['TCP', 'HTTP']:
+        if self.exists(name=name, folder=folder) and recv_text:
             value = self.lb_monitor.typefactory.create(
                          'LocalLB.Monitor.StringValue')
             value.type = self.lb_monitor.typefactory.create(

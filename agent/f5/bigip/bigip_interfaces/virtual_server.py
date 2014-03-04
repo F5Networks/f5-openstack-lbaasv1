@@ -36,7 +36,7 @@ class VirtualServer(object):
     def create(self, name=None, ip_address=None, mask=None,
                port=None, protocol=None, vlan_name=None,
                traffic_group=None, use_snat=True,
-               snat_pool_name=None, folder='Common'):
+               snat_pool=None, folder='Common'):
 
         if not self.exists(name=name, folder=folder):
 
@@ -83,8 +83,8 @@ class VirtualServer(object):
                     raise wf
 
             if use_snat:
-                if snat_pool_name:
-                    self.lb_vs.set_snat_pool([name], [snat_pool_name])
+                if snat_pool:
+                    self.lb_vs.set_snat_pool([name], [snat_pool])
                 else:
                     self.lb_vs.set_snat_automap([name])
 
@@ -112,7 +112,7 @@ class VirtualServer(object):
     def create_ip_forwarder(self, name=None, ip_address=None,
                             mask=None, vlan_name=None,
                             traffic_group=None, use_snat=True,
-                            snat_pool_name=None, folder='Common'):
+                            snat_pool=None, folder='Common'):
         if not self.exists(name=name, folder=folder):
             # virtual server definition
             vs_def = self.lb_vs.typefactory.create(
@@ -150,8 +150,8 @@ class VirtualServer(object):
                     raise wf
 
             if use_snat:
-                if snat_pool_name:
-                    self.lb_vs.set_snat_pool([name], [snat_pool_name])
+                if snat_pool:
+                    self.lb_vs.set_snat_pool([name], [snat_pool])
                 else:
                     self.lb_vs.set_snat_automap([name])
 
@@ -179,7 +179,7 @@ class VirtualServer(object):
     def create_fastl4(self, name=None, ip_address=None, mask=None,
                port=None, protocol=None, vlan_name=None,
                traffic_group=None, use_snat=True,
-               snat_pool_name=None, folder='Common'):
+               snat_pool=None, folder='Common'):
 
         if not self.exists(name=name, folder=folder):
 
@@ -226,8 +226,8 @@ class VirtualServer(object):
                     raise wf
 
             if use_snat:
-                if snat_pool_name:
-                    self.lb_vs.set_snat_pool([name], [snat_pool_name])
+                if snat_pool:
+                    self.lb_vs.set_snat_pool([name], [snat_pool])
                 else:
                     self.lb_vs.set_snat_automap([name])
 
@@ -523,6 +523,8 @@ class VirtualServer(object):
     def set_persist_profile(self, name=None, profile_name=None,
                                 folder='Common'):
         if self.exists(name=name, folder=folder):
+            if profile_name.startswith('/Common'):
+                profile_name = strip_folder_and_prefix(profile_name)
             vsp = self.lb_vs.typefactory.create(
             'LocalLB.VirtualServer.VirtualServerPersistence')
             vsp.profile_name = profile_name
@@ -550,6 +552,8 @@ class VirtualServer(object):
     def remove_and_delete_persist_profile(self, name=None,
                                           profile_name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
+            if profile_name.startswith("/Common"):
+                profile_name = strip_folder_and_prefix(profile_name)
             persist_profiles = self.lb_vs.get_persistence_profile([name])[0]
             profile_names_to_remove = []
             profiles_to_remove = []
