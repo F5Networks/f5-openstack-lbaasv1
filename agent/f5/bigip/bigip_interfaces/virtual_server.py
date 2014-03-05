@@ -480,7 +480,7 @@ class VirtualServer(object):
     @icontrol_folder
     def add_rule(self, name=None, rule_name=None,
                      priority=500, folder='Common'):
-        if self.exist(name=name, folder=folder):
+        if self.exists(name=name, folder=folder):
             if not self.virtual_server_has_rule(name=name,
                                                 rule_name=rule_name,
                                                 folder=folder):
@@ -501,7 +501,7 @@ class VirtualServer(object):
     @icontrol_folder
     def remove_rule(self, name=None, rule_name=None,
                     priority=500, folder='Common'):
-        if self.exist(name=name, folder=folder):
+        if self.exists(name=name, folder=folder):
             if self.virtual_server_has_rule(name=name,
                                             rule_name=rule_name,
                                             folder=folder):
@@ -525,18 +525,46 @@ class VirtualServer(object):
         if self.exists(name=name, folder=folder):
             if profile_name.startswith('/Common'):
                 profile_name = strip_folder_and_prefix(profile_name)
-            vsp = self.lb_vs.typefactory.create(
-            'LocalLB.VirtualServer.VirtualServerPersistence')
-            vsp.profile_name = profile_name
-            vsp.default_profile = True
-            vsp_seq = self.lb_vs.typefactory.create(
-            'LocalLB.VirtualServer.VirtualServerPersistenceSequence')
-            vsp_seq.values = [vsp]
-            vsp_seq_seq = self.lb_vs.typefactory.create(
+            try:
+                vsp = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerPersistence')
+                vsp.profile_name = profile_name
+                vsp.default_profile = True
+                vsp_seq = self.lb_vs.typefactory.create(
+                'LocalLB.VirtualServer.VirtualServerPersistenceSequence')
+                vsp_seq.values = [vsp]
+                vsp_seq_seq = self.lb_vs.typefactory.create(
             'LocalLB.VirtualServer.VirtualServerPersistenceSequenceSequence')
-            vsp_seq_seq.values = [vsp_seq]
-            self.lb_vs.add_persistence_profile([name], vsp_seq_seq)
-            return True
+                vsp_seq_seq.values = [vsp_seq]
+                self.lb_vs.add_persistence_profile([name], vsp_seq_seq)
+                return True
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                    'tried to set source_addr persistence when exists'))
+                return False
+            else:
+                raise wf
+        else:
+            return False
+
+    @icontrol_folder
+    def set_fallback_persist_profile(self, name=None, profile_name=None,
+                                     folder='Common'):
+        if self.exists(name=name, folder=folder):
+            if profile_name.startswith('/Common'):
+                profile_name = strip_folder_and_prefix(profile_name)
+            try:
+                self.lb_vs.set_fallback_persistence_profile([name],
+                                                            [profile_name])
+                return True
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    LOG.error(_(
+                    'tried to set source_addr persistence when exists'))
+                return False
+            else:
+                raise wf
         else:
             return False
 
@@ -552,14 +580,16 @@ class VirtualServer(object):
     def remove_and_delete_persist_profile(self, name=None,
                                           profile_name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            if profile_name.startswith("/Common"):
-                profile_name = strip_folder_and_prefix(profile_name)
             persist_profiles = self.lb_vs.get_persistence_profile([name])[0]
+            fb_profiles = \
+                      self.lb_vs.get_fallback_persistence_profile([name])
             profile_names_to_remove = []
             profiles_to_remove = []
             rules_to_remove = []
             for p in persist_profiles:
                 if profile_name:
+                    if profile_name.startswith('/Common'):
+                        profile_name = strip_folder_and_prefix(profile_name)
                     if profile_name == p['profile_name']:
                         rule_name = \
                     self.lb_persist.get_rule([p['profile_name']])[0]['value']
@@ -573,8 +603,11 @@ class VirtualServer(object):
                     if rule_name:
                             rules_to_remove.append(rule_name)
                     profiles_to_remove.append(p)
-                    profile_names_to_remove.append(p['profile_name'])
+                    if not p['profile_name'].startswith('/Common'):
+                        profile_names_to_remove.append(p['profile_name'])
             if len(profiles_to_remove) > 0:
+                if len(fb_profiles):
+                    self.lb_vs.set_fallback_persistence_profile([name], [None])
                 vsp_seq = self.lb_vs.typefactory.create(
                  'LocalLB.VirtualServer.VirtualServerPersistenceSequence')
                 vsp_seq.values = profiles_to_remove
@@ -582,7 +615,8 @@ class VirtualServer(object):
             'LocalLB.VirtualServer.VirtualServerPersistenceSequenceSequence')
                 vsp_seq_seq.values = [vsp_seq]
                 self.lb_vs.remove_persistence_profile([name], vsp_seq_seq)
-                self.lb_persist.delete_profile(profile_names_to_remove)
+                if len(profile_names_to_remove) > 0:
+                    self.lb_persist.delete_profile(profile_names_to_remove)
             if len(rules_to_remove) > 0:
                 self.bigip.rule.lb_rule.delete_rule(rules_to_remove)
             return True

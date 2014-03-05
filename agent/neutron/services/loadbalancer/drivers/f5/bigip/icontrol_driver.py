@@ -385,9 +385,9 @@ class iControlDriver(object):
                 if monitor['type'] == 'HTTP' or monitor['type'] == 'HTTPS':
                     if 'url_path' in monitor:
                         send_text = "GET " + monitor['url_path'] + \
-                                                        " HTTP/1.0\r\n\r\n"
+                                                        " HTTP/1.0\\r\\n\\r\\n"
                     else:
-                        send_text = "GET / HTTP/1.0\r\n\r\n"
+                        send_text = "GET / HTTP/1.0\\r\\n\\r\\n"
 
                     if 'expected_codes' in monitor:
                         try:
@@ -732,8 +732,7 @@ class iControlDriver(object):
                         persistence_type = \
                                service['vip']['session_persistence']['type']
 
-                        if persistence_type == 'SOURCE_IP' or \
-                             service['pool']['lb_method'] == 'SOURCE_IP':
+                        if persistence_type == 'SOURCE_IP':
                             # add source_addr persistence profile
                             LOG.debug('adding source_addr primary persistence')
                             bigip.virtual_server.set_persist_profile(
@@ -741,20 +740,25 @@ class iControlDriver(object):
                                 profile_name='/Common/source_addr',
                                 folder=service['vip']['tenant_id'])
                         elif persistence_type == 'HTTP_COOKIE':
-                            # HTTP cooke persistence requires an http profile
+                            # HTTP cookie persistence requires an HTTP profile
                             LOG.debug('adding http profile and primary cookie persistence')
-                            bigip.virtual_server.virtual_server.add_profile(
+                            bigip.virtual_server.add_profile(
                                 name=service['vip']['id'],
                                 profile_name='/Common/http',
                                 folder=service['vip']['tenant_id'])
                             # add standard cookie persistence profile
-                            bigip.virtual_server.set_persistence_profile(
+                            bigip.virtual_server.set_persist_profile(
                                 name=service['vip']['id'],
                                 profile_name='/Common/cookie',
-                                folder=service['pool']['tenant_id'])
+                                folder=service['vip']['tenant_id'])
+                            if service['pool']['lb_method'] == 'SOURCE_IP':
+                                bigip.virtual_server.set_fallback_persist_profile(
+                                    name=service['vip']['id'],
+                                    profile_name='/Common/source_addr',
+                                    folder=service['vip']['tenant_id'])
                         elif persistence_type == 'APP_COOKIE':
                             # application cookie persistence requires
-                            # an http profile
+                            # an HTTP profile
                             LOG.debug('adding http profile and primary universal persistence')
                             bigip.virtual_server.virtual_server.add_profile(
                                 name=service['vip']['id'],
@@ -788,6 +792,11 @@ class iControlDriver(object):
                                         profile_name=APP_COOKIE_RULE_PREFIX + \
                                                  service['vip']['id'],
                                         folder=service['vip']['tenant_id'])
+                                if service['pool']['lb_method'] == 'SOURCE_IP':
+                                    bigip.virtual_server.set_fallback_persist_profile(
+                                        name=service['vip']['id'],
+                                        profile_name='/Common/source_addr',
+                                        folder=service['vip']['tenant_id'])
                             else:
                                 # if they did not supply a cookie_name
                                 # just default to regualar cookie peristence
@@ -795,6 +804,15 @@ class iControlDriver(object):
                                        name=service['vip']['id'],
                                        profile_name='/Common/cookie',
                                        folder=service['vip']['tenant_id'])
+                                if service['pool']['lb_method'] == 'SOURCE_IP':
+                                    bigip.virtual_server.set_fallback_persist_profile(
+                                        name=service['vip']['id'],
+                                        profile_name='/Common/source_addr',
+                                        folder=service['vip']['tenant_id'])
+                    else:
+                        bigip.virtual_server.remove_all_persist_profiles(
+                                        name=service['vip']['id'],
+                                        folder=service['vip']['tenant_id'])
 
                     rule_name = 'http_throttle_' + service['vip']['id']
 
@@ -806,7 +824,7 @@ class iControlDriver(object):
                         if service['vip']['protocol'] == 'HTTP':
                             LOG.debug('adding http profile and RPS throttle rule')
                             # add an http profile
-                            bigip.virtual_server.virtual_server.add_profile(
+                            bigip.virtual_server.add_profile(
                                 name=service['vip']['id'],
                                 profile_name='/Common/http',
                                 folder=service['vip']['tenant_id'])
@@ -1612,13 +1630,15 @@ class iControlDriver(object):
 
     def _create_app_cookie_persist_rule(self, cookiename):
         rule_text = "when HTTP_REQUEST {\n"
-        rule_text += " if { [HTTP::cookie " + cookiename + "] ne \"\" }{\n"
+        rule_text += " if { [HTTP::cookie " + str(cookiename)
+        rule_text += "] ne \"\" }{\n"
         rule_text += "     persist uie [string tolower [HTTP::cookie \""
         rule_text += cookiename + "\"]] 3600\n"
         rule_text += " }\n"
         rule_text += "}\n\n"
         rule_text += "when HTTP_RESPONSE {\n"
-        rule_text += " if { [HTTP::cookie \"" + cookiename + "\"] ne \"\" }{\n"
+        rule_text += " if { [HTTP::cookie \"" + str(cookiename)
+        rule_text += "\"] ne \"\" }{\n"
         rule_text += "     persist add uie [string tolower [HTTP::cookie \""
         rule_text += cookiename + "\"]] 3600\n"
         rule_text += " }\n"
@@ -1629,12 +1649,12 @@ class iControlDriver(object):
         rule_text = "when HTTP_REQUEST {\n"
         rule_text += " set expiration_time 300\n"
         rule_text += " set client_ip [IP::client_addr]\n"
-        rule_text += " set req_limit " + req_limit + "\n"
+        rule_text += " set req_limit " + str(req_limit) + "\n"
         rule_text += " set curr_time [clock seconds]\n"
         rule_text += " set timekey starttime\n"
         rule_text += " set reqkey reqcount\n"
         rule_text += " set request_count [session lookup uie $reqkey]\n"
-        rule_text += " if { $request_count eq "" } {\n"
+        rule_text += " if { $request_count eq \"\" } {\n"
         rule_text += "   set request_count 1\n"
         rule_text += "   session add uie $reqkey $request_count "
         rule_text += "$expiration_time\n"
@@ -1656,6 +1676,7 @@ class iControlDriver(object):
         rule_text += "   }\n"
         rule_text += " }\n"
         rule_text += "}\n"
+        return rule_text
 
     def _init_connection(self):
         try:
