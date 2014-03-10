@@ -74,9 +74,15 @@ class Route(object):
 
     @icontrol_folder
     def create_domain(self, folder='Common'):
+        return self._create_domain(folder)
+
+    def _create_domain(self, folder='Common'):
         ids = [self._get_next_domain_id()]
         domains = [self._get_domain_name(folder)]
         self.net_domain.create(domains, ids, [[]])
+        strict_state = self.net_domain.typefactory.create(
+                                    'Common.EnabledState').STATE_DISABLED
+        self.net_domain.set_strict_state(domains, [strict_state])
         return ids[0]
 
     @icontrol_folder
@@ -84,7 +90,6 @@ class Route(object):
         domains = [self._get_domain_name(folder)]
         try:
             self.net_domain.delete_route_domain(domains)
-            self.bigip.system.delete_folder(folder)
         except WebFault as wf:
             if "is referenced" in str(wf.message):
                 LOG.error('delete route domain %s failed %s'
@@ -94,6 +99,15 @@ class Route(object):
                           % (folder, wf.message))
             else:
                 raise wf
+
+    @icontrol_folder
+    def domain_exists(self, folder='Common'):
+        self._domain_exists(folder)
+
+    def _domain_exists(self, folder='Common'):
+        domain_name = self._get_domain_name(folder)
+        all_route_domains = self.net_domain.get_list()
+        return domain_name in all_route_domains
 
     @icontrol_folder
     def get_domain(self, folder='Common'):

@@ -12,10 +12,6 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-import logging
-
-LOG = logging.getLogger(__name__)
-
 
 class System(object):
     def __init__(self, bigip):
@@ -36,6 +32,19 @@ class System(object):
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
         self.platform = None
+        self.current_folder = None
+
+
+    def folder_exists(self, folder):
+        try:
+            self.sys_session.set_active_folder(folder)
+        except WebFault as wf:
+            if "was not found" in str(wf.message):
+                return False
+        else:
+            if self.current_folder:
+                self.sys_session.set_active_folder(self.current_folder)
+            return True
 
     def create_folder(self, folder, change_to=False):
         self.set_folder('/')
@@ -44,8 +53,10 @@ class System(object):
         self.mgmt_folder.create([folder])
         if change_to:
             self.sys_session.set_active_folder(folder)
+            self.current_folder = folder
         else:
             self.set_folder('/Common')
+            self.current_folder = '/Common'
 
     def delete_folder(self, folder):
         self.set_folder('/')
@@ -59,20 +70,39 @@ class System(object):
         return folders
 
     def set_folder(self, folder):
+        if self.current_folder and folder is self.current_folder:
+            return
         try:
             self.sys_session.set_active_folder(folder)
+            self.current_folder = folder
         except WebFault as wf:
             if "was not found" in str(wf.message):
+                if folder is '/' or 'Common' in folder:
+                    # don't try to recover from this
+                    raise
                 try:
                     self.create_folder(folder, change_to=True)
+                    if len(self.bigip.group_bigips) > 1:
+                        # folder must sync before route domains are created.
+                        dg = self.bigip.device.get_device_group()
+                        self.bigip.cluster.sync(dg)
+                        # get_device_group and sync will change the current
+                        # folder.
+                        self.sys_session.set_active_folder(folder)
+                        self.current_folder = folder
+                    if self.bigip.route_domain_required:
+                        if len(self.bigip.group_bigips) > 1:
+                            for b in self.bigip.group_bigips.values():
+                                b.route._create_domain(folder=folder)
+                        else:
+                            self.bigip.route._create_domain(folder=folder)
                 except WebFault as wf:
-                    LOG.error("System.set_folder:create_folder failed: " + str(wf.message))
-                if self.bigip.route_domain_required:
-                    try:
-                        self.bigip.route.create_domain(folder=folder)
-                    except WebFault as wf:
-                        LOG.error("System.set_folder:create_domain failed: " + str(wf.message))
-
+                    LOG.error("set_folder:create failed: " + str(wf.message))
+                    raise
+            else:
+                LOG.error("set_folder:set_active_folder failed: " + \
+                              str(wf.message))
+                raise
 
     def get_hostname(self):
         return self.sys_inet.get_hostname()

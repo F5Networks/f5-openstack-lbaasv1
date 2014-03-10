@@ -7,6 +7,9 @@ from f5.bigip.exceptions import BigIPClusterSyncFailure
 import time
 import os
 import json
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 # Management - Cluster
@@ -32,7 +35,12 @@ class Cluster(object):
     def get_sync_status(self):
         return self.mgmt_dg.get_sync_status_overview().status
 
+    def save_base_config(self):
+        self.sys_sync.save_configuration(filename="",save_flag="SAVE_BASE_LEVEL_CONFIG")
+
     def sync(self, name):
+        start_time = time.time()
+        self.bigip.system.set_folder('/Common')
         dev_name = self.mgmt_dev.get_local_device()
         sleep_delay = const.SYNC_DELAY
         attempts = 0
@@ -102,6 +110,8 @@ class Cluster(object):
                     ' Correct sync problem manually' + \
                     ' according to sol13946 on ' + \
                     ' support.f5.com.')
+        end_time = time.time()
+        LOG.debug("SYNC SECONDS: " + str(end_time - start_time))
 
     def sync_failover_dev_group_exists(self, name):
         dev_groups = map(os.path.basename, self.mgmt_dg.get_list())

@@ -157,5 +157,6 @@ class SNAT(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        if name in self.lb_snataddress.get_list():
+        snat_addrs = self.lb_snataddress.get_list()
+        if name in snat_addrs:
             return True

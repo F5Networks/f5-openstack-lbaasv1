@@ -29,6 +29,7 @@ class Device(object):
         self.lock = None
 
     def get_device_name(self):
+        self.bigip.system.set_folder('/Common')
         return os.path.basename(self.mgmt_dev.get_local_device())
 
     def get_all_device_names(self):
@@ -38,6 +39,7 @@ class Device(object):
         current_lock = self._get_lock()
         new_lock = int(time.time())
 
+        self.bigip.system.set_folder('/Common')
         if current_lock:
             if (new_lock - current_lock) > const.CONNECTION_TIMEOUT:
                 Log.info('Device', 'Locking device %s with lock %s'
@@ -53,6 +55,7 @@ class Device(object):
             return True
 
     def release_lock(self):
+        self.bigip.system.set_folder('/Common')
         dev_name = self.mgmt_dev.get_local_device()
         current_lock = self._get_lock()
 
@@ -68,6 +71,7 @@ class Device(object):
             return False
 
     def _get_lock(self):
+        self.bigip.system.set_folder('/Common')
         dev_name = self.mgmt_dev.get_local_device()
         current_lock = self.mgmt_dev.get_comment([dev_name])[0]
 
@@ -75,6 +79,7 @@ class Device(object):
             return int(current_lock.replace(const.DEVICE_LOCK_PREFIX, ''))
 
     def _set_lock(self, lock):
+        self.bigip.system.set_folder('/Common')
         dev_name = self.mgmt_dev.get_local_device()
         self.lock = lock
         lock_comment = const.DEVICE_LOCK_PREFIX + str(lock)
@@ -108,6 +113,13 @@ class Device(object):
         if not ip_address:
             ip_address = 'none'
         self.mgmt_dev.set_primary_mirror_address([self.get_device_name()],
+                                                 [ip_address])
+
+    @domain_address
+    def set_secondary_mirror_addr(self, ip_address=None, Folder='/Common'):
+        if not ip_address:
+            ip_address = 'none'
+        self.mgmt_dev.set_secondary_mirror_address([self.get_device_name()],
                                                  [ip_address])
 
     def get_failover_addrs(self):
@@ -147,6 +159,7 @@ class Device(object):
         return self.mgmt_dev.get_failover_state([current_dev_name])[0]
 
     def get_device_group(self):
+        self.bigip.system.set_folder('/Common')
         device_groups = self.bigip.cluster.mgmt_dg.get_list()
         device_group_types = self.bigip.cluster.mgmt_dg.get_type(
                                                          device_groups)
@@ -197,6 +210,7 @@ class Device(object):
                               'root_device_mgmt_address': None})
 
     def set_metadata(self, device_dict):
+        self.bigip.system.set_folder('/Common')
         local_device = self.mgmt_dev.get_local_device()
         if isinstance(device_dict, dict):
             str_comment = json.dumps(device_dict)
@@ -207,6 +221,7 @@ class Device(object):
                                       [device_dict])
 
     def get_metadata(self, device=None):
+        self.bigip.system.set_folder('/Common')
         if not device:
             device = self.mgmt_dev.get_local_device()
         str_comment = self.mgmt_dev.get_description(
@@ -217,6 +232,7 @@ class Device(object):
             return {}
 
     def remove_metadata(self, remove_dict, device=None):
+        self.bigip.system.set_folder('/Common')
         if not device:
             device = self.mgmt_dev.get_local_device()
         if isinstance(remove_dict, dict):
@@ -236,6 +252,7 @@ class Device(object):
             self.mgmt_dev.set_description([device], [''])
 
     def update_metadata(self, device_dict, device=None):
+        self.bigip.system.set_folder('/Common')
         if not device:
             device = self.mgmt_dev.get_local_device()
         if isinstance(device_dict, dict):

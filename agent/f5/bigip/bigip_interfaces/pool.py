@@ -106,7 +106,7 @@ class Pool(object):
         return return_members
 
     @icontrol_folder
-    def get_statisitcs(self, name=None, folder='Common'):
+    def get_statistics(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             stats = self.lb_pool.get_statistics([name])[0][0].statistics
             return_stats = {}
