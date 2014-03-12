@@ -38,63 +38,104 @@ class Cluster(object):
     def save_base_config(self):
         self.sys_sync.save_configuration(filename="",save_flag="SAVE_BASE_LEVEL_CONFIG")
 
-    def sync(self, name):
-        start_time = time.time()
+    # force_now=True is typically used for initial sync.
+    # In order to avoid sync problems, you should wait until devices
+    # in the group are connected.
+    def sync(self, name, force_now=False):
+        sync_start_time = time.time()
         self.bigip.system.set_folder('/Common')
         dev_name = self.mgmt_dev.get_local_device()
         sleep_delay = const.SYNC_DELAY
+
         attempts = 0
+        if force_now:
+            self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
+            time.sleep(sleep_delay)
+            attempts += 1
+
 
         while attempts < const.MAX_SYNC_ATTEMPTS:
             state = self.get_sync_status()
-            if not state in ['Standalone',
-                             'In Sync',
-                             ]:
-                if state == 'Disconnected':
-                    attempts += 1
-                    Log.info('Cluster',
-                    "Device %s - Showing disconnected from other devices in %s"
-                    % (dev_name, name))
-                    time.sleep(sleep_delay)
+            if state in ['Standalone',
+                         'In Sync',
+                        ]:
+                break
+
+            elif state in ['Disconnected',
+                            'Not All Devices Synced',
+                            'Changes Pending',
+                           ]:
+                attempts += 1
+
+                last_log_time = 0
+                now = time.time()
+                wait_start_time = now
+                # Keep checking the sync state in a quick loop.
+                # We want to detect In Sync as quickly as possible.
+                while now - wait_start_time < sleep_delay:
+                    # Only log once per second
+                    if now - last_log_time >= 1:
+                        Log.info('Cluster',
+                            "Device %s, Group %s not synced. Waiting. State is: %s"
+                            % (dev_name, name, state))
+                        last_log_time = now
+                    state = self.get_sync_status()
+                    if state in ['Standalone',
+                                 'In Sync',
+                                ]:
+                        break
+                    time.sleep(.5)
+                    now = time.time()
+                else:
+                    # if we didn't break out due to the group being in sync
+                    # then attempt to force a sync.
+                    self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
                     sleep_delay += const.SYNC_DELAY
-                elif state == 'Awaiting Initial Sync':
-                    Log.info('Cluster',
+                    # no need to sleep here because we already spent the sleep
+                    # interval checking status.
+                    continue
+
+                # Only a break from the inner while loop due to Standalone or
+                # In Sync will reach here.
+                # Normal exit of the while loop reach the else statement
+                # above which continues the outer loop
+                break
+
+
+            elif state == 'Awaiting Initial Sync':
+                attempts += 1
+                Log.info('Cluster',
                     "Device %s - Synchronizing initial config to group %s"
                     % (dev_name, name))
-                    self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
-                    time.sleep(sleep_delay)
-                elif state == 'Changes Pending':
-                    attempts += 1
-                    Log.info('Cluster',
-                    "Device %s - Changes pending in configuration for %s"
-                    % (dev_name, name))
-                    time.sleep(sleep_delay)
-                    sleep_delay += const.SYNC_DELAY
-                elif state == 'Sync Failure':
-                    Log.info('Cluster',
-                    "Device %s - Synchronization failed for %s"
-                    % (dev_name, name))
-                    raise BigIPClusterSyncFailure(
-                       'Device service group %s' % name + \
-                       ' failed after ' + \
-                       '%s attempts.' % const.MAX_SYNC_ATTEMPTS + \
-                       ' Correct sync problem manually' + \
-                       ' according to sol13946 on ' + \
-                       ' support.f5.com.')
-                else:
-                    attempts += 1
-                    Log.info('Cluster',
-                    "Device %s " % dev_name \
-                    + "Synchronizing config attempt %s to group %s:"
-                    % (attempts, name) \
-                    + " current state: %s" % state)
-                    self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
-                    time.sleep(sleep_delay)
-                    sleep_delay += const.SYNC_DELAY
+                self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
+                time.sleep(sleep_delay)
+            elif state == 'Sync Failure':
+                Log.info('Cluster',
+                "Device %s - Synchronization failed for %s"
+                % (dev_name, name))
+                LOG.debug("SYNC SECONDS (Sync Failure): " + \
+                            str(time.time() - sync_start_time))
+                raise BigIPClusterSyncFailure(
+                   'Device service group %s' % name + \
+                   ' failed after ' + \
+                   '%s attempts.' % const.MAX_SYNC_ATTEMPTS + \
+                   ' Correct sync problem manually' + \
+                   ' according to sol13946 on ' + \
+                   ' support.f5.com.')
             else:
-                break
+                attempts += 1
+                Log.info('Cluster',
+                "Device %s " % dev_name \
+                + "Synchronizing config attempt %s to group %s:"
+                % (attempts, name) \
+                + " current state: %s" % state)
+                self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
+                time.sleep(sleep_delay)
+                sleep_delay += const.SYNC_DELAY
         else:
             if state == 'Disconnected':
+                LOG.debug("SYNC SECONDS(Disconnected): " + \
+                              str(time.time() - sync_start_time))
                 raise BigIPClusterSyncFailure(
                         'Device service group %s' % name + \
                         ' could not reach a sync state' + \
@@ -102,6 +143,8 @@ class Cluster(object):
                         ' over the sync network. Please' + \
                         ' check connectivity.')
             else:
+                LOG.debug("SYNC SECONDS(Timeout): " + \
+                              str(time.time() - sync_start_time))
                 raise BigIPClusterSyncFailure(
                     'Device service group %s' % name + \
                     ' could not reach a sync state after ' + \
@@ -110,8 +153,10 @@ class Cluster(object):
                     ' Correct sync problem manually' + \
                     ' according to sol13946 on ' + \
                     ' support.f5.com.')
-        end_time = time.time()
-        LOG.debug("SYNC SECONDS: " + str(end_time - start_time))
+
+
+        LOG.debug("SYNC SECONDS(Success): " + \
+                      str(time.time() - sync_start_time))
 
     def sync_failover_dev_group_exists(self, name):
         dev_groups = map(os.path.basename, self.mgmt_dg.get_list())
@@ -202,7 +247,7 @@ class Cluster(object):
         else:
             return False
 
-    def create(self, name):
+    def create(self, name, autosync=True):
         if not self.cluster_exists(name):
             self.mgmt_dg.create([name],
                                 ['DGT_FAILOVER'])
@@ -210,9 +255,15 @@ class Cluster(object):
                                                 [name],
                                                 ['STATE_ENABLED']
                                                 )
-            self.mgmt_dg.set_autosync_enabled_state(
+            if autosync:
+                self.mgmt_dg.set_autosync_enabled_state(
                                                 [name],
                                                 ['STATE_ENABLED']
+                                                )
+            else:
+                self.mgmt_dg.set_autosync_enabled_state(
+                                                [name],
+                                                ['STATE_DISABLED']
                                                 )
             return True
         else:
