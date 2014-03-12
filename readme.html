@@ -1,0 +1,472 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<title>Neutron/LBaaS/F5BigIP</title>
+		<meta name="author" content="j.gruber@f5.com" />
+		<!-- Date: 2014-03-11 -->
+	</head>
+	<body>
+		<section id='content' class='mw-body container 0'>
+			<div id='bodyContent'>
+				<h1 id='firstHeading' class='firstHeading page-header'>
+					Neutron/LBaaS/F5BigIP - Version 1.0-1 EA Release
+				</h1>
+				<ul>
+					<li><a href='#Supported_Neutron_Releases'>Supported Neutron Releases</a></li>
+					<li><a href='#Installation_of_the_Type_Driver'>Installation of the Type Driver</a></li>
+					<li><a href='#Neutron_Server_Plugin_Settings'>Neutron Server Plugin Settings</a></li>
+					<li><a href='#iControl_Driver_Supported_TMOS_Versions'>iControl Driver Supported TMOS Versions</a></li>					
+					<li><a href='#Supported_Neutron_Network_Topologies'>Supported Neutron Network Topologies</a></li>
+					<li><a href='#Supported_TMOS_High_Availability_Modes'>Supported TMOS High Availability Modes</a></li>
+					<li><a href='#Preparing_Your_TMOS_Device_for_LBaaS'>Preparing Your TMOS Device for LBaaS</a></li>
+					<li><a href='#Installing_and_Running_the_LBaaS_Agent_Processes'>Installing and Running the LBaaS Agent Processes</a></li>
+					<li><a href='#Troubleshooting_Issues'>Troubleshooting Issues</a></li>
+				</ul>
+				
+				<h2><span class='mw-headline' id='Supported_Neutron_Releases'>Supported Neutron Releases</span></h2>
+				<p>
+				The F5 LBaaS plugin type driver, as well as the LBaaS Agent with iControl Driver, supports the OpenStack 
+				Neutron Havana release. There are no alternations made to the community LBaaS database schema, nor any 
+				additional database tables generated. The stock community LoadBalancerPlugin class is used as the service
+				plugin.  Any discovered issues with the community LoadBalancerPlugin class and the associated LBaaS database
+				model will need to be monitored and resolved through the OpenStack Neutron community.
+				</p>
+				<p>
+				<img src='./images/plugin_agent.png' width='750px'>
+				</p>
+				<p>
+				The F5 LBaaS plugin type driver schedules LBaaS requests and distributed request to various F5 LBaaS agent processes. 
+				The tasks are schedule and segregated by OpenStack tenant id. The community OpenStack RPC based queues are 
+				used to fan out the requests to one more multiple F5 LBaaS agent processes, which use RPC queues to call back 
+				into the F5 LBaaS plugin type driver to update Neutron object status.
+				</p>
+				<p>
+				F5 LBaaS agents can be run on any host which has the appropriate Neutron python libraries installed. This includes 
+				either the controller or network nodes.  Alternatively, a host can be dedicated to service agents. Mulitple F5 LBaaS
+				agent processes can be run on the same host. 	
+				</p>
+				<p>
+				F5 LBaaS agent processes are mapped directly to F5 TMOS Device Service Groups. There will always be one active 
+				F5 LBaaS agent per F5 TMOS Device Service Group.  High availablity for the F5 LBaaS agent process follows the 
+				same pattern as any OpenStack agent.  Please see the OpenStack high availability guides for instructions on how 
+				to run active and standby agents in a high availablity mode.	
+				</p>
+				<p>
+				Please see the section below for the high availablity modes supported for the TMOS deviecs themselves.	
+				</p>
+				
+				<h2><span class='mw-headline' id='Installation_of_the_Type_Driver'>Installation of the Type Driver</span></h2>
+				<p>
+				The Neutron server plugin type driver is distributed as a Debian installation package. It has been tested
+				on Ubuntu Server 12.04 LTS. To install the Neutron server plugin type driver, download the 
+				<span style='font-family: Courier'>python-f5-lbaas-driver_1.0-1_all.deb</span> package to the host which runs your Neutron API server 
+				process. To install run:
+				</p>
+				<p>
+				<span style='font-family: Courier'>sudo dpkg -i python-f5-lbaas-driver_1.0-1_all.deb</span>	
+				</p> 
+				
+				<h2><span class='mw-headline' id='Neutron_Server_Plugin_Settings'>Neutron Server Plugin Settings</span></h2>
+				<p>
+				There are two settings which must be set to enable Neutron LBaaS with the F5 LBaaS type driver. The services entry for 
+				Neutron must include a reference to the default community LoadBalancerPlugin. The <span style='font-family: Courier'>services</span> 
+				configuration entry in the default <span style='font-family: Courier'>neutron.conf</span> file contains a comma separated list 
+				of python classes which implement extension plugin services. The following example would load the default community LoadBalancerPlugin.
+				</p>
+				<p>
+					In the neutron.conf file:
+				</p>
+				<p>
+					<span style='font-family: Courier'>service_plugins = neutron.services.loadbalancer.plugin.LoadBalancerPlugin</span>
+				</p>
+				<p> 
+				Once the default community LoadBalancerPlugin plugin is loaded, service provider type drivers entries will be examined. Providing 
+				the following service provider type driver entry for the <span style='font-family: Courier'>LOADBALANCER</span> plugin service, will load 
+				the F5 LBaaS type driver.
+				</p>
+				<p>
+					<span style='font-family: Courier'>service_provider=LOADBALANCER:F5:neutron.services.loadbalancer.drivers.f5.plugin_driver.F5PluginDriver:default</span>
+				</p> 
+				<p>
+				You must have at least one <span style='font-family: Courier'>default</span> entry in for each plugin service. If the F5 plugin type driver
+				is not the default, simply remove the <span style='font-family: Courier'>default</span> field from the above entry.
+				</p>
+				
+				<h2><span class='mw-headline' id='iControl_Driver_Supported_TMOS_Versions'>iControl Driver Supported TMOS Versions</span></h2>
+				<p>
+				The agent processes themselves include orchestration methods which are available on TMOS 11.5 and greater.
+				</p>
+				<h2><span class='mw-headline' id='Supported_Neutron_Network_Topologies'>Supported Neutron Network Topologies</span></h2>
+				<p>
+				The F5 iControl agent driver supports:
+				</p>
+				<ul>
+					<li> One-Arm mode where VIP and Members are in the same Neutron subnets</li>
+					<li> Two-Arm mode where VIP and Members are on different Neutron subnets</li>
+				</ul>
+				<ul>
+					<li> VIPs or Members on Neutron Shared networks of type VLAN</li>
+					<li> VIPs or Members on Neutron Tenant networks of type VLAN</li>
+				</ul>
+				<p>
+				For all the above subnet topologies, SNAT (source network address translation) is supported using either the TMOS 
+				device address (SelfIP with AutoMap SNAT) or you can specifiy the number of SNAT addresses to allocate for each Neutron
+				subnet per active HA TMOS device. 
+				</p>
+				
+				<h2><span class='mw-headline' id='Supported_TMOS_High_Availability_Modes'>Supported TMOS High Availability Modes</span></h2>
+				
+				<p>
+				The F5 iControl agent driver supports:
+				</p>
+				<ul>
+					<li> Standalone mode - Singlge TMOS device providing no High Availability</li>
+					<li> Pair mode - Active / Standby TMOS devices</li>
+					<li> ScaleN mode - Multiple Active TMOS devices</li>
+				</ul>	
+				<p>
+				In the EA release only TMOS devices which have been prepared before taking LBaaS requests are supported. These devices 
+				are expected to support tagged VLAN frames on the TMOS interfaces. The TMOS devices can be TMOS hardware devices or 
+				TMOS virtual editions. TMOS vCMP guests are currently not supported.	
+				</p>
+				
+				<h2><span class='mw-headline' id='Preparing_Your_TMOS_Device_for_LBaaS'>Preparing Your TMOS Device for LBaaS</span></h2>
+				<p>
+				TMOS deviecs must be onboarded to support their appropriate high availability mode. All of the following onboarding steps
+				can be automated using iControl. Below is a listing of all the manual CLI commands needed to complete the TMOS device onboarding. 	
+				</p>
+				
+				<h3>Standalone High Availablity Mode</h3>
+				<p>
+				The TMOS device must be licensed to support Local Traffic (LTM). The TMOS device should have Local Traffic (LTM) provisioned as Nominal.
+				</p>
+				
+				<p>
+				To license a TMOS device via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
+				</ul>
+				<p>
+				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify sys provision ltm level nominal</span>
+				</ul>
+				
+				<p>
+				For Standalone Mode, SNAT addresses will get created on, and VIPs will get scheduled to, the default traffic-group-local-only non-floating traffic group.
+				</p>
+				
+				
+				
+				
+				
+			
+				<h3>Pair High Availablity Mode</h3>
+				<p>
+				Both TMOS devices must be licensed to support Local Traffic (LTM). The TMOS devices should have Local Traffic (LTM) provisioned as Nominal.
+				</p>
+				<p>
+				To license a TMOS device via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
+				</ul>
+				<p>
+				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify sys provision ltm level nominal</span>
+				</ul>
+				<p>
+				Both TMOS devices must have their Network Time Protocol servers set to the same NTP server.	Both TMOS devices should also have their timezone
+				set to the same timezone.
+				</p>
+				<p>
+				To set a TMOS device NTP server via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>tmsh modify sys ntp servers replace-all-with { &lt;ip_address_ntp_1&gt; &lt;ip_address_ntp_2&gt; }</span>
+				</ul>
+				<p>
+				To set a TMOS device timezone via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify sys ntp timezone UTC</span>
+				</ul>
+				
+				<p>
+				Both TMOS devices must share a common VLAN for HA management communication. Both devices will require a local IP address to communicate 
+				cluster heatbeat and synchronization information. 
+				</p>
+				
+				<p>
+				To provision a TMOS device HA VLAN via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>tmsh create net vlan HA interfaces add { &lt;TMOS_interface_name&gt; } description HA</span>
+				</ul>
+				<p>
+				To provision a TMOS device IP address on the HA VLAN via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh create net self HA &lt;ip_address/cidr&gt; allow-service default vlan HA</span>
+				</ul>
+                
+				<p>
+				Both TMOS devices must have their configuration sync interfaces, connection mirroring, and failover addresses defined. 
+				</p>
+				<p>
+				To define a TMOS device configuration sync address via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; configsync-ip &lt;ha_ip_address&gt;</span>
+				</ul>
+				<p>
+				To define a TMOS device connection mirroring address via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; mirror-ip &lt;ha_ip_address&gt;</span>
+                </ul>
+                <p>
+				To define a TMOS device failover address via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; unicast-address { { ip &lt;ha_ip_address&gt; port 1026 } { ip &lt;device_mgmt_ip_address&gt; port 1026 } }</span>
+				</ul>
+				
+				<p>
+				Both TMOS devices must have distinct device names before they can be placed in a Device Service Group. Once they have distinct device names, 
+				a trust must be build between the devices.
+				</p>
+				
+				<p>
+				To reset TMOS device name via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh mv cm device &lt;original_name&gt; &lt;new_name&gt;</span>
+				</ul>
+				<p>
+				To add a tusted peer <i>from your primary TMOS device</i> via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify cm trust-domain /Common/Root ca-devices add { &lt;peer_mgmt_ip_address&gt; } name &lt;remove_device_name&gt; username &lt;remote_device_admin_username&gt; password &lt;remote_device_admin_password&gt;</span>
+				</ul>
+				
+				<p>
+				Both TMOS devices must be placed into a sync failover Device Service Group to allow active/standby failover. An initial sync must be run on the new sync failover
+				Device Service Group.
+				</p>
+				<p>
+				To create the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh create cm device-group &lt;device_group_name&gt; devices add { &lt;primary_device_name&gt; &lt;remote_device_name&gt; } type sync-failover auto-sync enabled network-failover enabled</span>
+				</ul>
+				To force an initial sync for the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
+				<ul>
+				    <span style='font-family: Courier'>tmsh run cm config-sync to-group &lt;device_group_name&gt;</span>
+				</ul>
+				
+				<p>
+				For Pair High Availability Mode, SNAT addresses will get created on, and VIPs will get scheduled to, the default traffic-group-1 floating traffic group.
+				</p>
+				
+				
+				
+				
+	
+				
+	
+                <h3>ScaleN High Availablity Mode</h3>
+				<p>
+				All TMOS devices in your ScaleN group must be licensed to support Local Traffic (LTM). The TMOS device should have Local Traffic (LTM) provisioned as Nominal.
+				</p>
+				
+				<p>
+				To license a TMOS device via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
+				</ul>
+				<p>
+				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify sys provision ltm level nominal</span>
+				</ul>
+
+				<p>
+				All TMOS devices must have their Network Time Protocol servers set to the same NTP server.	Both TMOS devices should also have their timezone
+				set to the same timezone.
+				</p>
+				<p>
+				To set a TMOS device NTP server via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>tmsh modify sys ntp servers replace-all-with { &lt;ip_address_ntp_1&gt; &lt;ip_address_ntp_2&gt; }</span>
+				</ul>
+				<p>
+				To set a TMOS device timezone via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify sys ntp timezone UTC</span>
+				</ul>
+				
+				<p>
+				All TMOS devices must share a common VLAN for HA management communication. All devices will require a local IP address to communicate 
+				cluster heatbeat and synchronization information. 
+				</p>
+				
+				<p>
+				To provision a TMOS device HA VLAN via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>tmsh create net vlan HA interfaces add { &lt;TMOS_interface_name&gt; } description HA</span>
+				</ul>
+				<p>
+				To provision a TMOS device IP address on the HA VLAN via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh create net self HA &lt;ip_address/cidr&gt; allow-service default vlan HA</span>
+				</ul>
+                
+				<p>
+				All TMOS devices must have their configuration sync interfaces, connection mirroring, and failover addresses defined. 
+				</p>
+				<p>
+				To define a TMOS device configuration sync address via the CLI, run:
+				</p>
+				<ul>
+					<span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; configsync-ip &lt;ha_ip_address&gt;</span>
+				</ul>
+				<p>
+				To define a TMOS device connection mirroring address via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; mirror-ip &lt;ha_ip_address&gt;</span>
+                </ul>
+                <p>
+				To define a TMOS device failover address via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; unicast-address { { ip &lt;ha_ip_address&gt; port 1026 } { ip &lt;device_mgmt_ip_address&gt; port 1026 } }</span>
+				</ul>
+				
+				<p>
+				All TMOS devices must have distinct device names before they can be placed in a Device Service Group. Once they have distinct device names, 
+				a trust must be build between the devices.
+				</p>
+				
+				<p>
+				To reset TMOS device name via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh mv cm device &lt;original_name&gt; &lt;new_name&gt;</span>
+				</ul>
+				<p>
+				To add a tusted peer <i>from your primary TMOS device</i> for each peer device via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh modify cm trust-domain /Common/Root ca-devices add { &lt;peer_mgmt_ip_address&gt; } name &lt;remove_device_name&gt; username &lt;remote_device_admin_username&gt; password &lt;remote_device_admin_password&gt;</span>
+				</ul>
+				
+				<p>
+				All TMOS devices must be placed into a sync failover Device Service Group to allow active/standby failover. An initial sync must be run on the new sync failover
+				Device Service Group.
+				</p>
+				<p>
+				To create the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>tmsh create cm device-group &lt;device_group_name&gt; devices add { &lt;primary_device_name&gt; &lt;remote_device_name&gt; .. &lt;additional_remote_device_name&gt; } type sync-failover auto-sync enabled network-failover enabled</span>
+				</ul>
+				To force an initial sync for the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
+				<ul>
+				    <span style='font-family: Courier'>tmsh run cm config-sync to-group &lt;device_group_name&gt;</span>
+				</ul>
+				
+				<p>
+				To enable failover between the active devices, you must create traffic groups.  The scheme you choose to create traffic groups will depend on your failover
+				group design.  The iControl driver in ScaleN failover mode will schedule VIPs and SNAT addresses on traffic groups which are not name, 
+				traffic-group-1 or traffic-group-local-only.  It is required that you create unique named traffic groups for you failover pattern which 
+				are assoicated with an appropriate HA failover order. The iControl driver will schedule the VIP traffic group placement based on which 
+				unique named traffic group has least number of VIPs associated with it. 
+				</p>
+				<p>
+				To create the you multiple unique named traffic group with HA order <i>from your primary TMOS device</i> via the CLI, run:
+				</p>
+				<ul>
+				    <span style='font-family: Courier'>
+				    	tmsh create cm traffic-group &lt;traffic_group_name&gt; default-device &lt;device_name&gt; auto-failback-enabled true ha-order { &lt;secondary_device_name&gt; .. &lt;additional_device_name&gt;  }
+				    </span>
+				</ul>
+	
+				
+				
+				<h2><span class='mw-headline' id='Installing_and_Running_the_LBaaS_Agent_Processes'>Installing and Running the LBaaS Agent Processes</span></h2>
+				
+				<p>
+				The F5 LBaaS agent is distributed as a Debian installation package. It has been tested on Ubuntu Server 12.04 LTS. To install the Neutron server plugin type driver, 
+				download the python-f5-bigip-lbaas-agent_1.0-1_all.deb package to the host which will run your agent process. To install run:
+				</p>
+				
+                <span style='font-family: Courier'>
+				sudo dpkg -i python-f5-bigip-lbaas-agent_1.0-1_all.deb	
+				</span>
+				
+				<p>
+				On Ubuntu systems an upstart job will run as a result of the installation.  You should stop this service and configure your F5 LBaaS agent.
+				</p>
+
+                <span style='font-family: Courier'>
+				sudo service python-f5-bigip-lbaas-agent stop	
+				</span>
+				
+				<p>
+				The default settings file for the F5 LBaaS agent is installed at <span style='font-family: Courier'>/etc/neutron/f5-bigip-lbaas-agent.ini</span>.
+				Below is a consideration of each setting in that settings file.
+				</p>
+				
+				<table border='1' width='1024px' cellpadding='2'>
+					<tr><th nowrap>Setting</th><th nowrap>Allowed Values</th><th nowrap>Default Value</th><th nowrap>Description</th></tr>
+					<tr><td nowrap>Debug</td><td>True or False</td><td>False</td><td>Should the agent create verbose debug logging in /var/log/neutron/f5-bigip-lbaas-agent.log</td></tr>
+					<tr><td nowrap>periodic_interval</td><td>integer number of seconds</td><td>10</td><td>How often should the get_stats, and save configurations be considered. (not run, but considered)</td></tr>
+					<tr><td nowrap>use_namespace</td><td>True or False</td><td>True</td><td>Should all Neutron non-shared subnet addresses be assigned to route domains</td></tr>
+					<tr><td nowrap>f5_device_type</td><td>external (only for EA)</td><td>external</td><td>This determines the type of automatica device onboarding.  Only external, not onboarding is acceptable for the EA release.</td></tr>
+				    <tr><td nowrap>f5_ha_type</td><td>standalone, pair, or scalen</td><td>standalone</td><td>This determines the way LBaaS will be deployed for HA</td></tr>
+				    <tr><td nowrap>f5_external_physical_mappings</td><td>comma separated list</td><td>default:1.1:True</td><td>Determines how Neutron VLAN networks are created. The format for each mapp entry is 
+				    	    [provider:physical_network]:[TMOS interface or trunk name]:[Boolean to tag the VLAN ]. One entry with 'default' as it initial entry should be present to allow for cases where 
+				    	    the provider:physical_network does not match any other specified mapping.</td></tr>
+				    <tr><td nowrap>f5_snat_mode</td><td>True or False</td><td>True</td><td>Should SNAT be used or else should the LBaaS device attempt to be come the default gateway for the Neutron subnet of Member objects</td></tr>
+				    <tr><td>f5_snat_addresses_per_subnet</td><td>integer number of SNAT addresses</td><td>1</td><td>If set to 0(zero), AutoMAP SNAT will be used.  If set to a positive integer, that number of SNAT addresses will
+				    	     be created per Neutron subnet of Members, per active TMOS device in an HA mode.</td></tr>
+				    <tr><td>f5_bigip_lbaas_device_driver</td><td>python class name of the device driver to use</td><td>neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver</td><td>In EA only the neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver is allowed</td></tr>
+				    <tr><td>icontrol_hostname</td><td>either a single entry or a comma separated list iControl endpoint IP address or FQDNs </td><td>192.168.1.245</td><td>The iControl endpoint to connect to for this agent</td></tr>
+				    <tr><td>icontrol_username</d><td>valid username for the TMOS device</td><td>admin</td><td>The iControl endpoint username for this agent</td></tr>
+				    <tr><td>icontrol_password</d><td>valid password for the TMOS device</td><td>admin</td><td>The iControl endpoint password for this agent</td></tr>
+				    <tr><td>icontrol_connection_retry_interval</td><td>integer number of seconds</td><td>10</td><td>How often to attempt to reconnect if iControl connection fails</td></tr>
+				</table>
+				
+
+				<h2><span class='mw-headline' id='Troubleshooting_Issues'>Troubleshooting Issues</span></h2>
+				
+				<p>
+				To troubleshoot problems with the F5 LBaaS Type driver or an agent process, set the global Neutron setting and agent process <span style='font-family: Courier'>Debug</span> 
+				setting to <span style='font-family: Courier'>True</span>. Extensive logging will then appear in the <span style='font-family: Courier'>neutron-server</span> and 
+				<span style='font-family: Courier'>f5-bigip-lbaas-agent</span> log files on their respective hosts. 	
+				</p>
+				
+			</div>
+			<div id='footer' name='footer'>
+				&copy; 2014 F5 Networks
+			</div>
+		</section>
+
+	</body>
+</html>
+
