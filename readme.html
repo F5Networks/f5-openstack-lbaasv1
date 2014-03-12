@@ -6,14 +6,145 @@
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 		<title>Neutron/LBaaS/F5BigIP</title>
 		<meta name="author" content="j.gruber@f5.com" />
+		<style>
+			body {
+			  margin-left: 10px;
+			  margin-right: 10px;
+			  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+			  font-size: 14px;
+			  line-height: 20px;
+			  color: #333333;
+			  background-color: #ffffff;
+			}
+			a {
+			  color: #0088cc;
+			  text-decoration: none;
+			}
+			a:hover,
+			a:focus {
+			  color: #005580;
+			  text-decoration: underline;
+			}
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+			  margin: 10px 0;
+			  font-family: inherit;
+			  font-weight: bold;
+			  line-height: 20px;
+			  color: inherit;
+			  text-rendering: optimizelegibility;
+			}
+			h1 small,
+			h2 small,
+			h3 small,
+			h4 small,
+			h5 small,
+			h6 small {
+			  font-weight: normal;
+			  line-height: 1;
+			  color: #999999;
+			}
+			h1,
+			h2,
+			h3 {
+			  line-height: 40px;
+			}
+			h1 {
+			  font-size: 38.5px;
+			}
+			h2 {
+			  font-size: 31.5px;
+			}
+			h3 {
+			  font-size: 24.5px;
+			}
+			h4 {
+			  font-size: 17.5px;
+			}
+			h5 {
+			  font-size: 14px;
+			}
+			h6 {
+			  font-size: 11.9px;
+			}
+			h1 small {
+			  font-size: 24.5px;
+			}
+			h2 small {
+			  font-size: 17.5px;
+			}
+			h3 small {
+			  font-size: 14px;
+			}
+			h4 small {
+			  font-size: 14px;
+			}
+			ul,
+		ol {
+		  padding: 0;
+		  margin: 0 0 10px 25px;
+		}
+		ul ul,
+		ul ol,
+		ol ol,
+		ol ul {
+		  margin-bottom: 0;
+		}
+		li {
+		  line-height: 20px;
+		}
+		hr {
+		  margin: 20px 0;
+		  border: 0;
+		  border-top: 1px solid #eeeeee;
+		  border-bottom: 1px solid #ffffff;
+		}
+		table {
+		  max-width: 100%;
+		  background-color: transparent;
+		  border-collapse: collapse;
+		  border-spacing: 0;
+		}
+		table th,
+		table td {
+		  padding: 8px;
+		  line-height: 20px;
+		  text-align: left;
+		  vertical-align: top;
+		  border-top: 1px solid #dddddd;
+		}
+		table th {
+		  font-weight: bold;
+		  white-space: nowrap;
+		}
+		table tbody {
+		  border-top: 2px solid #dddddd;
+		}
+		.command_text {
+		  font-family:Courier;
+		  font-weight:bold;
+		  font-size:large;
+		}
+		.firstHeading {
+		  font-style: italic;	
+		}
+		.mw-headline {
+		  color: #c01010;	
+		}
+		</style>
 		<!-- Date: 2014-03-11 -->
 	</head>
 	<body>
-		<section id='content' class='mw-body container 0'>
+		<section id='content'>
 			<div id='bodyContent'>
-				<h1 id='firstHeading' class='firstHeading page-header'>
+				<h1 id='firstHeading' class='firstHeading'>
 					Neutron/LBaaS/F5BigIP - Version 1.0-1 EA Release
 				</h1>
+				<hr/>
 				<ul>
 					<li><a href='#Supported_Neutron_Releases'>Supported Neutron Releases</a></li>
 					<li><a href='#Installation_of_the_Type_Driver'>Installation of the Type Driver</a></li>
@@ -62,37 +193,37 @@
 				<p>
 				The Neutron server plugin type driver is distributed as a Debian installation package. It has been tested
 				on Ubuntu Server 12.04 LTS. To install the Neutron server plugin type driver, download the 
-				<span style='font-family: Courier'>python-f5-lbaas-driver_1.0-1_all.deb</span> package to the host which runs your Neutron API server 
+				<span class='command_text'>python-f5-lbaas-driver_1.0-1_all.deb</span> package to the host which runs your Neutron API server 
 				process. To install run:
 				</p>
 				<p>
-				<span style='font-family: Courier'>sudo dpkg -i python-f5-lbaas-driver_1.0-1_all.deb</span>	
+				<span class='command_text'>sudo dpkg -i python-f5-lbaas-driver_1.0-1_all.deb</span>	
 				</p> 
 				
 				<h2><span class='mw-headline' id='Neutron_Server_Plugin_Settings'>Neutron Server Plugin Settings</span></h2>
 				<p>
 				There are two settings which must be set to enable Neutron LBaaS with the F5 LBaaS type driver. The services entry for 
-				Neutron must include a reference to the default community LoadBalancerPlugin. The <span style='font-family: Courier'>services</span> 
-				configuration entry in the default <span style='font-family: Courier'>neutron.conf</span> file contains a comma separated list 
+				Neutron must include a reference to the default community LoadBalancerPlugin. The <span class='command_text'>services</span> 
+				configuration entry in the default <span class='command_text'>neutron.conf</span> file contains a comma separated list 
 				of python classes which implement extension plugin services. The following example would load the default community LoadBalancerPlugin.
 				</p>
 				<p>
 					In the neutron.conf file:
 				</p>
 				<p>
-					<span style='font-family: Courier'>service_plugins = neutron.services.loadbalancer.plugin.LoadBalancerPlugin</span>
+					<span class='command_text'>service_plugins = neutron.services.loadbalancer.plugin.LoadBalancerPlugin</span>
 				</p>
 				<p> 
 				Once the default community LoadBalancerPlugin plugin is loaded, service provider type drivers entries will be examined. Providing 
-				the following service provider type driver entry for the <span style='font-family: Courier'>LOADBALANCER</span> plugin service, will load 
+				the following service provider type driver entry for the <span class='command_text'>LOADBALANCER</span> plugin service, will load 
 				the F5 LBaaS type driver.
 				</p>
 				<p>
-					<span style='font-family: Courier'>service_provider=LOADBALANCER:F5:neutron.services.loadbalancer.drivers.f5.plugin_driver.F5PluginDriver:default</span>
+					<span class='command_text'>service_provider=LOADBALANCER:F5:neutron.services.loadbalancer.drivers.f5.plugin_driver.F5PluginDriver:default</span>
 				</p> 
 				<p>
-				You must have at least one <span style='font-family: Courier'>default</span> entry in for each plugin service. If the F5 plugin type driver
-				is not the default, simply remove the <span style='font-family: Courier'>default</span> field from the above entry.
+				You must have at least one <span class='command_text'>default</span> entry in for each plugin service. If the F5 plugin type driver
+				is not the default, simply remove the <span class='command_text'>default</span> field from the above entry.
 				</p>
 				
 				<h2><span class='mw-headline' id='iControl_Driver_Supported_TMOS_Versions'>iControl Driver Supported TMOS Versions</span></h2>
@@ -148,13 +279,13 @@
 				To license a TMOS device via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
+				    <span class='command_text'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
 				</ul>
 				<p>
 				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify sys provision ltm level nominal</span>
+				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span>
 				</ul>
 				
 				<p>
@@ -174,13 +305,13 @@
 				To license a TMOS device via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
+					<span class='command_text'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
 				</ul>
 				<p>
 				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify sys provision ltm level nominal</span>
+				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span>
 				</ul>
 				<p>
 				Both TMOS devices must have their Network Time Protocol servers set to the same NTP server.	Both TMOS devices should also have their timezone
@@ -190,13 +321,13 @@
 				To set a TMOS device NTP server via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>tmsh modify sys ntp servers replace-all-with { &lt;ip_address_ntp_1&gt; &lt;ip_address_ntp_2&gt; }</span>
+					<span class='command_text'>tmsh modify sys ntp servers replace-all-with { &lt;ip_address_ntp_1&gt; &lt;ip_address_ntp_2&gt; }</span>
 				</ul>
 				<p>
 				To set a TMOS device timezone via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify sys ntp timezone UTC</span>
+				    <span class='command_text'>tmsh modify sys ntp timezone UTC</span>
 				</ul>
 				
 				<p>
@@ -208,13 +339,13 @@
 				To provision a TMOS device HA VLAN via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>tmsh create net vlan HA interfaces add { &lt;TMOS_interface_name&gt; } description HA</span>
+					<span class='command_text'>tmsh create net vlan HA interfaces add { &lt;TMOS_interface_name&gt; } description HA</span>
 				</ul>
 				<p>
 				To provision a TMOS device IP address on the HA VLAN via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh create net self HA &lt;ip_address/cidr&gt; allow-service default vlan HA</span>
+				    <span class='command_text'>tmsh create net self HA &lt;ip_address/cidr&gt; allow-service default vlan HA</span>
 				</ul>
                 
 				<p>
@@ -224,19 +355,19 @@
 				To define a TMOS device configuration sync address via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; configsync-ip &lt;ha_ip_address&gt;</span>
+					<span class='command_text'>tmsh modify cm device &lt;device_name&gt; configsync-ip &lt;ha_ip_address&gt;</span>
 				</ul>
 				<p>
 				To define a TMOS device connection mirroring address via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; mirror-ip &lt;ha_ip_address&gt;</span>
+				    <span class='command_text'>tmsh modify cm device &lt;device_name&gt; mirror-ip &lt;ha_ip_address&gt;</span>
                 </ul>
                 <p>
 				To define a TMOS device failover address via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; unicast-address { { ip &lt;ha_ip_address&gt; port 1026 } { ip &lt;device_mgmt_ip_address&gt; port 1026 } }</span>
+				    <span class='command_text'>tmsh modify cm device &lt;device_name&gt; unicast-address { { ip &lt;ha_ip_address&gt; port 1026 } { ip &lt;device_mgmt_ip_address&gt; port 1026 } }</span>
 				</ul>
 				
 				<p>
@@ -248,13 +379,13 @@
 				To reset TMOS device name via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh mv cm device &lt;original_name&gt; &lt;new_name&gt;</span>
+				    <span class='command_text'>tmsh mv cm device &lt;original_name&gt; &lt;new_name&gt;</span>
 				</ul>
 				<p>
 				To add a tusted peer <i>from your primary TMOS device</i> via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify cm trust-domain /Common/Root ca-devices add { &lt;peer_mgmt_ip_address&gt; } name &lt;remove_device_name&gt; username &lt;remote_device_admin_username&gt; password &lt;remote_device_admin_password&gt;</span>
+				    <span class='command_text'>tmsh modify cm trust-domain /Common/Root ca-devices add { &lt;peer_mgmt_ip_address&gt; } name &lt;remove_device_name&gt; username &lt;remote_device_admin_username&gt; password &lt;remote_device_admin_password&gt;</span>
 				</ul>
 				
 				<p>
@@ -265,11 +396,11 @@
 				To create the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh create cm device-group &lt;device_group_name&gt; devices add { &lt;primary_device_name&gt; &lt;remote_device_name&gt; } type sync-failover auto-sync enabled network-failover enabled</span>
+				    <span class='command_text'>tmsh create cm device-group &lt;device_group_name&gt; devices add { &lt;primary_device_name&gt; &lt;remote_device_name&gt; } type sync-failover auto-sync enabled network-failover enabled</span>
 				</ul>
 				To force an initial sync for the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
 				<ul>
-				    <span style='font-family: Courier'>tmsh run cm config-sync to-group &lt;device_group_name&gt;</span>
+				    <span class='command_text'>tmsh run cm config-sync to-group &lt;device_group_name&gt;</span>
 				</ul>
 				
 				<p>
@@ -291,13 +422,13 @@
 				To license a TMOS device via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
+				    <span class='command_text'>SOAPClientClient --interactive &lt;license_basekey&gt;</span>
 				</ul>
 				<p>
 				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify sys provision ltm level nominal</span>
+				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span>
 				</ul>
 
 				<p>
@@ -308,13 +439,13 @@
 				To set a TMOS device NTP server via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>tmsh modify sys ntp servers replace-all-with { &lt;ip_address_ntp_1&gt; &lt;ip_address_ntp_2&gt; }</span>
+					<span class='command_text'>tmsh modify sys ntp servers replace-all-with { &lt;ip_address_ntp_1&gt; &lt;ip_address_ntp_2&gt; }</span>
 				</ul>
 				<p>
 				To set a TMOS device timezone via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify sys ntp timezone UTC</span>
+				    <span class='command_text'>tmsh modify sys ntp timezone UTC</span>
 				</ul>
 				
 				<p>
@@ -326,13 +457,13 @@
 				To provision a TMOS device HA VLAN via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>tmsh create net vlan HA interfaces add { &lt;TMOS_interface_name&gt; } description HA</span>
+					<span class='command_text'>tmsh create net vlan HA interfaces add { &lt;TMOS_interface_name&gt; } description HA</span>
 				</ul>
 				<p>
 				To provision a TMOS device IP address on the HA VLAN via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh create net self HA &lt;ip_address/cidr&gt; allow-service default vlan HA</span>
+				    <span class='command_text'>tmsh create net self HA &lt;ip_address/cidr&gt; allow-service default vlan HA</span>
 				</ul>
                 
 				<p>
@@ -342,19 +473,19 @@
 				To define a TMOS device configuration sync address via the CLI, run:
 				</p>
 				<ul>
-					<span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; configsync-ip &lt;ha_ip_address&gt;</span>
+					<span class='command_text'>tmsh modify cm device &lt;device_name&gt; configsync-ip &lt;ha_ip_address&gt;</span>
 				</ul>
 				<p>
 				To define a TMOS device connection mirroring address via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; mirror-ip &lt;ha_ip_address&gt;</span>
+				    <span class='command_text'>tmsh modify cm device &lt;device_name&gt; mirror-ip &lt;ha_ip_address&gt;</span>
                 </ul>
                 <p>
 				To define a TMOS device failover address via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify cm device &lt;device_name&gt; unicast-address { { ip &lt;ha_ip_address&gt; port 1026 } { ip &lt;device_mgmt_ip_address&gt; port 1026 } }</span>
+				    <span class='command_text'>tmsh modify cm device &lt;device_name&gt; unicast-address { { ip &lt;ha_ip_address&gt; port 1026 } { ip &lt;device_mgmt_ip_address&gt; port 1026 } }</span>
 				</ul>
 				
 				<p>
@@ -366,13 +497,13 @@
 				To reset TMOS device name via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh mv cm device &lt;original_name&gt; &lt;new_name&gt;</span>
+				    <span class='command_text'>tmsh mv cm device &lt;original_name&gt; &lt;new_name&gt;</span>
 				</ul>
 				<p>
 				To add a tusted peer <i>from your primary TMOS device</i> for each peer device via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh modify cm trust-domain /Common/Root ca-devices add { &lt;peer_mgmt_ip_address&gt; } name &lt;remove_device_name&gt; username &lt;remote_device_admin_username&gt; password &lt;remote_device_admin_password&gt;</span>
+				    <span class='command_text'>tmsh modify cm trust-domain /Common/Root ca-devices add { &lt;peer_mgmt_ip_address&gt; } name &lt;remove_device_name&gt; username &lt;remote_device_admin_username&gt; password &lt;remote_device_admin_password&gt;</span>
 				</ul>
 				
 				<p>
@@ -383,11 +514,11 @@
 				To create the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>tmsh create cm device-group &lt;device_group_name&gt; devices add { &lt;primary_device_name&gt; &lt;remote_device_name&gt; .. &lt;additional_remote_device_name&gt; } type sync-failover auto-sync enabled network-failover enabled</span>
+				    <span class='command_text'>tmsh create cm device-group &lt;device_group_name&gt; devices add { &lt;primary_device_name&gt; &lt;remote_device_name&gt; .. &lt;additional_remote_device_name&gt; } type sync-failover auto-sync enabled network-failover enabled</span>
 				</ul>
 				To force an initial sync for the sync failover Device Service Group <i>from your primary TMOS device</i> via the CLI, run:
 				<ul>
-				    <span style='font-family: Courier'>tmsh run cm config-sync to-group &lt;device_group_name&gt;</span>
+				    <span class='command_text'>tmsh run cm config-sync to-group &lt;device_group_name&gt;</span>
 				</ul>
 				
 				<p>
@@ -401,7 +532,7 @@
 				To create the you multiple unique named traffic group with HA order <i>from your primary TMOS device</i> via the CLI, run:
 				</p>
 				<ul>
-				    <span style='font-family: Courier'>
+				    <span class='command_text'>
 				    	tmsh create cm traffic-group &lt;traffic_group_name&gt; default-device &lt;device_name&gt; auto-failback-enabled true ha-order { &lt;secondary_device_name&gt; .. &lt;additional_device_name&gt;  }
 				    </span>
 				</ul>
@@ -415,7 +546,7 @@
 				download the python-f5-bigip-lbaas-agent_1.0-1_all.deb package to the host which will run your agent process. To install run:
 				</p>
 				
-                <span style='font-family: Courier'>
+                <span class='command_text'>
 				sudo dpkg -i python-f5-bigip-lbaas-agent_1.0-1_all.deb	
 				</span>
 				
@@ -423,16 +554,17 @@
 				On Ubuntu systems an upstart job will run as a result of the installation.  You should stop this service and configure your F5 LBaaS agent.
 				</p>
 
-                <span style='font-family: Courier'>
+                <span class='command_text'>
 				sudo service python-f5-bigip-lbaas-agent stop	
 				</span>
 				
 				<p>
-				The default settings file for the F5 LBaaS agent is installed at <span style='font-family: Courier'>/etc/neutron/f5-bigip-lbaas-agent.ini</span>.
+				The default settings file for the F5 LBaaS agent is installed at <span class='command_text'>/etc/neutron/f5-bigip-lbaas-agent.ini</span>.
 				Below is a consideration of each setting in that settings file.
 				</p>
 				
 				<table border='1' width='1024px' cellpadding='2'>
+					<tbody>
 					<tr><th nowrap>Setting</th><th nowrap>Allowed Values</th><th nowrap>Default Value</th><th nowrap>Description</th></tr>
 					<tr><td nowrap>Debug</td><td>True or False</td><td>False</td><td>Should the agent create verbose debug logging in /var/log/neutron/f5-bigip-lbaas-agent.log</td></tr>
 					<tr><td nowrap>periodic_interval</td><td>integer number of seconds</td><td>10</td><td>How often should the get_stats, and save configurations be considered. (not run, but considered)</td></tr>
@@ -450,15 +582,16 @@
 				    <tr><td>icontrol_username</d><td>valid username for the TMOS device</td><td>admin</td><td>The iControl endpoint username for this agent</td></tr>
 				    <tr><td>icontrol_password</d><td>valid password for the TMOS device</td><td>admin</td><td>The iControl endpoint password for this agent</td></tr>
 				    <tr><td>icontrol_connection_retry_interval</td><td>integer number of seconds</td><td>10</td><td>How often to attempt to reconnect if iControl connection fails</td></tr>
+				    </tbody>
 				</table>
 				
 
 				<h2><span class='mw-headline' id='Troubleshooting_Issues'>Troubleshooting Issues</span></h2>
 				
 				<p>
-				To troubleshoot problems with the F5 LBaaS Type driver or an agent process, set the global Neutron setting and agent process <span style='font-family: Courier'>Debug</span> 
-				setting to <span style='font-family: Courier'>True</span>. Extensive logging will then appear in the <span style='font-family: Courier'>neutron-server</span> and 
-				<span style='font-family: Courier'>f5-bigip-lbaas-agent</span> log files on their respective hosts. 	
+				To troubleshoot problems with the F5 LBaaS Type driver or an agent process, set the global Neutron setting and agent process <span class='command_text'>Debug</span> 
+				setting to <span class='command_text'>True</span>. Extensive logging will then appear in the <span class='command_text'>neutron-server</span> and 
+				<span class='command_text'>f5-bigip-lbaas-agent</span> log files on their respective hosts. 	
 				</p>
 				
 			</div>
