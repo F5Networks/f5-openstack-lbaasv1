@@ -38,6 +38,14 @@ class Cluster(object):
     def save_base_config(self):
         self.sys_sync.save_configuration(filename="",save_flag="SAVE_BASE_LEVEL_CONFIG")
 
+    def save_service_config(self):
+        self.sys_sync.save_configuration(filename="",
+                                         save_flag="SAVE_HIGH_LEVEL_CONFIG")
+
+    def save_full_config(self):
+        self.sys_sync.save_configuration(filename="",
+                                         save_flag="SAVE_FULL")
+
     # force_now=True is typically used for initial sync.
     # In order to avoid sync problems, you should wait until devices
     # in the group are connected.

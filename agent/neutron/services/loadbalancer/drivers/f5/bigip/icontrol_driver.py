@@ -324,6 +324,7 @@ class iControlDriver(object):
         self.assure_vip_network_delete(service, bigip, ctx)
         self.assure_member_network_delete(service, bigip, ctx)
         self.assure_tenant_cleanup(service, bigip, ctx)
+        self.sync_if_clustered(bigip, ctx)
 
     @log.log
     def set_monitor_delete_if_pool_delete(self, service):
@@ -1055,22 +1056,40 @@ class iControlDriver(object):
                not existing_pools and \
                not existing_vips:
                 try:
+                    # syncing the folder delete seems to cause problems,
+                    # so try deleting it on each device
+                    clustered = (len(self.__bigips.values()) > 1)
+                    if clustered:
+                        if not ctx.device_group:
+                            ctx.device_group = bigip.device.get_device_group()
+                    # turn off sync on all devices so we can prevent
+                    # a sync from another device doing it
+                    for b in self.__bigips.values():
+                        b.system.set_folder('/Common')
+                        if clustered:
+                            b.cluster.mgmt_dg.set_autosync_enabled_state( \
+                                         [ctx.device_group], ['STATE_DISABLED'])
                     # all domains must be gone before we attempt to delete
                     # the folder or it won't delete due to not being empty
                     for b in self.__bigips.values():
                         b.route.delete_domain(
                                 folder=service['pool']['tenant_id'])
-                    # make sure each big-ip is not currently
-                    # set to the folder that is being deleted.
+                        b.system.set_folder('/Common')
+                        b.system.delete_folder(folder='/uuid_' + \
+                                                 service['pool']['tenant_id'])
+                    # turn off sync on all devices so we can delete the folder
+                    # on each device individually
                     for b in self.__bigips.values():
                         b.system.set_folder('/Common')
-
-                    bigip.system.delete_folder(folder='/uuid_' + \
-                                                 service['pool']['tenant_id'])
-                    # Need to make sure this folder delete syncs before
-                    # something else runs and changes the current folder
-                    # to the folder being deleted which will cause problems.
-                    self.sync_if_clustered(bigip, ctx)
+                        if clustered:
+                            b.cluster.mgmt_dg.set_autosync_enabled_state( \
+                                                        [ctx.device_group],
+                                                        ['STATE_ENABLED'])
+                    if clustered:
+                        # Need to make sure this folder delete syncs before
+                        # something else runs and changes the current folder
+                        # to the folder being deleted which will cause big problems.
+                        self.sync_if_clustered(bigip, ctx)
                 except:
                     LOG.error("Error cleaning up tenant " + \
                                        service['pool']['tenant_id'])
@@ -1768,3 +1787,12 @@ class iControlDriver(object):
                 ctx.device_group = bigip.device.get_device_group()
             bigip.cluster.sync(ctx.device_group)
         return ctx.device_group
+
+    @serialized('backup_configuration')
+    @am.is_connected
+    def backup_configuration(self):
+        for bigip in self.__bigips.values():
+            bigip.system.set_folder('/Common')
+            bigip.cluster.save_base_config()
+            bigip.cluster.save_service_config()
+

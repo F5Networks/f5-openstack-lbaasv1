@@ -250,6 +250,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 LOG.exception(_('Error upating stats'))
                 self.needs_resync = True
 
+    @periodic_task.periodic_task(spacing=600)
+    def backup_configuration(self, context):
+        self.driver.backup_configuration()
+
     def _vip_plug_callback(self, action, port):
         if action == 'plug':
             self.plugin_rpc.plug_vip_port(port['id'])
