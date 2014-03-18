@@ -70,32 +70,18 @@ class System(object):
         return folders
 
     def set_folder(self, folder):
-        if self.current_folder and folder is self.current_folder:
+        if self.current_folder and folder == self.current_folder:
             return
         try:
             self.sys_session.set_active_folder(folder)
             self.current_folder = folder
         except WebFault as wf:
             if "was not found" in str(wf.message):
-                if folder is '/' or 'Common' in folder:
+                if folder == '/' or 'Common' in folder:
                     # don't try to recover from this
                     raise
                 try:
-                    self.create_folder(folder, change_to=True)
-                    if len(self.bigip.group_bigips) > 1:
-                        # folder must sync before route domains are created.
-                        dg = self.bigip.device.get_device_group()
-                        self.bigip.cluster.sync(dg)
-                        # get_device_group and sync will change the current
-                        # folder.
-                        self.sys_session.set_active_folder(folder)
-                        self.current_folder = folder
-                    if self.bigip.route_domain_required:
-                        if len(self.bigip.group_bigips) > 1:
-                            for b in self.bigip.group_bigips.values():
-                                b.route._create_domain(folder=folder)
-                        else:
-                            self.bigip.route._create_domain(folder=folder)
+                    self._create_folder_and_domain(folder, self.bigip)
                 except WebFault as wf:
                     LOG.error("set_folder:create failed: " + str(wf.message))
                     raise
@@ -103,6 +89,31 @@ class System(object):
                 LOG.error("set_folder:set_active_folder failed: " + \
                               str(wf.message))
                 raise
+
+    # TODO: this belongs in a higher level cluster abstraction
+    def _create_folder_and_domain(self, folder, bigip):
+        if bigip.sync_mode == 'replication':
+            # presumably whatever is operating on the current bigip
+            # will do the same on every bigip, so no need to replicate
+            bigip.system.create_folder(folder, change_to=True)
+            if bigip.route_domain_required:
+                bigip.route._create_domain(folder=folder)
+        else:
+            self.create_folder(folder, change_to=True)
+            if len(bigip.group_bigips) > 1:
+                # folder must sync before route domains are created.
+                dg = bigip.device.get_device_group()
+                bigip.cluster.sync(dg)
+                # get_device_group and sync will change the current
+                # folder.
+                self.sys_session.set_active_folder(folder)
+                self.current_folder = folder
+            if bigip.route_domain_required:
+                if len(bigip.group_bigips) > 1:
+                    for b in bigip.group_bigips:
+                        b.route._create_domain(folder=folder)
+                else:
+                    bigip.route._create_domain(folder=folder)
 
     def get_hostname(self):
         return self.sys_inet.get_hostname()

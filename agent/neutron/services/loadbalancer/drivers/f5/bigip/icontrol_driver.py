@@ -18,6 +18,7 @@ import urllib2
 import netaddr
 import datetime
 import time
+import logging as std_logging
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
@@ -46,7 +47,12 @@ OPTS = [
         'icontrol_connection_retry_interval',
         default=10,
         help=_('How many seconds to wait between retry connection attempts'),
-    )
+    ),
+    cfg.StrOpt(
+        'sync_mode',
+        default='autosync',
+        help=_('The sync mechanism: autosync or replication'),
+    ),
 ]
 
 
@@ -312,19 +318,25 @@ class iControlDriver(object):
 
     @log.log
     def _assure_service(self, service):
-        ctx = self.AssureServiceContext()
+        bigip = self._get_bigip()
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        ctxs = {}
+        for b in bigips:
+            ctxs[b.device_name] = self.AssureServiceContext()
 
         self.set_monitor_delete_if_pool_delete(service)
-        bigip = self._get_bigip()
-        self.assure_pool_create(service, bigip, ctx)
-        self.assure_pool_monitors(service, bigip, ctx)
-        self.assure_members(service, bigip, ctx)
-        self.assure_vip(service, bigip, ctx)
-        self.assure_pool_delete(service, bigip, ctx)
-        self.assure_vip_network_delete(service, bigip, ctx)
-        self.assure_member_network_delete(service, bigip, ctx)
-        self.assure_tenant_cleanup(service, bigip, ctx)
-        self.sync_if_clustered(bigip, ctx)
+        self.assure_pool_create(service, bigip)
+        self.assure_pool_monitors(service, bigip)
+        self.assure_members(service, bigip, ctxs)
+        self.assure_vip(service, bigip, ctxs)
+        self.assure_pool_delete(service, bigip)
+        self.assure_vip_network_delete(service, bigip, ctxs)
+        self.assure_member_network_delete(service, bigip, ctxs)
+        self.assure_tenant_cleanup(service, bigip, ctxs)
+        self.sync_if_clustered(bigip)
 
     @log.log
     def set_monitor_delete_if_pool_delete(self, service):
@@ -341,38 +353,64 @@ class iControlDriver(object):
     # Provision Pool - Create/Update
     #
     @log.log
-    def assure_pool_create(self, service, bigip, ctx):
-        if not service['pool']['status'] == plugin_const.PENDING_DELETE:
-            if not bigip.pool.create(name=service['pool']['id'],
-                              lb_method=service['pool']['lb_method'],
-                              description=service['pool']['name'] + \
-                              ':' + service['pool']['description'],
-                              folder=service['pool']['tenant_id']):
+    def assure_pool_create(self, service, bigip):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            self._assure_pool_create(service, bigip, on_last_bigip)
 
-                if service['pool']['status'] == \
-                                               plugin_const.PENDING_UPDATE:
-                    # make sure pool attributes are correct
-                    bigip.pool.set_lb_method(name=service['pool']['id'],
-                                    lb_method=service['pool']['lb_method'])
-                    bigip.pool.set_description(name=service['pool']['id'],
-                                    description=service['pool']['name'] + \
-                                    ':' + service['pool']['description'])
-                    self.plugin_rpc.update_pool_status(
-                                    service['pool']['id'],
-                                    status=plugin_const.ACTIVE,
-                                    status_description='pool updated'
-                                  )
-            else:
-                self.plugin_rpc.update_pool_status(
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_pool_create(self, service, bigip, on_last_bigip):
+            if not service['pool']['status'] == plugin_const.PENDING_DELETE:
+                if not bigip.pool.create(name=service['pool']['id'],
+                                  lb_method=service['pool']['lb_method'],
+                                  description=service['pool']['name'] + \
+                                  ':' + service['pool']['description'],
+                                  folder=service['pool']['tenant_id']):
+ 
+                    if service['pool']['status'] == \
+                                                   plugin_const.PENDING_UPDATE:
+                        # make sure pool attributes are correct
+                        bigip.pool.set_lb_method(name=service['pool']['id'],
+                                        lb_method=service['pool']['lb_method'])
+                        bigip.pool.set_description(name=service['pool']['id'],
+                                        description=service['pool']['name'] + \
+                                        ':' + service['pool']['description'])
+                        if on_last_bigip:
+                            self.plugin_rpc.update_pool_status(
                                         service['pool']['id'],
                                         status=plugin_const.ACTIVE,
-                                        status_description='pool created'
+                                        status_description='pool updated'
+                                      )
+                else:
+                    if on_last_bigip:
+                        self.plugin_rpc.update_pool_status(
+                                            service['pool']['id'],
+                                            status=plugin_const.ACTIVE,
+                                            status_description='pool created'
                                        )
 
     #
     # Provision Health Monitors - Create/Update
     #
-    def assure_pool_monitors(self, service, bigip, ctx):
+    @log.log
+    def assure_pool_monitors(self, service, bigip):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            self._assure_pool_monitors(service, bigip, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_pool_monitors(self, service, bigip, on_last_bigip):
         # Current monitors on the pool according to BigIP
         existing_monitors = bigip.pool.get_monitors(
                                 name=service['pool']['id'],
@@ -395,7 +433,8 @@ class iControlDriver(object):
                                       monitor_name=monitor['id'],
                                       folder=service['pool']['tenant_id']
                                     )
-                self.plugin_rpc.health_monitor_destroyed(
+                if on_last_bigip:
+                    self.plugin_rpc.health_monitor_destroyed(
                                       health_monitor_id=monitor['id'],
                                       pool_id=service['pool']['id'])
                 # not sure if the monitor might be in use
@@ -478,7 +517,8 @@ class iControlDriver(object):
                                        monitor_name=monitor['id'],
                                        folder=service['pool']['tenant_id'])
 
-                self.plugin_rpc.update_health_monitor_status(
+                if on_last_bigip:
+                    self.plugin_rpc.update_health_monitor_status(
                                     pool_id=service['pool']['id'],
                                     health_monitor_id=monitor['id'],
                                     status=plugin_const.ACTIVE,
@@ -498,7 +538,20 @@ class iControlDriver(object):
     #
     # Provision Members - Create/Update
     #
-    def assure_members(self, service, bigip, ctx):
+    @log.log
+    def assure_members(self, service, bigip, ctxs):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            ctx = ctxs[bigip.device_name]
+            self._assure_members(service, bigip, ctx, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_members(self, service, bigip, ctx, on_last_bigip):
         # Current members on the BigIP
         existing_members = bigip.pool.get_members(
                                 name=service['pool']['id'],
@@ -531,9 +584,10 @@ class iControlDriver(object):
                 # avoids race condition:
                 # deletion of pool member objects must sync before we
                 # remove the selfip from the peer bigips.
-                self.sync_if_clustered(bigip, ctx)
+                self.sync_if_clustered(bigip)
                 try:
-                    self.plugin_rpc.member_destroyed(member['id'])
+                    if on_last_bigip:
+                        self.plugin_rpc.member_destroyed(member['id'])
                 except Exception as e:
                     LOG.error(_("Plugin delete member %s error: %s"
                                 % (member['id'], e.message)
@@ -549,7 +603,8 @@ class iControlDriver(object):
                     % (service['pool']['id'],
                        member['address'],
                        member['protocol_port'])))
-                    self.plugin_rpc.update_member_status(
+                    if on_last_bigip:
+                        self.plugin_rpc.update_member_status(
                                         member['id'],
                                         status=plugin_const.ACTIVE,
                                         status_description='member created'
@@ -578,12 +633,14 @@ class iControlDriver(object):
                                    )
                         using_ratio = True
 
-                    self.plugin_rpc.update_member_status(
+                    if on_last_bigip:
+                        self.plugin_rpc.update_member_status(
                                     member['id'],
                                     status=plugin_const.ACTIVE,
                                     status_description='member updated'
                                    )
-                ctx.assured_subnets.append(member['subnet']['id'])
+                if member['subnet']['id'] not in ctx.assured_subnets:
+                    ctx.assured_subnets.append(member['subnet']['id'])
 
             # Remove them from the one's BigIP needs to
             # handle.. leaving on those that are needed to
@@ -616,13 +673,27 @@ class iControlDriver(object):
                                 lb_method='RATIO',
                                 folder=service['pool']['tenant_id'])
 
-            self.plugin_rpc.update_pool_status(
+            if on_last_bigip:
+                self.plugin_rpc.update_pool_status(
                             service['pool']['id'],
                             status=plugin_const.ACTIVE,
                             status_description='pool now using ratio lb'
                            )
 
-    def assure_vip(self, service, bigip, ctx):
+    @log.log
+    def assure_vip(self, service, bigip, ctxs):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            ctx = ctxs[bigip.device_name]
+            self._assure_vip(service, bigip, ctx, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_vip(self, service, bigip, ctx, on_last_bigip):
         if 'id' in service['vip']:
             #
             # Provision Virtual Service - Create/Update
@@ -646,7 +717,7 @@ class iControlDriver(object):
                 # avoids race condition:
                 # deletion of vip address must sync before we
                 # remove the selfip from the peer bigips.
-                self.sync_if_clustered(bigip, ctx)
+                self.sync_if_clustered(bigip)
 
                 if service['vip']['id'] in self.__vips_to_traffic_group:
                     tg = self.__vips_to_traffic_group[service['vip']['id']]
@@ -656,7 +727,8 @@ class iControlDriver(object):
                                                      service['vip']['id']])
                 ctx.delete_vip_service_networks = True
                 try:
-                    self.plugin_rpc.vip_destroyed(service['vip']['id'])
+                    if on_last_bigip:
+                        self.plugin_rpc.vip_destroyed(service['vip']['id'])
                 except Exception as e:
                     LOG.error(_("Plugin delete vip %s error: %s"
                                 % (service['vip']['id'], e.message)
@@ -727,7 +799,8 @@ class iControlDriver(object):
                                         name=service['vip']['ip'],
                                         folder=service['pool']['tenant_id'])
                         self.__vips_to_traffic_group[service['vip']['ip']] = tg
-                        self.plugin_rpc.update_vip_status(
+                        if on_last_bigip:
+                            self.plugin_rpc.update_vip_status(
                                             service['vip']['id'],
                                             status=plugin_const.ACTIVE,
                                             status_description='vip created'
@@ -750,7 +823,8 @@ class iControlDriver(object):
                                         name=service['vip']['ip'],
                                         folder=service['pool']['tenant_id'])
                         self.__vips_to_traffic_group[service['vip']['ip']] = tg
-                        self.plugin_rpc.update_vip_status(
+                        if on_last_bigip:
+                            self.plugin_rpc.update_vip_status(
                                             service['vip']['id'],
                                             status=plugin_const.ACTIVE,
                                             status_description='vip created'
@@ -920,28 +994,56 @@ class iControlDriver(object):
                                 connection_limit=0,
                                 folder=service['pool']['tenant_id'])
 
-                    self.plugin_rpc.update_vip_status(
+                    if on_last_bigip:
+                        self.plugin_rpc.update_vip_status(
                                             service['vip']['id'],
                                             status=plugin_const.ACTIVE,
                                             status_description='vip updated'
                                            )
-                ctx.assured_subnets.append(service['vip']['subnet']['id'])
+                if service['vip']['subnet']['id'] not in ctx.assured_subnets:
+                    ctx.assured_subnets.append(service['vip']['subnet']['id'])
 
-    def assure_pool_delete(self, service, bigip, ctx):
+    @log.log
+    def assure_pool_delete(self, service, bigip):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            self._assure_pool_delete(service, bigip, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_pool_delete(self, service, bigip, on_last_bigip):
         # Remove the pool if it is pending delete
         if service['pool']['status'] == plugin_const.PENDING_DELETE:
             LOG.debug(_('Deleting Pool %s' % service['pool']['id']))
             bigip.pool.delete(name=service['pool']['id'],
                               folder=service['pool']['tenant_id'])
             try:
-                self.plugin_rpc.pool_destroyed(service['pool']['id'])
+                if on_last_bigip:
+                    self.plugin_rpc.pool_destroyed(service['pool']['id'])
             except Exception as e:
                     LOG.error(_("Plugin delete pool %s error: %s"
                                 % (service['pool']['id'], e.message)
                                 ))
 
-    def assure_vip_network_delete(self, service, bigip, ctx):
-        # Clean up an Self IP, SNATs, networks, and folder for
+    @log.log
+    def assure_vip_network_delete(self, service, bigip, ctxs):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            ctx = ctxs[bigip.device_name]
+            self._assure_vip_network_delete(service, bigip, ctx, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_vip_network_delete(self, service, bigip, ctx, on_last_bigip):
+        # Clean up any Self IP, SNATs, networks, and folder for
         # services items that we deleted.
         if ctx.delete_vip_service_networks:
             # Don't delete network objects if you just created
@@ -972,22 +1074,35 @@ class iControlDriver(object):
                     # Since no virtual addresses or nodes found
                     # go ahead and try to delete the Self IP
                     # and SNATs
-                    self._delete_local_selfip_snat(service['vip'],
-                                                               service)
+                    self._delete_local_selfip_snat(service['vip'], service,
+                                                   bigip, on_last_bigip)
                     # avoids race condition:
                     # deletion of ip objects must sync before we
                     # remove the vlan from the peer bigips.
-                    self.sync_if_clustered(bigip, ctx)
+                    self.sync_if_clustered(bigip)
                     # Flag this network so we won't try to go through
                     # this same process if a deleted member is on
                     # this same subnet.
                     ctx.deleted_subnets.append(service['vip']['subnet']['id'])
                     try:
-                        self._delete_network(service['vip']['network'])
+                        self._delete_network(service['vip']['network'], bigip)
                     except:
                         pass
 
-    def assure_member_network_delete(self, service, bigip, ctx):
+    @log.log
+    def assure_member_network_delete(self, service, bigip, ctxs):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            ctx = ctxs[bigip.device_name]
+            self._assure_member_network_delete(service, bigip, ctx, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_member_network_delete(self, service, bigip, ctx, on_last_bigip):
         if ctx.delete_member_service_networks:
             for member in service['members']:
                 # Only need to bother if the member is deleted
@@ -1025,23 +1140,36 @@ class iControlDriver(object):
                             # and SNATs
                             if not self.conf.f5_snat_mode:
                                 self._delete_floating_default_gateway(
-                                                              member,
-                                                              service)
-                            self._delete_local_selfip_snat(member, service)
+                                          member, service, bigip, on_last_bigip)
+                            self._delete_local_selfip_snat(member, service,
+                                                           bigip, on_last_bigip)
                             # avoids race condition:
                             # deletion of ip objects must sync before we
                             # remove the vlan from the peer bigips.
-                            self.sync_if_clustered(bigip, ctx)
+                            self.sync_if_clustered(bigip)
                             try:
-                                self._delete_network(member['network'])
+                                self._delete_network(member['network'], bigip)
                             except:
                                 pass
                             # Flag this network so we won't try to go
-                            # through this same process if a deleted
+                            # through this same process if
                             # another member is delete on this subnet
                             ctx.deleted_subnets.append(member['subnet']['id'])
 
-    def assure_tenant_cleanup(self, service, bigip, ctx):
+    @log.log
+    def assure_tenant_cleanup(self, service, bigip, ctxs):
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_last_bigip = (bigip is bigips[-1])
+            ctx = ctxs[bigip.device_name]
+            self._assure_tenant_cleanup(service, bigip, ctx)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_tenant_cleanup(self, service, bigip, ctx):
         # if something was deleted check whether to do domain+folder teardown
         if service['pool']['status'] == plugin_const.PENDING_DELETE or \
              ctx.delete_vip_service_networks or ctx.delete_member_service_networks:
@@ -1055,46 +1183,73 @@ class iControlDriver(object):
             if not existing_monitors and \
                not existing_pools and \
                not existing_vips:
-                try:
-                    # syncing the folder delete seems to cause problems,
-                    # so try deleting it on each device
-                    clustered = (len(self.__bigips.values()) > 1)
-                    if clustered:
-                        if not ctx.device_group:
-                            ctx.device_group = bigip.device.get_device_group()
-                    # turn off sync on all devices so we can prevent
-                    # a sync from another device doing it
-                    for b in self.__bigips.values():
-                        b.system.set_folder('/Common')
-                        if clustered:
-                            b.cluster.mgmt_dg.set_autosync_enabled_state( \
-                                         [ctx.device_group], ['STATE_DISABLED'])
-                    # all domains must be gone before we attempt to delete
-                    # the folder or it won't delete due to not being empty
-                    for b in self.__bigips.values():
-                        b.route.delete_domain(
-                                folder=service['pool']['tenant_id'])
-                        b.system.set_folder('/Common')
-                        b.system.delete_folder(folder='/uuid_' + \
-                                                 service['pool']['tenant_id'])
-                    # turn off sync on all devices so we can delete the folder
-                    # on each device individually
-                    for b in self.__bigips.values():
-                        b.system.set_folder('/Common')
-                        if clustered:
-                            b.cluster.mgmt_dg.set_autosync_enabled_state( \
-                                                        [ctx.device_group],
-                                                        ['STATE_ENABLED'])
-                    if clustered:
-                        # Need to make sure this folder delete syncs before
-                        # something else runs and changes the current folder
-                        # to the folder being deleted which will cause big problems.
-                        self.sync_if_clustered(bigip, ctx)
-                except:
-                    LOG.error("Error cleaning up tenant " + \
-                                       service['pool']['tenant_id'])
+                self.remove_tenant(service, bigip)
 
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def remove_tenant(self, service, bigip):
+        try:
+            if self.conf.sync_mode == 'replication':
+                bigip.route.delete_domain(
+                            folder=service['pool']['tenant_id'])
+                bigip.system.delete_folder(folder='/uuid_' + \
+                                             service['pool']['tenant_id'])
+            else:
+                # syncing the folder delete seems to cause problems,
+                # so try deleting it on each device
+                clustered = (len(self.__bigips.values()) > 1)
+                if clustered:
+                    bigip.device_group = bigip.device.get_device_group()
+                # turn off sync on all devices so we can prevent
+                # a sync from another device doing it
+                for b in self.__bigips.values():
+                    b.system.set_folder('/Common')
+                    if clustered:
+                        b.cluster.mgmt_dg.set_autosync_enabled_state( \
+                                     [bigip.device_group], ['STATE_DISABLED'])
+                # all domains must be gone before we attempt to delete
+                # the folder or it won't delete due to not being empty
+                for b in self.__bigips.values():
+                    b.route.delete_domain(
+                            folder=service['pool']['tenant_id'])
+                    b.system.set_folder('/Common')
+                    b.system.delete_folder(folder='/uuid_' + \
+                                             service['pool']['tenant_id'])
+                # turn off sync on all devices so we can delete the folder
+                # on each device individually
+                for b in self.__bigips.values():
+                    b.system.set_folder('/Common')
+                    if clustered:
+                        b.cluster.mgmt_dg.set_autosync_enabled_state( \
+                                                    [bigip.device_group],
+                                                    ['STATE_ENABLED'])
+                if clustered:
+                    # Need to make sure this folder delete syncs before
+                    # something else runs and changes the current folder
+                    # to the folder being deleted which will cause big problems.
+                    self.sync_if_clustered(bigip)
+        except:
+            LOG.error("Error cleaning up tenant " + \
+                               service['pool']['tenant_id'])
+
+
+    @log.log
     def _assure_service_networks(self, service):
+        bigip = self._get_bigip()
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            bigips = [bigip]
+        for bigip in bigips:
+            on_first_bigip = (bigip is bigips[0])
+            on_last_bigip = (bigip is bigips[-1])
+            self.__assure_service_networks(service,
+                        bigip, on_first_bigip, on_last_bigip)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def __assure_service_networks(self, service,
+              bigip, on_first_bigip, on_last_bigip):
 
         assured_networks = []
         assured_subnet_local_and_snats = []
@@ -1102,19 +1257,12 @@ class iControlDriver(object):
 
         if 'id' in service['vip']:
             if not service['vip']['status'] == plugin_const.PENDING_DELETE:
-                self._assure_network(service['vip']['network'])
+                self._assure_network(service['vip']['network'], bigip, on_first_bigip)
                 assured_networks.append(service['vip']['network']['id'])
-                # does the pool network need a self-ip or snat addresses?
-                assured_networks.append(service['vip']['network']['id'])
-                if 'id' in service['vip']['network']:
-                    if not service['vip']['network']['id'] in assured_networks:
-                        self._assure_network(
-                                        service['vip']['network'])
-                        assured_networks.append(
-                                        service['vip']['network']['id'])
-                    self._assure_local_selfip_snat(
-                                        service['vip'], service)
-                    assured_subnet_local_and_snats.append(
+                self._assure_local_selfip_snat(
+                                        service['vip'], service,
+                                        bigip, on_first_bigip)
+                assured_subnet_local_and_snats.append(
                                         service['vip']['subnet']['id'])
 
         for member in service['members']:
@@ -1122,80 +1270,112 @@ class iControlDriver(object):
                 network_id = member['network']['id']
                 subnet_id = member['subnet']['id']
                 if not network_id in assured_networks:
-                    self._assure_network(member['network'])
+                    self._assure_network(member['network'], bigip, on_first_bigip)
                 if not subnet_id in assured_subnet_local_and_snats:
                     # each member gets a local self IP on each device
-                    self._assure_local_selfip_snat(member, service)
+                    self._assure_local_selfip_snat(member, service,
+                                                   bigip, on_first_bigip)
                 # if we are not using SNATS, attempt to become
                 # the subnet's default gateway.
                 if not self.conf.f5_snat_mode and \
                     subnet_id not in assured_floating_default_gateway:
-                    self._assure_floating_default_gateway(member, service)
+                    self._assure_floating_default_gateway(member, service,
+                        bigip, on_first_bigip)
                     assured_floating_default_gateway.append(subnet_id)
 
-    def _assure_network(self, network):
-        # setup all needed L2 network segments on all BigIPs
-        for bigip in self.__bigips.values():
-            if network['provider:network_type'] == 'vlan':
-                if network['shared']:
-                    network_folder = 'Common'
-                else:
-                    network_folder = network['tenant_id']
 
-                # VLAN names are limited to 64 characters including
-                # the folder name, so we name them foolish things.
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_network(self, network, bigip, on_first_bigip):
+        if self.conf.sync_mode == 'replication' and not on_first_bigip:
+            # already did this work
+            return
 
-                interface = self.interface_mapping['default']
-                tagged = self.tagging_mapping['default']
+        bigips = bigip.group_bigips
+        for bigip in bigips:
+            self.__assure_network(network, bigip)
+ 
+       
+    # called for every bigip in every sync mode
+    def __assure_network(self, network, bigip):
+
+        # setup all needed L2 network segments
+        if network['provider:network_type'] == 'vlan':
+            if network['shared']:
+                network_folder = 'Common'
+            else:
+                network_folder = network['tenant_id']
+
+            # VLAN names are limited to 64 characters including
+            # the folder name, so we name them foolish things.
+
+            interface = self.interface_mapping['default']
+            tagged = self.tagging_mapping['default']
+            vlanid = 0
+
+            if network['provider:physical_network'] in \
+                                        self.interface_mapping:
+                interface = self.interface_mapping[
+                          network['provider:physical_network']]
+                tagged = self.tagging_mapping[
+                          network['provider:physical_network']]
+
+            if tagged:
+                vlanid = network['provider:segmentation_id']
+            else:
                 vlanid = 0
 
-                if network['provider:physical_network'] in \
-                                            self.interface_mapping:
-                    interface = self.interface_mapping[
-                              network['provider:physical_network']]
-                    tagged = self.tagging_mapping[
-                              network['provider:physical_network']]
+            vlan_name = self._get_vlan_name(network)
 
-                if tagged:
-                    vlanid = network['provider:segmentation_id']
-                else:
-                    vlanid = 0
+            bigip.vlan.create(name=vlan_name,
+                              vlanid=vlanid,
+                              interface=interface,
+                              folder=network_folder,
+                              description=network['id'])
 
-                vlan_name = self._get_vlan_name(network)
+        if network['provider:network_type'] == 'flat':
+            if network['shared']:
+                network_folder = 'Common'
+            else:
+                network_folder = network['id']
+            interface = self.interface_mapping['default']
+            vlanid = 0
+            if network['provider:physical_network'] in \
+                                        self.interface_mapping:
+                interface = self.interface_mapping[
+                          network['provider:physical_network']]
 
-                bigip.vlan.create(name=vlan_name,
-                                  vlanid=vlanid,
-                                  interface=interface,
-                                  folder=network_folder,
-                                  description=network['id'])
+            vlan_name = self._get_vlan_name(network)
 
-            if network['provider:network_type'] == 'flat':
-                if network['shared']:
-                    network_folder = 'Common'
-                else:
-                    network_folder = network['id']
-                interface = self.interface_mapping['default']
-                vlanid = 0
-                if network['provider:physical_network'] in \
-                                            self.interface_mapping:
-                    interface = self.interface_mapping[
-                              network['provider:physical_network']]
+            bigip.vlan.create(name=vlan_name,
+                              vlanid=0,
+                              interface=interface,
+                              folder=network_folder,
+                              description=network['id'])
 
-                vlan_name = self._get_vlan_name(network)
+        # TODO: add vxlan
 
-                bigip.vlan.create(name=vlan_name,
-                                  vlanid=0,
-                                  interface=interface,
-                                  folder=network_folder,
-                                  description=network['id'])
+        # TODO: add gre
 
-            # TODO: add vxlan
 
-            # TODO: add gre
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_local_selfip_snat(self, service_object, service,
+                                  bigip, on_first_bigip):
 
-    def _assure_local_selfip_snat(self, service_object, service):
 
-        bigip = self._get_bigip()
+        # Sync special case:
+        # In replication mode, even though assure_local_selfip_snat is called
+        # for each bigip, we allocate a floating ip later that needs to be
+        # the same for every bigip. We could allocate the ips and pass them
+        # back to so they can be used multiple times, but its easier to just
+        # do all the work here. This function is called for every big-ip but we
+        # only want to do this work once, so we'll only do this on the first
+        # bigip.
+        if self.conf.sync_mode == 'replication' and not on_first_bigip:
+            # we already did this work
+            return
+
         # Setup non-floating Self IPs on all BigIPs
         snat_pool_name = service['pool']['tenant_id']
         # Where to put all these objects?
@@ -1204,36 +1384,15 @@ class iControlDriver(object):
             network_folder = 'Common'
         vlan_name = self._get_vlan_name(service_object['network'])
 
-        # On each BIG-IP create the local Self IP for this subnet
-        for bigip in self.__bigips.values():
+        # These selfs are unique to each big-ip 
+        for b in bigip.group_bigips:
+            self.create_local_self(b, service_object,
+                                   network_folder, vlan_name)
 
-            local_selfip_name = "local-" \
-            + bigip.device_name \
-            + "-" + service_object['subnet']['id']
-
-            ports = self.plugin_rpc.get_port_by_name(
-                                            port_name=local_selfip_name)
-            LOG.debug("got ports: %s" % ports)
-            if len(ports) > 0:
-                ip_address = ports[0]['fixed_ips'][0]['ip_address']
-            else:
-                new_port = self.plugin_rpc.create_port_on_subnet(
-                                subnet_id=service_object['subnet']['id'],
-                                mac_address=None,
-                                name=local_selfip_name,
-                                fixed_address_count=1)
-                ip_address = new_port['fixed_ips'][0]['ip_address']
-            netmask = netaddr.IPNetwork(
-                               service_object['subnet']['cidr']).netmask
-            bigip.selfip.create(name=local_selfip_name,
-                                ip_address=ip_address,
-                                netmask=netmask,
-                                vlan_name=vlan_name,
-                                floating=False,
-                                folder=network_folder)
-
+ 
         # Setup required SNAT addresses on this subnet
         # based on the HA requirements
+        # 
         if self.conf.f5_snat_addresses_per_subnet > 0:
             # failover mode dictates SNAT placement on traffic-groups
             if self.conf.f5_ha_type == 'standalone':
@@ -1258,14 +1417,21 @@ class iControlDriver(object):
                         ip_address = ip_address + '%0'
                     if service_object['network']['shared']:
                         index_snat_name = '/Common/' + index_snat_name
-                    bigip.snat.create(
-                     name=index_snat_name,
-                     ip_address=ip_address,
-                     traffic_group='/Common/traffic-group-local-only',
-                     snat_pool_name=None,
-                     folder=network_folder
-                    )
-                    bigip.snat.create_pool(name=snat_pool_name,
+
+
+                    if self.conf.sync_mode == 'replication':
+                        bigips = bigip.group_bigips
+                    else:
+                        # this is a synced object, so only do it once in sync modes
+                        bigips = [bigip]
+                    for bigip in bigips:
+                        bigip.self.create_snat(
+                               name=index_snat_name,
+                               ip_address=ip_address,
+                               traffic_group='/Common/traffic-group-local-only',
+                               snat_pool_name=None,
+                               folder=network_folder)
+                        bigip.snat.create_pool(name=snat_pool_name,
                                            member_name=index_snat_name,
                                            folder=service['pool']['tenant_id'])
 
@@ -1290,14 +1456,19 @@ class iControlDriver(object):
                     if service_object['network']['shared']:
                         ip_address = ip_address + '%0'
                         index_snat_name = '/Common/' + index_snat_name
-                    bigip.snat.create(
-                     name=index_snat_name,
-                     ip_address=ip_address,
-                     traffic_group='/Common/traffic-group-1',
-                     snat_pool_name=None,
-                     folder=network_folder
-                    )
-                    bigip.snat.create_pool(name=snat_pool_name,
+                    if self.conf.sync_mode == 'replication':
+                        bigips = bigip.group_bigips
+                    else:
+                        bigips = [bigip]
+                    for bigip in bigips:
+                        bigip.snat.create(
+                                   name=index_snat_name,
+                                   ip_address=ip_address,
+                                   traffic_group='/Common/traffic-group-1',
+                                   snat_pool_name=None,
+                                   folder=network_folder
+                                  )
+                        bigip.snat.create_pool(name=snat_pool_name,
                                            member_name=index_snat_name,
                                            folder=service['pool']['tenant_id'])
 
@@ -1325,20 +1496,64 @@ class iControlDriver(object):
                             ip_address = ip_address + '%0'
                         if service_object['network']['shared']:
                             index_snat_name = '/Common/' + index_snat_name
-                        bigip.snat.create(
-                         name=index_snat_name,
-                         ip_address=ip_address,
-                         traffic_group=traffic_group,
-                         snat_pool_name=None,
-                         folder=network_folder
-                        )
-                        bigip.snat.create_pool(name=snat_pool_name,
+                        if self.conf.sync_mode == 'replication':
+                            bigips = bigip.group_bigips
+                        else:
+                            # this is a synced object, so only do it once in sync modes
+                            bigips = [bigip]
+                        for bigip in bigips:
+                            bigip.snat.create(
+                                       name=index_snat_name,
+                                       ip_address=ip_address,
+                                       traffic_group=traffic_group,
+                                       snat_pool_name=None,
+                                       folder=network_folder
+                                      )
+                            bigip.snat.create_pool(name=snat_pool_name,
                                            member_name=index_snat_name,
                                            folder=service['pool']['tenant_id'])
 
-    def _assure_floating_default_gateway(self, service_object, service):
 
-        bigip = self._get_bigip()
+    # called for every bigip
+    def create_local_self(self, bigip, service_object, network_folder, vlan_name):
+        local_selfip_name = "local-" + bigip.device_name \
+                            + "-" + service_object['subnet']['id']
+
+        ports = self.plugin_rpc.get_port_by_name(
+                                    port_name=local_selfip_name)
+        LOG.debug("got ports: %s" % ports)
+        if len(ports) > 0:
+            ip_address = ports[0]['fixed_ips'][0]['ip_address']
+        else:
+            new_port = self.plugin_rpc.create_port_on_subnet(
+                        subnet_id=service_object['subnet']['id'],
+                        mac_address=None,
+                        name=local_selfip_name,
+                        fixed_address_count=1)
+            ip_address = new_port['fixed_ips'][0]['ip_address']
+        netmask = netaddr.IPNetwork(
+                           service_object['subnet']['cidr']).netmask
+        bigip.selfip.create(name=local_selfip_name,
+                            ip_address=ip_address,
+                            netmask=netmask,
+                            vlan_name=vlan_name,
+                            floating=False,
+                            folder=network_folder)
+
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _assure_floating_default_gateway(self, service_object, service, bigip, on_first_bigip):
+        # Sync special case:
+        # In replication mode, even though _assure_floating_default_gateway is
+        # called for each bigip, we allocate a floating ip later that needs to
+        # be the same for every bigip. We could allocate the ips and pass them
+        # back to so they can be used multiple times, but its easier to just
+        # do all the work here. This function is called for every big-ip but we
+        # only want to do this work once, so we'll only do this on the first bigip
+        if self.conf.sync_mode == 'replication' and not on_first_bigip:
+            # we already did this work
+            return
+
 
         # Do we already have a port with the gateway_ip belonging
         # to this agent's host?
@@ -1398,7 +1613,14 @@ class iControlDriver(object):
 
         # Select a traffic group for the floating SelfIP
         tg = self._get_least_gw_traffic_group()
-        bigip.selfip.create(
+        
+        if self.conf.sync_mode == 'replication':
+            bigips = bigip.group_bigips
+        else:
+            # these are synced objects, so only create them once in sync modes
+            bigips = [bigip]
+        for bigip in bigips:
+            bigip.selfip.create(
                             name=floating_selfip_name,
                             ip_address=service_object['subnet']['gateway_ip'],
                             netmask=netmask,
@@ -1407,26 +1629,33 @@ class iControlDriver(object):
                             traffic_group=tg,
                             folder=network_folder)
 
-        # Get the actual traffic group if the Self IP already existed
-        tg = bigip.self.get_traffic_group(name=floating_selfip_name,
-                                folder=service_object['subnet']['tenant_id'])
+            # Get the actual traffic group if the Self IP already existed
+            tg = bigip.self.get_traffic_group(name=floating_selfip_name,
+                                    folder=service_object['subnet']['tenant_id'])
 
-        # Setup a wild card ip forwarding virtual service for this subnet
-        bigip.virtual_server.create_ip_forwarder(
+            # Setup a wild card ip forwarding virtual service for this subnet
+            bigip.virtual_server.create_ip_forwarder(
                             name=gw_name, ip_address='0.0.0.0',
                             mask='0.0.0.0',
                             vlan_name=vlan_name,
                             traffic_group=tg,
                             folder=network_folder)
 
-        # Setup the IP forwarding virtual server to use the Self IPs
-        # as the forwarding SNAT addresses
-        bigip.virtual_server.set_snat_automap(name=gw_name,
-                            folder=network_folder)
+            # Setup the IP forwarding virtual server to use the Self IPs
+            # as the forwarding SNAT addresses
+            bigip.virtual_server.set_snat_automap(name=gw_name,
+                                folder=network_folder)
 
-    def _delete_network(self, network):
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _delete_network(self, network, bigip):
+        if self.conf.sync_mode == 'replication':
+            bigips = [bigip]
+        else:
+            bigips = bigip.group_bigips
+
         # setup all needed L2 network segments on all BigIPs
-        for bigip in self.__bigips.values():
+        for bigip in bigips:
             if network['provider:network_type'] == 'vlan':
                 if network['shared']:
                     network_folder = 'Common'
@@ -1449,8 +1678,9 @@ class iControlDriver(object):
 
             # TODO: add gre
 
-    def _delete_local_selfip_snat(self, service_object, service):
-        bigip = self._get_bigip()
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _delete_local_selfip_snat(self, service_object, service, bigip, on_last_bigip):
         network_folder = service_object['subnet']['tenant_id']
         if service_object['network']['shared']:
             network_folder = 'Common'
@@ -1477,7 +1707,8 @@ class iControlDriver(object):
                         # Only if it still exists and can be
                         # deleted because it is not in use can
                         # we safely delete the neutron port
-                        self.plugin_rpc.delete_port_by_name(
+                        if on_last_bigip:
+                            self.plugin_rpc.delete_port_by_name(
                                             port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'ha':
                 # Create SNATs on traffic-group-1
@@ -1497,7 +1728,8 @@ class iControlDriver(object):
                         # Only if it still exists and can be
                         # deleted because it is not in use can
                         # we safely delete the neutron port
-                        self.plugin_rpc.delete_port_by_name(
+                        if on_last_bigip:
+                            self.plugin_rpc.delete_port_by_name(
                                             port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'scalen':
                 # create SNATs on all provider defined traffic groups
@@ -1518,21 +1750,27 @@ class iControlDriver(object):
                             # Only if it still exists and can be
                             # deleted because it is not in use can
                             # we safely delete the neutron port
-                            self.plugin_rpc.delete_port_by_name(
+                            if on_last_bigip:
+                                self.plugin_rpc.delete_port_by_name(
                                                 port_name=index_snat_name)
-        # On each BIG-IP delete the local Self IP for this subnet
-        for bigip in self.__bigips.values():
 
+        # delete_local_selfip_snat called for every bigip only
+        # in replication mode. otherwise called once
+        if self.conf.sync_mode == 'replication':
+            bigips = [bigip]
+        else:
+            bigips = bigip.group_bigips
+        for bigip in bigips:
             local_selfip_name = "local-" \
-            + bigip.device_name \
-            + "-" + service_object['subnet']['id']
+                + bigip.device_name \
+                + "-" + service_object['subnet']['id']
             bigip.selfip.delete(name=local_selfip_name,
                                 folder=network_folder)
             self.plugin_rpc.delete_port_by_name(port_name=local_selfip_name)
 
-    def _delete_floating_default_gateway(self, service_object, service):
-
-        bigip = self._get_bigip()
+    # called for every bigip only in replication mode.
+    # otherwise called once
+    def _delete_floating_default_gateway(self, service_object, service, bigip, on_last_bigip):
 
         # Create a name for the port and for the IP Forwarding Virtual Server
         # as well as the floating Self IP which will answer ARP for the members
@@ -1553,30 +1791,30 @@ class iControlDriver(object):
         bigip.virtual_server.delete(name=gw_name,
                                     folder=network_folder)
 
-        # remove neutron default gateway port if the device id is
-        # f5_lbass
-        gateway_port_id = None
-        for port in service_object['subnet_ports']:
-            if gateway_port_id:
-                break
-            for fixed_ips in port['fixed_ips']:
-                if str(fixed_ips['ip_address']).strip() == \
-                    str(service_object['subnet']['gateway_ip']).strip():
-                    gateway_port_id = port['id']
+        if on_last_bigip:
+            # remove neutron default gateway port
+            gateway_port_id = None
+            for port in service_object['subnet_ports']:
+                if gateway_port_id:
                     break
+                for fixed_ips in port['fixed_ips']:
+                    if str(fixed_ips['ip_address']).strip() == \
+                        str(service_object['subnet']['gateway_ip']).strip():
+                        gateway_port_id = port['id']
+                        break
 
-        # There was not port on this agent's host, so get one from Neutron
-        if gateway_port_id:
-            try:
-                self.plugin_rpc.delete_port(port_id=gateway_port_id,
-                                            mac_address=None)
-            except Exception as e:
-                ermsg = 'Error on delete gateway port for subnet %s:%s - %s.' \
-                % (service_object['subnet']['id'],
-                   service_object['subnet']['gateway_ip'],
-                   e.message)
-                ermsg += " You will need to delete this manually"
-                LOG.error(_(ermsg))
+            # There was not port on this agent's host, so get one from Neutron
+            if gateway_port_id:
+                try:
+                    self.plugin_rpc.delete_port(port_id=gateway_port_id,
+                                                mac_address=None)
+                except Exception as e:
+                    ermsg = 'Error on delete gateway port for subnet %s:%s - %s.' \
+                    % (service_object['subnet']['id'],
+                       service_object['subnet']['gateway_ip'],
+                       e.message)
+                    ermsg += " You will need to delete this manually"
+                    LOG.error(_(ermsg))
 
     def _get_least_vips_traffic_group(self):
         traffic_group = '/Common/traffic-group-1'
@@ -1712,7 +1950,6 @@ class iControlDriver(object):
                                         5,
                                         self.conf.use_namespaces)
                 self.__bigips[self.hostnames[0]] = first_bigip
-                first_bigip.group_bigips = self.__bigips
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
@@ -1750,8 +1987,25 @@ class iControlDriver(object):
                                             5,
                                             self.conf.use_namespaces)
                     self.__bigips[host] = hostbigip
-                    hostbigip.group_bigips = self.__bigips
 
+                if self.conf.debug and f5const.LOG_MODE == 'dev':
+                    std_logging.getLogger('suds.client').setLevel(std_logging.DEBUG)
+
+                bigips = self.__bigips.values()
+                for b in bigips:
+                    b.group_bigips = bigips
+                    b.sync_mode = self.conf.sync_mode
+
+                if self.conf.sync_mode == 'replication':
+                    autosync_state = 'STATE_DISABLED'
+                else:
+                    autosync_state = 'STATE_ENABLED'
+                for b in bigips:
+                    device_group = b.device.get_device_group()
+                    if device_group:
+                        b.cluster.mgmt_dg.set_autosync_enabled_state( \
+                                [device_group], [autosync_state])
+    
                 # validate device versions
                 for host in self.__bigips:
                     hostbigip = self.__bigips[host]
@@ -1781,12 +2035,14 @@ class iControlDriver(object):
                 LOG.error(_('Could not communicate with all iControl devices: %s'
                                % e.message))
     
-    def sync_if_clustered(self, bigip, ctx):
+    # should be moved to cluster abstraction
+    def sync_if_clustered(self, bigip):
+        if self.conf.sync_mode == 'replication':
+            return
         if len(bigip.group_bigips) > 1:
-            if not ctx.device_group:
-                ctx.device_group = bigip.device.get_device_group()
-            bigip.cluster.sync(ctx.device_group)
-        return ctx.device_group
+            if not bigip.device_group:
+                bigip.device_group = bigip.device.get_device_group()
+            bigip.cluster.sync(bigip.device_group)
 
     @serialized('backup_configuration')
     @am.is_connected

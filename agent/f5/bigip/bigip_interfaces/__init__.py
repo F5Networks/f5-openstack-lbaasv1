@@ -4,6 +4,12 @@ import os
 OBJ_PREFIX = 'uuid_'
 
 
+def prefixed(name):
+    if not name.startswith(OBJ_PREFIX):
+        name = OBJ_PREFIX + name
+    return name
+
+
 def icontrol_folder(method):
     """Decorator to put the right folder on iControl object."""
     def wrapper(*args, **kwargs):
@@ -11,20 +17,17 @@ def icontrol_folder(method):
         if 'folder' in kwargs:
             kwargs['folder'] = os.path.basename(kwargs['folder'])
             if not kwargs['folder'] == 'Common':
-                if not kwargs['folder'].startswith(OBJ_PREFIX):
-                    kwargs['folder'] = OBJ_PREFIX + kwargs['folder']
+                kwargs['folder'] = prefixed(kwargs['folder'])
 
             if 'name' in kwargs and kwargs['name']:
                 if kwargs['name'].startswith('/Common/'):
                     kwargs['name'] = os.path.basename(kwargs['name'])
-                    if not kwargs['name'].startswith(OBJ_PREFIX):
-                        kwargs['name'] = OBJ_PREFIX + kwargs['name']
+                    kwargs['name'] = prefixed(kwargs['name'])
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                                'Common')
                 else:
                     kwargs['name'] = os.path.basename(kwargs['name'])
-                    if not kwargs['name'].startswith(OBJ_PREFIX):
-                        kwargs['name'] = OBJ_PREFIX + kwargs['name']
+                    kwargs['name'] = prefixed(kwargs['name'])
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
 
@@ -46,8 +49,7 @@ def icontrol_folder(method):
                 if name.find('_name') > 0 and kwargs[name]:
                     if kwargs[name].startswith('/Common/'):
                         kwargs[name] = os.path.basename(kwargs[name])
-                        if not kwargs[name].startswith(OBJ_PREFIX):
-                            kwargs[name] = OBJ_PREFIX + kwargs[name]
+                        kwargs[name] = prefixed(kwargs[name])
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                                  'Common')
                     else:
@@ -57,8 +59,7 @@ def icontrol_folder(method):
                         if specific_folder_name in kwargs:
                             folder = kwargs[specific_folder_name]
                         kwargs[name] = os.path.basename(kwargs[name])
-                        if not kwargs[name].startswith(OBJ_PREFIX):
-                            kwargs[name] = OBJ_PREFIX + kwargs[name]
+                        kwargs[name] = prefixed(kwargs[name])
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                              folder)
 

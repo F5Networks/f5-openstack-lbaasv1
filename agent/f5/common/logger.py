@@ -43,8 +43,6 @@ class Log(object):
                 log.info(log_string)
 
             log.removeHandler(out_hdlr)
-
-            logging.getLogger('suds.client').setLevel(logging.DEBUG)
         else:
             try:
                 from Insieme.Logger import Logger

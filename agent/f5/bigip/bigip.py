@@ -31,7 +31,7 @@ class BigIP(object):
             self.route_domain_required = True
         # interface instance cache
         self.interfaces = {}
-        self.group_bigips = {}
+        self.group_bigips = []
 
     @property
     def system(self):
