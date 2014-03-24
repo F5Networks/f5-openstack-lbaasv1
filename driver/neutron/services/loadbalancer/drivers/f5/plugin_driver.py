@@ -33,7 +33,7 @@ from neutron.openstack.common.rpc import proxy
 from neutron.plugins.common import constants
 from neutron.services.loadbalancer.drivers import abstract_driver
 from neutron.context import get_admin_context
-
+from time import time
 
 LOG = logging.getLogger(__name__)
 
@@ -163,9 +163,10 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port']['subnet'] = None
                 retval['vip']['subnet_ports'] = []
             retval['members'] = []
+            netcache = {}
+            adminctx = get_admin_context()
             for m in pool.members:
                 member = self.plugin._make_member_dict(m)
-                adminctx = get_admin_context()
                 alloc_qry = adminctx.session.query(models_v2.IPAllocation)
                 allocated = alloc_qry.filter_by(
                                         ip_address=member['address']).all()
@@ -182,19 +183,15 @@ class LoadBalancerCallbacks(object):
                     if net['tenant_id'] != pool['tenant_id']:
                         continue
                     member['network'] = net
-                    member['subnet'] = \
-                        self.plugin._core_plugin.get_subnet(
-                                             context, alloc['subnet_id'])
-                    member_subnet_fixed_ip_filters = {'network_id':
-                                            [member['subnet']['network_id']],
-                             'device_id': [host]}
-                    member['subnet_ports'] = self.plugin._core_plugin.get_ports(
-                                                                   context,
-                                      filters=member_subnet_fixed_ip_filters)
+                    self.set_member_subnet_info(context, host,
+                                                member,
+                                                alloc['subnet_id'],
+                                                netcache)
                     retval['members'].append(member)
                     break
                 else:
-                    # tenant member not found. accept any allocated ip on a shared network
+                    # tenant member not found. accept any
+                    # allocated ip on a shared network
                     for alloc in allocated:
                         try:
                             net=self.plugin._core_plugin.get_network(
@@ -204,15 +201,10 @@ class LoadBalancerCallbacks(object):
                         if not net['shared']:
                             continue
                         member['network'] = net
-                        member['subnet'] = \
-                            self.plugin._core_plugin.get_subnet(
-                                                 context, alloc['subnet_id'])
-                        member_subnet_fixed_ip_filters = {'network_id':
-                                                [member['subnet']['network_id']],
-                                 'device_id': [host]}
-                        member['subnet_ports'] = self.plugin._core_plugin.get_ports(
-                                                                       context,
-                                          filters=member_subnet_fixed_ip_filters)
+                        self.set_member_subnet_info(context, host,
+                                                    member,
+                                                    alloc['subnet_id'],
+                                                    netcache)
                         retval['members'].append(member)
                         break
                     else:
@@ -227,6 +219,29 @@ class LoadBalancerCallbacks(object):
             retval['gre_endpoints'] = self._get_gre_endpoints(context)
 
             return retval
+
+
+    class SubnetInfo:
+        def __init__(self, subnet=None, subnet_ports=None):
+            self.subnet = subnet
+            self.subnet_ports = subnet_ports
+
+    def set_member_subnet_info(self, context, host, member,
+                                subnet_id, netcache):
+        if subnet_id in netcache:
+            netinfo = netcache[subnet_id]
+            member['subnet'] = netinfo.subnet
+            member['subnet_ports'] = netinfo.subnet_ports
+        else:
+            core_plugin = self.plugin._core_plugin
+            member['subnet'] = core_plugin.get_subnet(context, subnet_id)
+            member_subnet_fixed_ip_filters = {'network_id':
+                                               [member['subnet']['network_id']],
+                                              'device_id': [host]}
+            member['subnet_ports'] = core_plugin.get_ports(context,
+                                        filters=member_subnet_fixed_ip_filters)
+            netcache[subnet_id] = self.SubnetInfo(member['subnet'],
+                                                  member['subnet_ports'])
 
     @log.log
     def create_network(self, context, tenant_id=None, name=None, shared=False,
@@ -939,11 +954,13 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
         member['pool'] = pool
 
+        start_time = time()
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
                                                 pool_id=member['pool_id'],
                                                 activate=False,
                                                 host=agent['host'])
+        LOG.debug("get_service took %.5f secs" % (time() - start_time))
 
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_member(context, member, service, agent['host'])

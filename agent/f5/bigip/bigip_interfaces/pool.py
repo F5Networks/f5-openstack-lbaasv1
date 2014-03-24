@@ -133,12 +133,13 @@ class Pool(object):
     @icontrol_folder
     @domain_address
     def add_member(self, name=None, ip_address=None, port=None,
-                   folder='Common'):
-        if self.exists(name=name, folder=folder) and \
-           not self.member_exists(name=name,
+                   folder='Common', no_checks=False):
+        if no_checks or \
+           (self.exists(name=name, folder=folder) and
+              not self.member_exists(name=name,
                                   ip_address=ip_address,
                                   port=port,
-                                  folder=folder):
+                                  folder=folder)):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
             self.lb_pool.add_member_v2([name], [addr_port_seq])
             return True
@@ -198,12 +199,13 @@ class Pool(object):
     @icontrol_folder
     @domain_address
     def set_member_ratio(self, name=None, ip_address=None, port=None,
-                         ratio=1, folder='Common'):
-        if self.exists(name=name, folder=folder) and \
-           self.member_exists(name=name,
+                         ratio=1, folder='Common', no_checks=False):
+        if no_checks or \
+           (self.exists(name=name, folder=folder) and
+               self.member_exists(name=name,
                                   ip_address=ip_address,
                                   port=port,
-                                  folder=folder):
+                                  folder=folder)):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
             self.lb_pool.set_member_ratio([name],
                                           [addr_port_seq],

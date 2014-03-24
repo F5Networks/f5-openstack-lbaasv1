@@ -44,7 +44,7 @@ MAX_SYNC_ATTEMPTS = 6
 SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP = '/Common/traffic-group-local-only'
 SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP = '/Common/traffic-group-1'
 # LOGGING PARAMETERS
-LOG_MODE = 'dev'
+LOG_MODE = 'prod'
 import logging
 LOG_LEVEL = logging.DEBUG
 LOG_PREFIX_DEV_VALIDATE = 'device validate'
