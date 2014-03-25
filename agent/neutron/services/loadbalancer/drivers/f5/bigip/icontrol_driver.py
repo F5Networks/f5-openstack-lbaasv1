@@ -12,7 +12,7 @@ from f5.bigip import bigip_interfaces
 
 from eventlet import greenthread
 
-import random
+import uuid
 import urllib2
 import netaddr
 import datetime
@@ -54,32 +54,77 @@ OPTS = [
     ),
 ]
 
+def request_index(request_queue, request_id):
+    for request in request_queue:
+        if request[0] == request_id:
+            return request_queue.index(request)
 
 def serialized(method_name):
     def real_serialized(method):
         """Decorator to serialize calls to configure via iControl"""
         def wrapper(*args, **kwargs):
-            instance = args[0]
-            my_request_id = random.random()
-            instance.service_queue.append(my_request_id)
-            how_far_back = instance.service_queue.index(my_request_id)
-            while how_far_back != 0:
-                if how_far_back < 2:
+            # args[0] must be an instance of iControlDriver
+            service_queue = args[0].service_queue
+            my_request_id = uuid.uuid4()
+
+            service = None
+            if len(args) > 0:
+                last_arg = args[-1]
+                if isinstance(last_arg, dict) and ('pool' in last_arg):
+                    service = last_arg
+            if 'service' in kwargs:
+                service = kwargs['service']
+
+            # Consolidate create_member requests for the same pool.
+            #
+            # NOTE: The following block of code alters the state of
+            # a queue that other greenthreads are waiting behind.
+            # This code assumes it will not be preempted by another
+            # greenthread while running. It does not do I/O or call any
+            # other monkey-patched code which might cause a context switch.
+            # To avoid race conditions, DO NOT add logging to this code
+            # block.
+            num_requests = len(service_queue)
+            if num_requests > 1 and method_name == 'create_member':
+                cur_pool_id = service['pool']['id']
+                cur_index = num_requests - 1
+                # do not attempt to replace the first entry (index 0)
+                # because it may already be in process.
+                while cur_index > 0:
+                    (check_request, check_method, check_service) = \
+                        service_queue[cur_index]
+                    if check_service['pool']['id'] != cur_pool_id:
+                        cur_index -= 1
+                        continue
+                    if check_method != 'create_member':
+                        break
+                    # move this request up in the queue and return
+                    # so that existing thread can handle it
+                    service_queue[cur_index] = \
+                        (check_request, check_method, service)
+                    return
+            # End of code block which assumes no preemption.
+
+            req = (my_request_id, method_name, service)
+            service_queue.append(req)
+            reqs_ahead_of_us = request_index(service_queue, my_request_id)
+            while reqs_ahead_of_us != 0:
+                if reqs_ahead_of_us == 1:
                     # it is almost our turn. get ready
                     waitsecs = .01
                 else:
-                    waitsecs = how_far_back * .5
+                    waitsecs = reqs_ahead_of_us * .5
                 if waitsecs > .01:
                     LOG.debug('%s request %s is blocking'
                           ' for %.2f secs - queue depth: %d'
                           % (str(method_name), my_request_id,
-                             waitsecs, len(instance.service_queue)))
+                             waitsecs, len(service_queue)))
                 greenthread.sleep(waitsecs)
-                how_far_back = instance.service_queue.index(my_request_id)
+                reqs_ahead_of_us = request_index(service_queue, my_request_id)
             else:
                 LOG.debug('%s request %s is running with queue depth: %d'
                           % (str(method_name), my_request_id,
-                             len(instance.service_queue)))
+                             len(service_queue)))
             try:
                 start_time = time()
                 result = method(*args, **kwargs)
@@ -91,7 +136,7 @@ def serialized(method_name):
                           % (str(method_name), my_request_id))
                 raise
             finally:
-                instance.service_queue.pop(0)
+                service_queue.pop(0)
             return result
         return wrapper
     return real_serialized
@@ -647,6 +692,7 @@ class iControlDriver(object):
                                                     subnet,
                                                     member['subnet_ports'])
             else:
+                just_added = False
                 if not found_existing_member:
                     start_time = time()
                     result = bigip.pool.add_member(
@@ -655,6 +701,7 @@ class iControlDriver(object):
                                       port=int(member['protocol_port']),
                                       folder=pool['tenant_id'],
                                       no_checks=True)
+                    just_added = True
                     LOG.debug("            bigip.pool.add_member took %.5f" %
                               (time() - start_time))
                     if result:
@@ -672,37 +719,41 @@ class iControlDriver(object):
                             LOG.debug("            update_member_status"
                                       " took %.5f secs" %
                                       (time() - start_time))
-                if (member['status'] == plugin_const.PENDING_CREATE \
-                        and not found_existing_member) \
-                    or member['status'] == plugin_const.PENDING_UPDATE:
+                if just_added or \
+                        member['status'] == plugin_const.PENDING_UPDATE:
                     # Is it enabled or disabled?
+                    # no_checks because we add the member above if not found
                     start_time = time()
                     if member['admin_state_up']:
-                        bigip.pool.enable_member(name=member['id'],
+                        bigip.pool.enable_member(name=pool['id'],
                                     ip_address=ip_address,
                                     port=int(member['protocol_port']),
-                                    folder=pool['tenant_id'])
+                                    folder=pool['tenant_id'],
+                                    no_checks=True)
                     else:
-                        bigip.pool.disable_member(name=member['id'],
+                        bigip.pool.disable_member(name=pool['id'],
                                     ip_address=ip_address,
                                     port=int(member['protocol_port']),
-                                    folder=pool['tenant_id'])
+                                    folder=pool['tenant_id'],
+                                    no_checks=True)
                     LOG.debug("            member enable/disable"
                               " took %.5f secs" %
                               (time() - start_time))
                     # Do we have weights for ratios?
                     if member['weight'] > 0:
                         start_time = time()
-                        bigip.pool.set_member_ratio(
+                        if not (just_added and int(member['weight'] == 1)):
+                            bigip.pool.set_member_ratio(
                                     name=pool['id'],
                                     ip_address=ip_address,
                                     port=int(member['protocol_port']),
                                     ratio=int(member['weight']),
                                     folder=pool['tenant_id'],
                                     no_checks=True)
-                        LOG.debug("            member set ratio"
-                              " took %.5f secs" %
-                              (time() - start_time))
+                        if time() - start_time > .0001:
+                            LOG.debug("            member set ratio"
+                                      " took %.5f secs" %
+                                      (time() - start_time))
                         using_ratio = True
 
                     if on_last_bigip:

@@ -149,12 +149,13 @@ class Pool(object):
     @icontrol_folder
     @domain_address
     def enable_member(self, name=None, ip_address=None, port=None,
-                       folder='Common'):
-        if self.exists(name=name, folder=folder) and \
+                       folder='Common', no_checks=False):
+        if no_checks or \
+           (self.exists(name=name, folder=folder) and \
            self.member_exists(name=name,
                                   ip_address=ip_address,
                                   port=port,
-                                  folder=folder):
+                                  folder=folder)):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
             state_seq = self.lb_pool.typefactory.create(
                                                     'Common.StringSequence')
@@ -174,12 +175,13 @@ class Pool(object):
     @icontrol_folder
     @domain_address
     def disable_member(self, name=None, ip_address=None, port=None,
-                       folder='Common'):
-        if self.exists(name=name, folder=folder) and \
+                       folder='Common', no_checks=False):
+        if no_checks or \
+           (self.exists(name=name, folder=folder) and \
            self.member_exists(name=name,
                                   ip_address=ip_address,
                                   port=port,
-                                  folder=folder):
+                                  folder=folder)):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
             state_seq = self.lb_pool.typefactory.create(
                                                     'Common.StringSequence')

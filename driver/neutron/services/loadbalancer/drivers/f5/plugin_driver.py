@@ -69,6 +69,8 @@ class LoadBalancerCallbacks(object):
     def __init__(self, plugin):
         LOG.debug('LoadBalancerCallbacks RPC subscriber initialized')
         self.plugin = plugin
+        self.net_cache = {}
+        self.subnet_cache = {}
 
     def create_rpc_dispatcher(self):
         return q_rpc.PluginRpcDispatcher(
@@ -123,18 +125,41 @@ class LoadBalancerCallbacks(object):
                     if hm.status in ACTIVE_PENDING:
                         hm.status = constants.ACTIVE
             retval = {}
-            retval['pool'] = self.plugin._make_pool_dict(pool)
-            subnet_dict = self.plugin._core_plugin.get_subnet(context,
-                                            retval['pool']['subnet_id'])
-            retval['pool']['subnet'] = subnet_dict
-            pool_subnet_fixed_ip_filters = {'network_id':
-                                            [subnet_dict['network_id']],
-                                            'device_id': [host]}
-            retval['pool']['subnet_ports'] = \
+            ports_cache = {}
+            retpool = self.plugin._make_pool_dict(pool)
+            retval['pool'] = retpool
+
+            # get pool subnet
+            pool_subnet_id = retpool['subnet_id']
+            if pool_subnet_id in self.subnet_cache:
+                retpool['subnet'] = self.subnet_cache[pool_subnet_id]
+            else:
+                subnet_dict = self.plugin._core_plugin.get_subnet(context,
+                                            pool_subnet_id)
+                retpool['subnet'] = subnet_dict
+                self.subnet_cache[pool_subnet_id] = retpool['subnet']
+
+            # get pool network
+            pool_network_id = retpool['subnet']['network_id']
+            if pool_network_id in self.net_cache:
+                retpool['network'] = self.net_cache[pool_network_id]
+            else:
+                retpool['network'] = self.plugin._core_plugin.get_network(
+                            context, pool_network_id)
+                self.net_cache[pool_network_id] = retpool['network']
+
+            # get pool subnet ports
+            if pool_subnet_id in ports_cache:
+                retpool['subnet_ports'] = ports_cache[pool_subnet_id]
+            else:
+                pool_subnet_fixed_ip_filters = {'network_id':
+                                                [pool_network_id],
+                                                'device_id': [host]}
+                retpool['subnet_ports'] = \
                                self.plugin._core_plugin.get_ports(context,
                                       filters=pool_subnet_fixed_ip_filters)
-            retval['pool']['network'] = self.plugin._core_plugin.get_network(
-                            context, retval['pool']['subnet']['network_id'])
+                ports_cache[pool_subnet_id] = retpool['subnet_ports']
+
             if pool.vip:
                 retval['vip'] = self.plugin._make_vip_dict(pool.vip)
                 retval['vip']['port'] = (
@@ -163,21 +188,28 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port']['subnet'] = None
                 retval['vip']['subnet_ports'] = []
             retval['members'] = []
-            netcache = {}
             adminctx = get_admin_context()
             for m in pool.members:
                 member = self.plugin._make_member_dict(m)
                 alloc_qry = adminctx.session.query(models_v2.IPAllocation)
                 allocated = alloc_qry.filter_by(
                                         ip_address=member['address']).all()
+
                 for alloc in allocated:
                     # It is normal to find a duplicate IP for another tenant,
                     # so first see if we find its network under this
                     # tenant context. A NotFound exception is normal if
                     # the IP belongs to another tenant.
                     try:
-                        net=self.plugin._core_plugin.get_network(
+                        #start_time = time()
+                        if alloc['network_id'] in self.net_cache:
+                            net = self.net_cache[alloc['network_id']]
+                        else:
+                            net = self.plugin._core_plugin.get_network(
                                              adminctx, alloc['network_id'])
+                            self.net_cache[alloc['network_id']] = net
+                        #LOG.debug("get network took %.5f secs " % 
+                        #          (time() - start_time))
                     except:
                         continue
                     if net['tenant_id'] != pool['tenant_id']:
@@ -186,7 +218,7 @@ class LoadBalancerCallbacks(object):
                     self.set_member_subnet_info(context, host,
                                                 member,
                                                 alloc['subnet_id'],
-                                                netcache)
+                                                ports_cache)
                     retval['members'].append(member)
                     break
                 else:
@@ -194,7 +226,7 @@ class LoadBalancerCallbacks(object):
                     # allocated ip on a shared network
                     for alloc in allocated:
                         try:
-                            net=self.plugin._core_plugin.get_network(
+                            net = self.plugin._core_plugin.get_network(
                                                  adminctx, alloc['network_id'])
                         except:
                             continue
@@ -204,7 +236,7 @@ class LoadBalancerCallbacks(object):
                         self.set_member_subnet_info(context, host,
                                                     member,
                                                     alloc['subnet_id'],
-                                                    netcache)
+                                                    ports_cache)
                         retval['members'].append(member)
                         break
                     else:
@@ -220,28 +252,25 @@ class LoadBalancerCallbacks(object):
 
             return retval
 
-
-    class SubnetInfo:
-        def __init__(self, subnet=None, subnet_ports=None):
-            self.subnet = subnet
-            self.subnet_ports = subnet_ports
-
     def set_member_subnet_info(self, context, host, member,
-                                subnet_id, netcache):
-        if subnet_id in netcache:
-            netinfo = netcache[subnet_id]
-            member['subnet'] = netinfo.subnet
-            member['subnet_ports'] = netinfo.subnet_ports
+                                subnet_id, ports_cache):
+        if subnet_id in self.subnet_cache:
+            member['subnet'] = self.subnet_cache[subnet_id]
         else:
             core_plugin = self.plugin._core_plugin
             member['subnet'] = core_plugin.get_subnet(context, subnet_id)
+            self.subnet_cache[subnet_id] = member['subnet']
+
+        if subnet_id in ports_cache:
+            member['subnet_ports'] = ports_cache[subnet_id]
+        else:
             member_subnet_fixed_ip_filters = {'network_id':
                                                [member['subnet']['network_id']],
                                               'device_id': [host]}
+            core_plugin = self.plugin._core_plugin
             member['subnet_ports'] = core_plugin.get_ports(context,
                                         filters=member_subnet_fixed_ip_filters)
-            netcache[subnet_id] = self.SubnetInfo(member['subnet'],
-                                                  member['subnet_ports'])
+            ports_cache[subnet_id] = member['subnet_ports']
 
     @log.log
     def create_network(self, context, tenant_id=None, name=None, shared=False,
