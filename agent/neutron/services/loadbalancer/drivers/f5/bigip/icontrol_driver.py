@@ -514,8 +514,12 @@ class iControlDriver(object):
                 if not found_existing_monitor:
                     timeout = int(monitor['max_retries']) * \
                               int(monitor['timeout'])
+                    if monitor['type'] == 'PING':
+                        mon_type = "ICMP"
+                    else:
+                        mon_type = monitor['type']
                     bigip.monitor.create(name=monitor['id'],
-                                         mon_type=monitor['type'],
+                                         mon_type=mon_type,
                                          interval=monitor['delay'],
                                          timeout=timeout,
                                          send_text=None,
@@ -1485,7 +1489,7 @@ class iControlDriver(object):
                                              snat_pool_name,
                                              network_folder,
                                              pool['tenant_id'])
-            elif self.conf.f5_ha_type == 'ha':
+            elif self.conf.f5_ha_type == 'pair':
                 self.assure_snats_ha(bigip, subnetinfo,
                                      snat_pool_name,
                                      network_folder,
@@ -1863,7 +1867,7 @@ class iControlDriver(object):
                         if on_last_bigip:
                             self.plugin_rpc.delete_port_by_name(
                                             port_name=index_snat_name)
-            elif self.conf.f5_ha_type == 'ha':
+            elif self.conf.f5_ha_type == 'pair':
                 # Create SNATs on traffic-group-1
                 snat_name = 'snat-traffic-group-1' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):

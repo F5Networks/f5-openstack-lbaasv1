@@ -56,8 +56,8 @@ OPTS = [
     ),
     cfg.StrOpt(
         'f5_ha_type',
-        default='ha',
-        help=_('Are we standalone, ha(active/standby), or scalen')
+        default='pair',
+        help=_('Are we standalone, pair(active/standby), or scalen')
     ),
     cfg.StrOpt(
         'f5_external_physical_mappings',
