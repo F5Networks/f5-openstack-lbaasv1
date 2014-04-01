@@ -7,9 +7,6 @@ from f5.bigip.exceptions import BigIPClusterSyncFailure
 import time
 import os
 import json
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 # Management - Cluster
@@ -36,7 +33,8 @@ class Cluster(object):
         return self.mgmt_dg.get_sync_status_overview().status
 
     def save_base_config(self):
-        self.sys_sync.save_configuration(filename="",save_flag="SAVE_BASE_LEVEL_CONFIG")
+        self.sys_sync.save_configuration(filename="",
+                                         save_flag="SAVE_BASE_LEVEL_CONFIG")
 
     def save_service_config(self):
         self.sys_sync.save_configuration(filename="",
@@ -61,13 +59,20 @@ class Cluster(object):
             time.sleep(sleep_delay)
             attempts += 1
 
-
         while attempts < const.MAX_SYNC_ATTEMPTS:
             state = self.get_sync_status()
             if state in ['Standalone',
                          'In Sync',
                         ]:
                 break
+
+            elif state == 'Awaiting Initial Sync':
+                attempts += 1
+                Log.info('Cluster',
+                    "Device %s - Synchronizing initial config to group %s"
+                    % (dev_name, name))
+                self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
+                time.sleep(sleep_delay)
 
             elif state in ['Disconnected',
                             'Not All Devices Synced',
@@ -84,8 +89,10 @@ class Cluster(object):
                     # Only log once per second
                     if now - last_log_time >= 1:
                         Log.info('Cluster',
-                            "Device %s, Group %s not synced. Waiting. State is: %s"
-                            % (dev_name, name, state))
+                            'Device %s, Group %s not synced. '
+                            % (dev_name, name) + \
+                            'Waiting. State is: %s'
+                            % state)
                         last_log_time = now
                     state = self.get_sync_status()
                     if state in ['Standalone',
@@ -109,19 +116,11 @@ class Cluster(object):
                 # above which continues the outer loop
                 break
 
-
-            elif state == 'Awaiting Initial Sync':
-                attempts += 1
-                Log.info('Cluster',
-                    "Device %s - Synchronizing initial config to group %s"
-                    % (dev_name, name))
-                self.sys_sync.synchronize_to_group_v2(name, dev_name, True)
-                time.sleep(sleep_delay)
             elif state == 'Sync Failure':
                 Log.info('Cluster',
                 "Device %s - Synchronization failed for %s"
                 % (dev_name, name))
-                LOG.debug("SYNC SECONDS (Sync Failure): " + \
+                Log.debug('Cluster', 'SYNC SECONDS (Sync Failure): ' + \
                             str(time.time() - sync_start_time))
                 raise BigIPClusterSyncFailure(
                    'Device service group %s' % name + \
@@ -142,7 +141,8 @@ class Cluster(object):
                 sleep_delay += const.SYNC_DELAY
         else:
             if state == 'Disconnected':
-                LOG.debug("SYNC SECONDS(Disconnected): " + \
+                Log.debug('Cluster',
+                          'SYNC SECONDS(Disconnected): ' + \
                               str(time.time() - sync_start_time))
                 raise BigIPClusterSyncFailure(
                         'Device service group %s' % name + \
@@ -151,7 +151,7 @@ class Cluster(object):
                         ' over the sync network. Please' + \
                         ' check connectivity.')
             else:
-                LOG.debug("SYNC SECONDS(Timeout): " + \
+                Log.debug('Cluster', 'SYNC SECONDS(Timeout): ' + \
                               str(time.time() - sync_start_time))
                 raise BigIPClusterSyncFailure(
                     'Device service group %s' % name + \
@@ -162,8 +162,7 @@ class Cluster(object):
                     ' according to sol13946 on ' + \
                     ' support.f5.com.')
 
-
-        LOG.debug("SYNC SECONDS(Success): " + \
+        Log.debug('Cluster', 'SYNC SECONDS(Success): ' + \
                       str(time.time() - sync_start_time))
 
     def sync_failover_dev_group_exists(self, name):
