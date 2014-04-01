@@ -1,16 +1,8 @@
-from f5.common import constants as const
 from f5.bigip import exceptions
-from f5.bigip.bigip_interfaces import domain_address
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
-import os
-import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class Monitor(object):
@@ -69,8 +61,8 @@ class Monitor(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a Monitor when exists'))
+                    Log.error('Monitor',
+                              'tried to create a Monitor when exists')
                     return False
                 else:
                     raise wf
@@ -105,8 +97,8 @@ class Monitor(object):
                     monitor_temp_type_type.TTYPE_GATEWAY_ICMP:
                 return 'ICMP'
             else:
-                # TODO: add exception for unsupported monitor type
-                pass
+                raise exceptions.UnknownMonitorType(
+                         'Unknown Monitor type: %s' % monitor_temp_type)
 
     @icontrol_folder
     def get_interval(self, name=None, folder='Common'):
@@ -120,9 +112,9 @@ class Monitor(object):
     def set_interval(self, name=None, interval=5, folder='Common'):
         if self.exists(name=name, folder=folder):
             value = self.lb_monitor.typefactory.create(
-                                'LocalLB.Monitor.IntegerValue')
+                        'LocalLB.Monitor.IntegerValue')
             value.type = self.lb_monitor.typefactory.create(
-                                'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
+                        'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
             value.value = int(interval)
             self.lb_monitor.set_template_integer_property([name], [value])
             return True
@@ -143,7 +135,7 @@ class Monitor(object):
             value = self.lb_monitor.typefactory.create(
                                 'LocalLB.Monitor.IntegerValue')
             value.type = self.lb_monitor.typefactory.create(
-                                'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
+                        'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
             value.value = int(timeout)
             self.lb_monitor.set_template_integer_property([name], [value])
             return True
@@ -220,6 +212,5 @@ class Monitor(object):
 
     @icontrol_folder
     def get_monitors(self, folder='Common'):
-        monitors = self.lb_monitor.get_template_list() 
+        monitors = self.lb_monitor.get_template_list()
         return monitors
-
