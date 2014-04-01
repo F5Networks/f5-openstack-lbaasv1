@@ -1,16 +1,9 @@
-from f5.common import constants as const
-from f5.bigip import exceptions
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
-import os
 import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class Route(object):
@@ -42,8 +35,8 @@ class Route(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a Route when exists'))
+                    Log.error('Route',
+                              'tried to create a Route when exists')
                     return False
                 else:
                     raise wf
@@ -71,6 +64,7 @@ class Route(object):
             rd_entry_seq_seq.values = [rd_entry_seq]
             self.net_domain.add_vlan([self._get_domain_name(folder)],
                                      rd_entry_seq_seq)
+            return True
 
     @icontrol_folder
     def create_domain(self, folder='Common'):
@@ -92,13 +86,16 @@ class Route(object):
             self.net_domain.delete_route_domain(domains)
         except WebFault as wf:
             if "is referenced" in str(wf.message):
-                LOG.error('delete route domain %s failed %s'
+                Log.error('Route', 'delete route domain %s failed %s'
                           % (folder, wf.message))
+                return False
             elif "All objects must be removed" in str(wf.message):
-                LOG.error('delete route domain %s failed %s'
+                Log.error('Route', 'delete route domain %s failed %s'
                           % (folder, wf.message))
+                return False
             else:
                 raise wf
+        return True
 
     @icontrol_folder
     def domain_exists(self, folder='Common'):
