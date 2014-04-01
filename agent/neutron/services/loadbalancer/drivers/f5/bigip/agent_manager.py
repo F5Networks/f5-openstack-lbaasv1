@@ -20,18 +20,20 @@ import weakref
 
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
-from neutron.common import constants
+from neutron.common import constants as neutron_constants
 from neutron.plugins.common import constants as plugin_const
 from neutron import context
 from neutron.openstack.common import importutils
 from neutron.common import log
+from neutron.common import topics
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
+from neutron.openstack.common.rpc import dispatcher
 
 from neutron.services.loadbalancer.drivers.f5.bigip import agent_api
+from neutron.services.loadbalancer.drivers.f5.bigip import constants
 from neutron.services.loadbalancer.drivers.f5 import plugin_driver
-
 
 LOG = logging.getLogger(__name__)
 
@@ -61,13 +63,23 @@ OPTS = [
     ),
     cfg.StrOpt(
         'f5_external_physical_mappings',
-        default='defaul:1.1:True',
-        help=_('What type of device onboarding')
+        default='default:1.1:True',
+        help=_('Mapping between Neutron physical_network to interfaces')
     ),
     cfg.StrOpt(
         'f5_external_tunnel_interface',
         default='1.1:0',
         help=_('Interface and VLAN for the VTEP overlay network')
+    ),
+    cfg.StrOpt(
+        'f5_external_tunnel_local_ips',
+        default='',
+        help=_('List of CIDR for SelfIP on each device used for VTEP')
+    ),
+    cfg.BoolOpt(
+        'l2_population',
+        default=False,
+        help=_('Use L2 Populate service for fdb entries on the BIG-IP')
     ),
     cfg.BoolOpt(
         'f5_source_monitor_from_member_subnet',
@@ -183,28 +195,42 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'configurations': {'device_driver': self.driver.__class__.__name__,
                                'device_type': self.device_type},
-            'agent_type': constants.AGENT_TYPE_LOADBALANCER,
+            'agent_type': neutron_constants.AGENT_TYPE_LOADBALANCER,
             'start_flag': True}
 
         self.admin_state_up = True
+        self.l2_pop = conf.l2_population
 
         self.context = context.get_admin_context_without_session()
         self._setup_rpc()
-        # add the reference to the rpc callbacks
-        # to allow the driver to allocate ports
-        # and fixed_ips in neutron.
-        self.driver.plugin_rpc = self.plugin_rpc
+
+        # create the cache of provisioned services
         self.cache = LogicalServiceCache()
+        # cause a sync of what Neutron believes
+        # needs to be handled by this agent
         self.needs_resync = True
 
     @log.log
     def _setup_rpc(self):
+
+        # LBaaS Callbacks API
         self.plugin_rpc = agent_api.LbaasAgentApi(
             plugin_driver.TOPIC_PROCESS_ON_HOST,
             self.context,
             self.agent_host
         )
+        self.driver.plugin_rpc = self.plugin_rpc
 
+        # Core plugin Callbacks API
+        self.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
+        self.driver.tunnel_rpc = self.tunnel_rpc
+
+        # L2 Populate plugin Callbacks API
+        if self.l2_pop:
+            self.l2pop_rpc = agent_api.L2PopulationApi()
+            self.driver.l2pop_rpc = self.l2pop_rpc
+
+        # Agent state Callbacks API
         self.state_rpc = agent_rpc.PluginReportStateAPI(
             plugin_driver.TOPIC_PROCESS_ON_HOST)
         report_interval = self.conf.AGENT.report_interval
@@ -212,6 +238,26 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             heartbeat = loopingcall.FixedIntervalLoopingCall(
                 self._report_state)
             heartbeat.start(interval=report_interval)
+
+        # Besides LBaaS Plugin calls... what else to consume
+
+        # tunnel updates to support vxlan and gre endpoint
+        # NOTE:  the driver can decide to handle endpoint
+        # membership based on the rpc notification or through
+        # other means (i.e. as part of a service definition)
+        consumers = [[constants.TUNNEL, topics.UPDATE]]
+
+        # L2 populate fdb calls
+        # NOTE:  the driver can decide to handle fdb updates
+        # or use some other mechanism (i.e. flooding) to
+        # learn about port updates.
+        if self.l2_pop:
+            consumers.append([topics.L2POPULATION,
+                              topics.UPDATE, cfg.CONF.host])
+
+        agent_rpc.create_consumers(dispatcher.RpcDispatcher([self]),
+                                   plugin_driver.TOPIC_LOADBALANCER_AGENT,
+                                   consumers)
 
     def _report_state(self):
         try:
@@ -253,12 +299,6 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     @periodic_task.periodic_task(spacing=600)
     def backup_configuration(self, context):
         self.driver.backup_configuration()
-
-    def _vip_plug_callback(self, action, port):
-        if action == 'plug':
-            self.plugin_rpc.plug_vip_port(port['id'])
-        elif action == 'unplug':
-            self.plugin_rpc.unplug_vip_port(port['id'])
 
     def sync_state(self):
         known_services = set(self.cache.get_pool_ids())
@@ -317,6 +357,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if pool_id:
                 self.refresh_service(pool_id)
 
+    @log.log
     def get_pool_stats(self, pool, service):
         try:
             stats = self.driver.get_stats(pool, service)
@@ -328,6 +369,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def create_vip(self, context, vip, service):
         """Handle RPC cast from plugin to create_vip"""
         try:
@@ -339,6 +381,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                               plugin_const.ERROR,
                                               message)
 
+    @log.log
     def update_vip(self, context, old_vip, vip, service):
         """Handle RPC cast from plugin to update_vip"""
         try:
@@ -350,6 +393,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                               plugin_const.ERROR,
                                               message)
 
+    @log.log
     def delete_vip(self, context, vip, service):
         """Handle RPC cast from plugin to delete_vip"""
         try:
@@ -361,6 +405,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                               plugin_const.ERROR,
                                               message)
 
+    @log.log
     def create_pool(self, context, pool, service):
         """Handle RPC cast from plugin to create_pool"""
         try:
@@ -372,6 +417,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def update_pool(self, context, old_pool, pool, service):
         """Handle RPC cast from plugin to update_pool"""
         try:
@@ -383,6 +429,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def delete_pool(self, context, pool, service):
         """Handle RPC cast from plugin to delete_pool"""
         try:
@@ -394,6 +441,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                               plugin_const.ERROR,
                                               message)
 
+    @log.log
     def create_member(self, context, member, service):
         """Handle RPC cast from plugin to create_member"""
         try:
@@ -405,6 +453,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def update_member(self, context, old_member, member, service):
         """Handle RPC cast from plugin to update_member"""
         try:
@@ -416,6 +465,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def delete_member(self, context, member, service):
         """Handle RPC cast from plugin to delete_member"""
         try:
@@ -427,6 +477,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def create_pool_health_monitor(self, context, health_monitor,
                                    pool, service):
         """Handle RPC cast from plugin to create_pool_health_monitor"""
@@ -442,6 +493,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                plugin_const.ERROR,
                                                message)
 
+    @log.log
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool, service):
         """Handle RPC cast from plugin to update_health_monitor"""
@@ -458,6 +510,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                                     plugin_const.ERROR,
                                                     message)
 
+    @log.log
     def delete_pool_health_monitor(self, context, health_monitor,
                                    pool, service):
         """Handle RPC cast from plugin to delete_pool_health_monitor"""
@@ -483,19 +536,18 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                     self.destroy_service(pool_id)
             LOG.info(_("agent_updated by server side %s!"), payload)
 
+    @log.log
+    def tunnel_update(self, context, tunnel_ip, tunnel_id, tunnel_type):
+        pass
 
-def is_connected(method):
-    """Decorator to check we are connected before provisioning."""
-    def wrapper(*args, **kwargs):
-        instance = args[0]
-        if instance.connected:
-            try:
-                return method(*args, **kwargs)
-            except IOError as ioe:
-                instance.non_connected()
-                raise ioe
-        else:
-            instance.non_connected()
-            LOG.error(_('Can not execute %s. Not connected.'
-                        % method.__name__))
-    return wrapper
+    @log.log
+    def fdb_add(self, context, fdb_entries):
+        pass
+
+    @log.log
+    def fdb_remove(self, context, fdb_entries):
+        pass
+
+    @log.log
+    def fdb_update(self, context, fdb_entries):
+        pass
