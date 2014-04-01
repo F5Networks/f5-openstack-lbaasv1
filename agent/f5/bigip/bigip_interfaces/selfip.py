@@ -1,16 +1,10 @@
+from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
-import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class SelfIP(object):
@@ -47,8 +41,8 @@ class SelfIP(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a SelfIP when exists'))
+                    Log.error('SelfIP',
+                              'tried to create a SelfIP when exists')
                     return False
                 else:
                     raise wf
@@ -95,7 +89,7 @@ class SelfIP(object):
     @icontrol_folder
     def get_vlan(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
-            self.net_self.get_vlan([name])[0]
+            return self.net_self.get_vlan([name])[0]
 
     @icontrol_folder
     def set_vlan(self, name=None, vlan_name=None, folder='Common'):
@@ -193,3 +187,5 @@ class SelfIP(object):
     def exists(self, name=None, folder='Common'):
         if name in self.net_self.get_list():
             return True
+        else:
+            return False
