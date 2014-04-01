@@ -17,6 +17,8 @@ from f5.bigip.bigip_interfaces.stat import Stat
 from f5.bigip.bigip_interfaces.system import System
 from f5.bigip.bigip_interfaces.virtual_server import VirtualServer
 from f5.bigip.bigip_interfaces.vlan import Vlan
+from f5.bigip.bigip_interfaces.vxlan import VXLAN
+from f5.bigip.bigip_interfaces.l2gre import L2GRE
 
 LOG = logging.getLogger(__name__)
 
@@ -77,6 +79,24 @@ class BigIP(object):
             vlan = Vlan(self)
             self.interfaces['vlan'] = vlan
             return vlan
+
+    @property
+    def vxlan(self):
+        if 'vxlan' in self.interfaces:
+            return self.interfaces['vxlan']
+        else:
+            vxlan = VXLAN(self)
+            self.interfaces['vxlan'] = vxlan
+            return vxlan
+
+    @property
+    def l2gre(self):
+        if 'l2gre' in self.interfaces:
+            return self.interfaces['l2gre']
+        else:
+            l2gre = L2GRE(self)
+            self.interfaces['l2gre'] = l2gre
+            return l2gre
 
     @property
     def selfip(self):
