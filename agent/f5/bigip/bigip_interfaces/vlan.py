@@ -1,16 +1,9 @@
 from f5.common import constants as const
-from f5.bigip import exceptions
-from f5.bigip.bigip_interfaces import domain_address
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
-import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class Vlan(object):
@@ -47,17 +40,6 @@ class Vlan(object):
                                 'Networking.MemberTagType').MEMBER_UNTAGGED
                 mem_seq.item = mem_entry
 
-                # use tagged interface for hardware platforms,
-                # untagged for VE
-                #if self.bigip.system.get_platform().startswith(
-                #                    const.BIGIP_VE_PLATFORM_ID):
-                #    mem_entry.tag_state = self.net_vlan.typefactory.create(
-                #                'Networking.MemberTagType').MEMBER_UNTAGGED
-                #else:
-                #    mem_entry.tag_state = self.net_vlan.typefactory.create(
-                #                'Networking.MemberTagType').MEMBER_TAGGED
-                # mem_seq.item = mem_entry
-
             try:
                 self.net_vlan.create_v2([name],
                                     [int(vlanid)],
@@ -72,8 +54,8 @@ class Vlan(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a VLAN when exists'))
+                    Log.error('VLAN',
+                        'tried to create a VLAN when exists')
                     return False
                 else:
                     raise wf
