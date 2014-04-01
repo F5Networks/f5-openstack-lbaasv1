@@ -940,6 +940,7 @@ class iControlDriver(object):
 
                 virtual_type = 'standard'
 
+                just_added_vip = False
                 if virtual_type == 'standard':
                     if bigip_vs.create(name=vip['id'],
                                        ip_address=ip_address,
@@ -961,6 +962,7 @@ class iControlDriver(object):
                                             vip['id'],
                                             status=plugin_const.ACTIVE,
                                             status_description='vip created')
+                        just_added_vip = True
                 else:
                     if bigip_vs.create_fastl4(
                                     name=vip['id'],
@@ -983,9 +985,11 @@ class iControlDriver(object):
                                             vip['id'],
                                             status=plugin_const.ACTIVE,
                                             status_description='vip created')
+                        just_added_vip = True
 
                 if vip['status'] == plugin_const.PENDING_CREATE or \
-                   vip['status'] == plugin_const.PENDING_UPDATE:
+                   vip['status'] == plugin_const.PENDING_UPDATE or \
+                   just_added_vip:
 
                     desc = vip['name'] + ':' + vip['description']
                     bigip_vs.set_description(name=vip['id'],
@@ -1573,7 +1577,7 @@ class iControlDriver(object):
                 index_snat_name = '/Common/' + index_snat_name
 
             tglo = '/Common/traffic-group-local-only',
-            bigip.self.create_snat(
+            bigip.snat.create(
                        name=index_snat_name,
                        ip_address=ip_address,
                        traffic_group=tglo,
@@ -2225,7 +2229,7 @@ class iControlDriver(object):
         if self.conf.sync_mode == 'replication':
             return
         if len(bigip.group_bigips) > 1:
-            if not bigip.device_group:
+            if not hasattr(bigip, 'device_group'):
                 bigip.device_group = bigip.device.get_device_group()
             bigip.cluster.sync(bigip.device_group)
 
