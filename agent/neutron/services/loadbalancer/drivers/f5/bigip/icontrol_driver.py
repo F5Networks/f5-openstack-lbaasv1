@@ -3,8 +3,6 @@ from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
-from neutron.services.loadbalancer.drivers.f5.bigip \
-    import agent_manager as am
 from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
@@ -54,10 +52,29 @@ OPTS = [
     ),
 ]
 
+
 def request_index(request_queue, request_id):
     for request in request_queue:
         if request[0] == request_id:
             return request_queue.index(request)
+
+
+def is_connected(method):
+    """Decorator to check we are connected before provisioning."""
+    def wrapper(*args, **kwargs):
+        instance = args[0]
+        if instance.connected:
+            try:
+                return method(*args, **kwargs)
+            except IOError as ioe:
+                instance.non_connected()
+                raise ioe
+        else:
+            instance.non_connected()
+            LOG.error(_('Can not execute %s. Not connected.'
+                        % method.__name__))
+    return wrapper
+
 
 def serialized(method_name):
     def real_serialized(method):
@@ -194,81 +211,80 @@ class iControlDriver(object):
                         % (intmap[0], intmap[1], intmap[2])
                         ))
 
-
     @serialized('sync')
-    @am.is_connected
+    @is_connected
     def sync(self, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('create_vip')
-    @am.is_connected
+    @is_connected
     def create_vip(self, vip, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('update_vip')
-    @am.is_connected
+    @is_connected
     def update_vip(self, old_vip, vip, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('delete_vip')
-    @am.is_connected
+    @is_connected
     def delete_vip(self, vip, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('create_pool')
-    @am.is_connected
+    @is_connected
     def create_pool(self, pool, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('update_pool')
-    @am.is_connected
+    @is_connected
     def update_pool(self, old_pool, pool, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('delete_pool')
-    @am.is_connected
+    @is_connected
     def delete_pool(self, pool, service):
         self._assure_service(service)
 
     @serialized('create_member')
-    @am.is_connected
+    @is_connected
     def create_member(self, member, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('update_member')
-    @am.is_connected
+    @is_connected
     def update_member(self, old_member, member, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('delete_member')
-    @am.is_connected
+    @is_connected
     def delete_member(self, member, service):
         self._assure_service_networks(service)
         self._assure_service(service)
 
     @serialized('create_pool_health_monitor')
-    @am.is_connected
+    @is_connected
     def create_pool_health_monitor(self, health_monitor, pool, service):
         self._assure_service(service)
         return True
 
     @serialized('update_health_monitor')
-    @am.is_connected
+    @is_connected
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, service):
         self._assure_service(service)
         return True
 
     @serialized('delete_pool_health_monitor')
-    @am.is_connected
+    @is_connected
     def delete_pool_health_monitor(self, health_monitor, pool, service):
         # Two behaviors of the plugin dictate our behavior here.
         # 1. When a plug-in deletes a monitor that is not being
@@ -294,7 +310,7 @@ class iControlDriver(object):
         return True
 
     @serialized('get_stats')
-    @am.is_connected
+    @is_connected
     def get_stats(self, service):
         # use pool stats because the pool_id is the
         # the service definition... not the vip
@@ -619,6 +635,7 @@ class iControlDriver(object):
             bigip.monitor.set_recv_string(name=monitor['id'],
                                           recv_text=recv_text,
                                           folder=monitor['tenant_id'])
+
     #
     # Provision Members - Create/Update
     #
@@ -785,7 +802,6 @@ class iControlDriver(object):
             if time() - member_start_time > .001:
                 LOG.debug("        assuring member %s took %.5f secs" %
                           (member['address'], time() - member_start_time))
-                   
 
         #LOG.debug(_("Pool: %s removing members %s"
         #            % (pool['id'], existing_members)))
@@ -1193,6 +1209,7 @@ class iControlDriver(object):
                                         folder=service['pool']['tenant_id'])
             for virt_serv in virtual_services:
                 (vs_name, dest) = virt_serv.items()[0]
+                del(vs_name)
                 if netaddr.IPAddress(dest['address']) in ipsubnet:
                     delete_subnet_objects = False
                     break
@@ -1927,7 +1944,6 @@ class iControlDriver(object):
             if subnet['id'] in bigip.assured_snat_subnets:
                 bigip.assured_snat_subnets.remove(subnet['id'])
 
-
     # called for every bigip only in replication mode.
     # otherwise called once
     def _delete_gateway_on_subnet(self, subnetinfo, bigip, on_last_bigip):
@@ -2165,7 +2181,6 @@ class iControlDriver(object):
                     set_bigip.assured_snat_subnets = []
                     set_bigip.assured_gateway_subnets = []
 
-
                 if self.conf.sync_mode == 'replication':
                     autosync_state = 'STATE_DISABLED'
                 else:
@@ -2215,7 +2230,7 @@ class iControlDriver(object):
             bigip.cluster.sync(bigip.device_group)
 
     @serialized('backup_configuration')
-    @am.is_connected
+    @is_connected
     def backup_configuration(self):
         for bigip in self.__bigips.values():
             bigip.system.set_folder('/Common')
