@@ -1,16 +1,10 @@
 from f5.common import constants as const
-from f5.bigip import exceptions
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
-import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class NAT(object):
@@ -45,8 +39,8 @@ class NAT(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a NAT when exists'))
+                    Log.error('NAT',
+                              'tried to create a NAT when exists')
                     return False
                 else:
                     raise wf
