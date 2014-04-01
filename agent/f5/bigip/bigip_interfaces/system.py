@@ -1,16 +1,5 @@
-from f5.common import constants as const
-from f5.bigip import exceptions
-from f5.bigip.bigip_interfaces import domain_address
-from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
-
+from f5.common.logger import Log
 from suds import WebFault
-import os
-import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class System(object):
@@ -33,7 +22,6 @@ class System(object):
         self.version = None
         self.platform = None
         self.current_folder = None
-
 
     def folder_exists(self, folder):
         try:
@@ -83,11 +71,13 @@ class System(object):
                 try:
                     self._create_folder_and_domain(folder, self.bigip)
                 except WebFault as wf:
-                    LOG.error("set_folder:create failed: " + str(wf.message))
+                    Log.error('System',
+                              'set_folder:create failed: ' + str(wf.message))
                     raise
             else:
-                LOG.error("set_folder:set_active_folder failed: " + \
-                              str(wf.message))
+                Log.error('System',
+                          'set_folder:set_active_folder failed: ' + \
+                          str(wf.message))
                 raise
 
     # TODO: this belongs in a higher level cluster abstraction
