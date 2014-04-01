@@ -1,17 +1,12 @@
 from f5.common import constants as const
-from f5.bigip import exceptions
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
 from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
-import netaddr
 import time
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class VirtualServer(object):
@@ -76,8 +71,8 @@ class VirtualServer(object):
                 self.lb_vs.create(vs_defs, [mask], resources, profiles)
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a Virtual Server when exists'))
+                    Log.error('VirtualServer',
+                        'tried to create a Virtual Server when exists')
                     return False
                 else:
                     raise wf
@@ -143,8 +138,8 @@ class VirtualServer(object):
                 self.lb_vs.create(vs_defs, [mask], resources, profiles)
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a Virtual Server when exists'))
+                    Log.error('VirtualServer',
+                        'tried to create a Virtual Server when exists')
                     return False
                 else:
                     raise wf
@@ -219,8 +214,8 @@ class VirtualServer(object):
                 self.lb_vs.create(vs_defs, [mask], resources, profiles)
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a Virtual Server when exists'))
+                    Log.error('VirtualServer',
+                        'tried to create a Virtual Server when exists')
                     return False
                 else:
                     raise wf
@@ -376,7 +371,7 @@ class VirtualServer(object):
                 self.lb_http.create([name])
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(
+                    Log.error('VirtualServer',
                         'tried to create a HTTP Profile when exists')
                 else:
                     raise wf
@@ -438,7 +433,8 @@ class VirtualServer(object):
                 self.lb_http.set_passthrough_unknown_method_mode([name],
                                                             [pt_mode_reject])
         except Exception as e:
-            LOG.error('could not set HTTP profile pass-through options %s'
+            Log.error('VirtualServer',
+                      'Could not set HTTP profile pass-through options %s'
                       % (e.message))
 
         return True
@@ -454,8 +450,8 @@ class VirtualServer(object):
             self.lb_persist.set_rule([name], [prof_str])
         except WebFault as wf:
             if "already exists in partition" in str(wf.message):
-                LOG.error(_(
-                    'tried to create a UIE persist profile when exists'))
+                Log.error('VirtualServer',
+                    'tried to create a UIE persist profile when exists')
                 return False
             else:
                 raise wf
@@ -540,8 +536,8 @@ class VirtualServer(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                    'tried to set source_addr persistence when exists'))
+                    Log.error('VirtualServer',
+                    'tried to set source_addr persistence when exists')
                 return False
             else:
                 raise wf
@@ -560,8 +556,8 @@ class VirtualServer(object):
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                    'tried to set source_addr persistence when exists'))
+                    Log.error('VirtualServer',
+                    'tried to set source_addr persistence when exists')
                 return False
             else:
                 raise wf
