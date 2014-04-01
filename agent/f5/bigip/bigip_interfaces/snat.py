@@ -1,16 +1,9 @@
+from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
-import os
-import netaddr
-
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class SNAT(object):
@@ -43,8 +36,8 @@ class SNAT(object):
                                            [traffic_group])
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    LOG.error(_(
-                        'tried to create a SNAT when exists'))
+                    Log.error('SNAT',
+                              'tried to create a SNAT when exists')
                 else:
                     raise wf
 
@@ -62,7 +55,8 @@ class SNAT(object):
                     return True
                 except WebFault as wf:
                     if "already exists in partition" in str(wf.message):
-                        LOG.error(_('tried to create a SNATPool when exists'))
+                        Log.error('SNAT',
+                                  'tried to create a SNATPool when exists')
                     else:
                         raise wf
         return False
@@ -75,7 +69,8 @@ class SNAT(object):
             except WebFault as wf:
                 if "is still referenced by a snat pool" \
                                                            in str(wf.message):
-                    LOG.info('Can not delete SNAT address %s ..still in use.'
+                    Log.info('SNAT',
+                             'Can not delete SNAT address %s ..still in use.'
                              % name)
                     return False
                 else:
@@ -113,6 +108,7 @@ class SNAT(object):
                 string_seq.values = member_name
                 string_seq_seq.values = [string_seq]
                 self.lb_snatpool.add_member_v2([name], string_seq_seq)
+        return True
 
     @icontrol_folder
     def add_to_pool(self, name=None, member_name=None, folder='Common'):
@@ -127,6 +123,7 @@ class SNAT(object):
                 string_seq.values = member_name
                 string_seq_seq.values = [string_seq]
                 self.lb_snatpool.add_member_v2([name], string_seq_seq)
+        return True
 
     @icontrol_folder
     def remove_from_pool(self, name=None, member_name=None, folder='Common'):
@@ -140,23 +137,27 @@ class SNAT(object):
             string_seq_seq.values = [string_seq]
             try:
                 self.lb_snatpool.remove_member_v2([name], string_seq_seq)
+                return True
             except WebFault as wf:
                 if "must reference at least one translation address" \
                                                            in str(wf.message):
-                    LOG.error(
+                    Log.error('SNAT',
                     'removing SNATPool because last member is being removed')
                     self.lb_snatpool.delete_snat_pool([name])
                     return True
-            return True
         return False
 
     @icontrol_folder
     def pool_exists(self, name=None, folder='Common'):
         if name in self.lb_snatpool.get_list():
             return True
+        else:
+            return False
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
         snat_addrs = self.lb_snataddress.get_list()
         if name in snat_addrs:
             return True
+        else:
+            return False
