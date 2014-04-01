@@ -17,7 +17,17 @@
 # @author: Mark McClain, DreamHost
 
 from neutron.openstack.common.rpc import proxy
+from neutron.agent import rpc as agent_rpc
+from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron.common import log
+
+
+class CoreAgentApi(agent_rpc.PluginApi):
+    pass
+
+
+class L2PopulationApi(l2pop_rpc.L2populationAgentNotifyAPI):
+    pass
 
 
 class LbaasAgentApi(proxy.RpcProxy):
