@@ -380,3 +380,15 @@ class Cluster(object):
             str_comment = json.dumps(existing_dict)
             self.mgmt_dg.set_description([name],
                                       [str_comment])
+
+    def create_traffic_group(self, name):
+        if isinstance(name, list):
+            self.mgmt_tg.create(name)
+        else:
+            self.mgmt_tg.create([name])
+
+    def delete_traffic_group(self, name):
+        if isinstance(name, list):
+            self.mgmt_tg.delete_traffic_group(name)
+        else:
+            self.mgmt_tg.delete_traffic_group([name])
