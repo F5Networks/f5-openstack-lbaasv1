@@ -30,3 +30,8 @@ class BigIPClusterPeerAddFailure(Exception):
 
 class UnknownMonitorType(Exception):
     pass
+
+
+class MissingVTEPAddress(Exception):
+    pass
+

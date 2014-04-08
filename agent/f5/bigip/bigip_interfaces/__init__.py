@@ -69,10 +69,43 @@ def icontrol_folder(method):
     return wrapper
 
 
+def icontrol_rest_folder(method):
+    """Decorator to put the right folder on iControl object."""
+    def wrapper(*args, **kwargs):
+        if 'folder' in kwargs:
+            if kwargs['folder'].find('Common') < 0:
+                kwargs['folder'] = \
+                    kwargs['folder'].replace('~', '').replace('/', '')
+                if not kwargs['folder'].startswith(OBJ_PREFIX):
+                    kwargs['folder'] = OBJ_PREFIX + kwargs['folder']
+        if 'name' in kwargs and kwargs['name']:
+            if kwargs['name'].find('/') > -1:
+                kwargs['name'] = os.path.basename(kwargs['name'])
+            if kwargs['name'].find('~') > -1:
+                path_parts = kwargs['name'].split('~')
+                kwargs['name'] = path_parts[-1]
+            if not kwargs['name'].startswith(OBJ_PREFIX):
+                kwargs['name'] = OBJ_PREFIX + kwargs['name']
+        for name in kwargs:
+            if name.find('_name') > 0 and kwargs[name]:
+                if kwargs[name].find('/') > -1:
+                    kwargs[name] = os.path.basename(kwargs[name])
+                if kwargs[name].find('~') > -1:
+                    path_parts = kwargs[name].split('~')
+                    kwargs[name] = path_parts[-1]
+                if not kwargs[name].startswith(OBJ_PREFIX):
+                    kwargs[name] = OBJ_PREFIX + kwargs[name]
+        return method(*args, **kwargs)
+    return wrapper
+
+
 def domain_address(method):
     """Decorator to put the right route domain decoration an address."""
     def wrapper(*args, **kwargs):
         instance = args[0]
+        if not instance.bigip.route_domain_required:
+            return method(*args, **kwargs)
+
         folder = 'Common'
         if 'folder' in kwargs:
             folder = os.path.basename(kwargs['folder'])

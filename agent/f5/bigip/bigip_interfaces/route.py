@@ -74,9 +74,15 @@ class Route(object):
         ids = [self._get_next_domain_id()]
         domains = [self._get_domain_name(folder)]
         self.net_domain.create(domains, ids, [[]])
-        strict_state = self.net_domain.typefactory.create(
+        if self.bigip.strict_route_isolation:
+            strict_state = self.net_domain.typefactory.create(
+                                    'Common.EnabledState').STATE_ENABLED
+            self.net_domain.set_strict_state(domains, [strict_state])
+        else:
+            strict_state = self.net_domain.typefactory.create(
                                     'Common.EnabledState').STATE_DISABLED
-        self.net_domain.set_strict_state(domains, [strict_state])
+            self.net_domain.set_strict_state(domains, [strict_state])
+            self.net_domain.set_parent(domains, ['/Common/0'])
         return ids[0]
 
     @icontrol_folder

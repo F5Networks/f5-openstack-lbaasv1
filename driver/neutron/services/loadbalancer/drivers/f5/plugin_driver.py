@@ -612,8 +612,12 @@ class LoadBalancerCallbacks(object):
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
                         if 'vxlan' in agent['configurations']['tunnel_types']:
-                            endpoints.append(
+                            if 'tunneling_ip' in agent['configurations']:
+                                endpoints.append(
                                      agent['configurations']['tunneling_ip'])
+                            if 'tunneling_ips' in agent['configurations']:
+                                for ip in agent['configurations']['tunneling_ips']:
+                                    endpoints.append(ip)
         return endpoints
 
     def _get_gre_endpoints(self, context):
@@ -624,8 +628,12 @@ class LoadBalancerCallbacks(object):
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
                         if 'gre' in agent['configurations']['tunnel_types']:
-                            endpoints.append(
+                            if 'tunneling_ip' in agent['configurations']:
+                                endpoints.append(
                                      agent['configurations']['tunneling_ip'])
+                            if 'tunneling_ips' in agent['configurations']:
+                                for ip in agent['configurations']['tunneling_ips']:
+                                    endpoints.append(ip)
         return endpoints
 
 
@@ -1099,7 +1107,8 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
                         if 'vxlan' in agent['configurations']['tunnel_types']:
-                            endpoints.append(
+                            if 'tunneling_ip' in agent['configurations']:
+                                endpoints.append(
                                      agent['configurations']['tunneling_ip'])
         return endpoints
 
@@ -1111,6 +1120,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
                         if 'gre' in agent['configurations']['tunnel_types']:
-                            endpoints.append(
+                            if 'tunneling_ip' in agent['configurations']:
+                                endpoints.append(
                                      agent['configurations']['tunneling_ip'])
         return endpoints

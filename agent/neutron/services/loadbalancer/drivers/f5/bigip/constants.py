@@ -8,3 +8,4 @@ TYPE_GRE = 'gre'
 TYPE_LOCAL = 'local'
 TYPE_VXLAN = 'vxlan'
 VXLAN_UDP_PORT = 4789
+VTEP_SELFIP_NAME = 'vtep'

@@ -5,6 +5,7 @@ from f5.bigip.bigip_interfaces import icontrol_folder
 
 from suds import WebFault
 import os
+import f5.bigip.bigip_interfaces as interfaces
 
 
 class SelfIP(object):
@@ -22,8 +23,7 @@ class SelfIP(object):
     def create(self, name=None, ip_address=None, netmask=None,
                vlan_name=None, floating=False, traffic_group=None,
                folder='Common'):
-        if not self.exists(name=name, folder=folder) and \
-               self.bigip.vlan.exists(name=vlan_name, folder=folder):
+        if not self.exists(name=name, folder=folder):
             enabled_state = self.net_self.typefactory.create(
                                         'Common.EnabledState').STATE_ENABLED
             if not traffic_group:
@@ -93,8 +93,7 @@ class SelfIP(object):
 
     @icontrol_folder
     def set_vlan(self, name=None, vlan_name=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and \
-           self.bigip.vlan.exists(name=vlan_name, folder=folder):
+        if self.exists(name=name, folder=folder):
             self.net_self.set_vlan([name], [vlan_name])
             return True
         else:
@@ -185,7 +184,9 @@ class SelfIP(object):
 
     @icontrol_folder
     def exists(self, name=None, folder='Common'):
-        if name in self.net_self.get_list():
+        current_list = self.net_self.get_list()
+        no_prefix_name = name.replace(interfaces.OBJ_PREFIX, '')
+        if name in current_list or no_prefix_name in current_list:
             return True
         else:
             return False

@@ -25,15 +25,22 @@ LOG = logging.getLogger(__name__)
 
 class BigIP(object):
     def __init__(self, hostname, username, password,
-                 timeout=None, address_isolation=True):
+                 timeout=None, address_isolation=True,
+                 strict_route_isolation=False):
         # get icontrol connection stub
         self.icontrol = self._get_icontrol(hostname, username, password)
-
         if address_isolation:
             self.route_domain_required = True
+        else:
+            self.route_domain_required = False
+        if strict_route_isolation:
+            self.strict_route_isolation = True
+        else:
+            self.strict_route_isolation = False
         # interface instance cache
         self.interfaces = {}
         self.group_bigips = []
+        self.sync_mode = const.DEFAULT_SYNC_MODE
 
     @property
     def system(self):
@@ -188,6 +195,18 @@ class BigIP(object):
             if not name.startswith(folder + "/"):
                 return folder + "/" + name
             else:
+                return name
+        else:
+            return None
+
+    def set_rest_folder(self, name, folder='/Common'):
+        folder = folder.replace('/', '')
+        folder = '~' + folder
+        if name:
+            if not name.startswith(folder + "/"):
+                return folder + '~' + name
+            else:
+                name = name.replace('/', '~')
                 return name
         else:
             return None

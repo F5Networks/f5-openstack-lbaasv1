@@ -71,11 +71,6 @@ OPTS = [
         default='1.1:0',
         help=_('Interface and VLAN for the VTEP overlay network')
     ),
-    cfg.StrOpt(
-        'f5_external_tunnel_local_ips',
-        default='',
-        help=_('List of CIDR for SelfIP on each device used for VTEP')
-    ),
     cfg.BoolOpt(
         'l2_population',
         default=False,
@@ -193,19 +188,24 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'binary': 'f5-bigip-lbaas-agent',
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
-            'configurations': {'device_driver': self.driver.__class__.__name__,
-                               'device_type': self.device_type},
             'agent_type': neutron_constants.AGENT_TYPE_LOADBALANCER,
             'start_flag': True}
 
         self.admin_state_up = True
-        self.l2_pop = conf.l2_population
+        self.driver.l2pop = conf.l2_population
+
+        if self.driver.l2pop:
+            self.agent_state['l2_population'] = True
+        else:
+            self.agent_state['l2_population'] = False
 
         self.context = context.get_admin_context_without_session()
-        self._setup_rpc()
-
+        # pass context to driver
+        self.driver.context = self.context
         # create the cache of provisioned services
         self.cache = LogicalServiceCache()
+        # setup all rpc and callback objects
+        self._setup_rpc()
         # cause a sync of what Neutron believes
         # needs to be handled by this agent
         self.needs_resync = True
@@ -222,13 +222,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.driver.plugin_rpc = self.plugin_rpc
 
         # Core plugin Callbacks API
-        self.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
-        self.driver.tunnel_rpc = self.tunnel_rpc
+        self.driver.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
 
         # L2 Populate plugin Callbacks API
-        if self.l2_pop:
-            self.l2pop_rpc = agent_api.L2PopulationApi()
-            self.driver.l2pop_rpc = self.l2pop_rpc
+        if self.driver.l2pop:
+            self.driver.l2pop_rpc = agent_api.L2PopulationApi()
 
         # Agent state Callbacks API
         self.state_rpc = agent_rpc.PluginReportStateAPI(
@@ -251,7 +249,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         # NOTE:  the driver can decide to handle fdb updates
         # or use some other mechanism (i.e. flooding) to
         # learn about port updates.
-        if self.l2_pop:
+        if self.driver.l2pop:
             consumers.append([topics.L2POPULATION,
                               topics.UPDATE, cfg.CONF.host])
 
@@ -266,7 +264,17 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.driver._init_connection()
 
             service_count = len(self.cache.services)
+            self.agent_state['configurations'] = {
+                            'device_driver': self.driver.__class__.__name__,
+                            'device_type': self.device_type}
             self.agent_state['configurations']['services'] = service_count
+            if self.driver.l2pop:
+                self.agent_state['configurations']['l2_population'] = True
+            else:
+                self.agent_state['configurations']['l2_population'] = False
+            if self.driver.agent_configurations:
+                self.agent_state['configurations'].update(
+                                             self.driver.agent_configurations)
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)
@@ -280,7 +288,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def periodic_resync(self, context):
         if self.needs_resync:
             self.needs_resync = False
-            self.sync_state()
+            if self.tunnel_sync():
+                self.needs_resync = True
+            if self.sync_state():
+                self.needs_resync = True
 
     @periodic_task.periodic_task(spacing=6)
     def collect_stats(self, context):
@@ -300,7 +311,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def backup_configuration(self, context):
         self.driver.backup_configuration()
 
+    def tunnel_sync(self):
+        return self.driver.tunnel_sync()
+
     def sync_state(self):
+        resync = False
         known_services = set(self.cache.get_pool_ids())
         try:
             ready_pool_ids = set(
@@ -314,8 +329,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.refresh_service(pool_id)
         except Exception:
             LOG.exception(_('Unable to retrieve ready services'))
-            self.needs_resync = True
-
+            resync = True
+        return resync
         self.remove_orphans()
 
     @log.log

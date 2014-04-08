@@ -24,35 +24,22 @@ class Log(object):
     @staticmethod
     def _log(level, prefix, msg):
         log_string = prefix + ': ' + msg
+        log = logging.getLogger(__name__)
+        out_hdlr = logging.StreamHandler(sys.stdout)
+        out_hdlr.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+        out_hdlr.setLevel(const.LOG_LEVEL)
+        log.addHandler(out_hdlr)
+        log.setLevel(const.LOG_LEVEL)
 
-        if const.LOG_MODE == 'dev':
-            log = logging.getLogger(__name__)
-            out_hdlr = logging.StreamHandler(sys.stdout)
-            out_hdlr.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-            out_hdlr.setLevel(const.LOG_LEVEL)
-            log.addHandler(out_hdlr)
-            log.setLevel(const.LOG_LEVEL)
-
-            if level == 'debug':
-                log.debug(log_string)
-            elif level == 'error':
-                log.error(log_string)
-            elif level == 'crit':
-                log.critical(log_string)
-            else:
-                log.info(log_string)
-
-            log.removeHandler(out_hdlr)
+        if level == 'debug':
+            log.debug(log_string)
+        elif level == 'error':
+            log.error(log_string)
+        elif level == 'crit':
+            log.critical(log_string)
         else:
-            try:
-                from Insieme.Logger import Logger
-                if level == 'debug':
-                    Logger.log(Logger.DEBUG, log_string)
-                elif level == 'error':
-                    Logger.log(Logger.ERROR, log_string)
-                elif level == 'crit':
-                    Logger.log(Logger.CRIT, log_string)
-                else:
-                    Logger.log(Logger.INFO, log_string)
-            except ImportError:
-                pass
+            log.info(log_string)
+
+        log.removeHandler(out_hdlr)
+
+            
