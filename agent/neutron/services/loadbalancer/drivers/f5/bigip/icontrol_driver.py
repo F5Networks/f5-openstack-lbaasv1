@@ -59,7 +59,7 @@ OPTS = [
     ),
     cfg.StrOpt(
         'f5_vtep_selfip_name',
-        default='vtep',
+        default=None,
         help=_('Name of the VTEP SelfIP'),
     ),
     cfg.BoolOpt(
@@ -2401,7 +2401,6 @@ class iControlDriver(object):
                                         5,
                                         self.conf.use_namespaces,
                                         self.conf.route_domain_strictness)
-                self.__bigips[self.hostnames[0]] = first_bigip
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
@@ -2431,6 +2430,7 @@ class iControlDriver(object):
                     self.__gw_on_traffic_groups[traffic_group] = 0
                     self.__vips_on_traffic_groups[traffic_group] = 0
 
+                self.__bigips[self.hostnames[0]] = first_bigip
                 # connect to the rest of the devices
                 for host in self.hostnames[1:]:
                     hostbigip = f5_bigip.BigIP(host,
@@ -2453,6 +2453,7 @@ class iControlDriver(object):
                     set_bigip.assured_networks = []
                     set_bigip.assured_snat_subnets = []
                     set_bigip.assured_gateway_subnets = []
+                    set_bigip.local_ip = None
 
                 if self.conf.sync_mode == 'replication':
                     autosync_state = 'STATE_DISABLED'
@@ -2474,10 +2475,6 @@ class iControlDriver(object):
 
                 for host in self.__bigips:
                     hostbigip = self.__bigips[host]
-                    hostbigip.vxlan.create_multipoint_profile(name='vxlan_ovs',
-                                                              folder='Common')
-                    hostbigip.l2gre.create_multipoint_profile(name='gre_ovs',
-                                                            folder='Common')
                     major_version = hostbigip.system.get_major_version()
                     if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
                         raise f5ex.MajorVersionValidateFailed(
@@ -2496,6 +2493,17 @@ class iControlDriver(object):
                     hostbigip.device_name = hostbigip.device.get_device_name()
 
                     if vtep_folder and vtep_selfip_name:
+                        # profiles may already exist
+                        try:
+                            hostbigip.vxlan.create_multipoint_profile(name='vxlan_ovs',
+                                                                      folder='Common')
+                        except:
+                            pass
+                        try:
+                            hostbigip.l2gre.create_multipoint_profile(name='gre_ovs',
+                                                                      folder='Common')
+                        except:
+                            pass
                         # find the IP address for the selfip for each box
                         local_ip = hostbigip.selfip.get_addr(
                                 "/" + vtep_folder + "/" + vtep_selfip_name,
