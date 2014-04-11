@@ -39,6 +39,7 @@ LOG = logging.getLogger(__name__)
 
 __VERSION__ = "0.1.1"
 
+# configuration options useful to all drivers
 OPTS = [
     cfg.StrOpt(
         'f5_bigip_lbaas_device_driver',
@@ -47,39 +48,19 @@ OPTS = [
         help=_('The driver used to provision BigIPs'),
     ),
     cfg.BoolOpt(
-        'use_namespaces',
-        default=True,
-        help=_('Allow overlapping IP addresses for tenants')
-    ),
-    cfg.StrOpt(
-        'f5_device_type',
-        default='external',
-        help=_('What type of device onboarding')
-    ),
-    cfg.StrOpt(
-        'f5_ha_type',
-        default='pair',
-        help=_('Are we standalone, pair(active/standby), or scalen')
-    ),
-    cfg.StrOpt(
-        'f5_external_physical_mappings',
-        default='default:1.1:True',
-        help=_('Mapping between Neutron physical_network to interfaces')
-    ),
-    cfg.StrOpt(
-        'f5_external_tunnel_interface',
-        default='1.1:0',
-        help=_('Interface and VLAN for the VTEP overlay network')
-    ),
-    cfg.BoolOpt(
         'l2_population',
         default=False,
         help=_('Use L2 Populate service for fdb entries on the BIG-IP')
     ),
     cfg.BoolOpt(
-        'f5_source_monitor_from_member_subnet',
+        'f5_global_routed_mode',
+        default=False,
+        help=_('Disable all L2 and L3 integration in favor or global routing')
+    ),
+    cfg.BoolOpt(
+        'use_namespaces',
         default=True,
-        help=_('create Self IP on member subnet for monitors')
+        help=_('Allow overlapping IP addresses for tenants')
     ),
     cfg.BoolOpt(
         'f5_snat_mode',
@@ -176,7 +157,6 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         LOG.debug(_('Initializing LbaasAgentManager with conf %s' % conf))
         self.conf = conf
         try:
-            self.device_type = conf.f5_device_type
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
             self.agent_host = conf.host + ":" + self.driver.agent_id
@@ -266,7 +246,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             service_count = len(self.cache.services)
             self.agent_state['configurations'] = {
                             'device_driver': self.driver.__class__.__name__,
-                            'device_type': self.device_type}
+                            'device_type': self.driver.device_type}
             self.agent_state['configurations']['services'] = service_count
             if self.driver.l2pop:
                 self.agent_state['configurations']['l2_population'] = True

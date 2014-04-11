@@ -6,6 +6,7 @@ from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
 from neutron.common import rpc as q_rpc
 from neutron.db import models_v2
+from neutron.plugins.ml2 import models as models_ml2
 from neutron.db import agents_db
 from neutron.db.loadbalancer import loadbalancer_db as ldb
 from neutron.extensions import lbaas_agentscheduler
@@ -45,7 +46,7 @@ cfg.CONF.register_opts(OPTS)
 # topic name for this particular agent implementation
 TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
 TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'
-
+VIF_TYPE = 'f5'
 
 class LoadBalancerCallbacks(object):
     """Callbacks made by the agent to update the data model."""
@@ -56,6 +57,7 @@ class LoadBalancerCallbacks(object):
         self.plugin = plugin
         self.net_cache = {}
         self.subnet_cache = {}
+        self.agent_cache = {}
 
     def create_rpc_dispatcher(self):
         return q_rpc.PluginRpcDispatcher(
@@ -131,6 +133,10 @@ class LoadBalancerCallbacks(object):
             else:
                 retpool['network'] = self.plugin._core_plugin.get_network(
                             context, pool_network_id)
+                if not 'provider:network_type' in retpool['network']:
+                    retpool['network']['provider:network_type'] = 'undefined'
+                if not 'provider:segmentation_id' in retpool['network']:
+                    retpool['network']['provider:segmentation_id'] = 0
                 self.net_cache[pool_network_id] = retpool['network']
 
             # get pool subnet ports
@@ -153,6 +159,51 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['network'] = \
                  self.plugin._core_plugin.get_network(context,
                                         retval['vip']['port']['network_id'])
+                retval['vip']['vxlan_vteps'] = []
+                retval['vip']['gre_vteps'] = []
+                if 'provider:network_type' in retval['vip']['network']:
+                    nettype = retval['vip']['network']['provider:network_type']
+                    if nettype == 'vxlan':
+                        segment_qry = context.session.query(
+                                                     models_ml2.NetworkSegment)
+                        segment = segment_qry.filter_by(
+                             network_id=retval['vip']['network']['id']).first()
+                        segment_id = segment['id']
+                        host_qry = context.session.query(
+                                                        models_ml2.PortBinding)
+                        hosts = host_qry.filter_by(segment=segment_id).all()
+                        host_ids = set()
+                        for host in hosts:
+                            host_ids.add(host['host'])
+                        for host_id in host_ids:
+                            endpoints = \
+                                self._get_vxlan_endpoints(context, host_id)
+                            if len(endpoints) > 0:
+                                retval['vip']['vxlan_vteps'] = \
+                                    retval['vip']['vxlan_vteps'] + endpoints
+                    if nettype == 'gre':
+                        segment_qry = context.session.query(
+                                                    models_ml2.NetworkSegment)
+                        segment = segment_qry.filter_by(
+                             network_id=retval['vip']['network']['id']).first()
+                        segment_id = segment['id']
+                        host_qry = context.session.query(
+                                                        models_ml2.PortBinding)
+                        hosts = host_qry.filter_by(segment=segment_id).all()
+                        host_ids = set()
+                        for host in hosts:
+                            host_ids.add(host['host'])
+                        for host_id in host_ids:
+                            endpoints = \
+                                self._get_gre_endpoints(context, host_id)
+                            if len(endpoints) > 0:
+                                retval['vip']['gre_vteps'] = \
+                                    retval['vip']['gre_vteps'] + endpoints
+                else:
+                    retval['vip']['network']['provider:network_type'] = \
+                                                                   'undefined'
+                if not 'provider:segmentation_id' in retval['vip']['network']:
+                    retval['vip']['network']['provider:segmentation_id'] = 0
                 # there should only be one fixed_ip
                 for fixed_ip in retval['vip']['port']['fixed_ips']:
                     retval['vip']['subnet'] = (
@@ -174,13 +225,13 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port']['subnet'] = None
                 retval['vip']['subnet_ports'] = []
             retval['members'] = []
+
             adminctx = get_admin_context()
             for m in pool.members:
                 member = self.plugin._make_member_dict(m)
                 alloc_qry = adminctx.session.query(models_v2.IPAllocation)
                 allocated = alloc_qry.filter_by(
                                         ip_address=member['address']).all()
-
                 for alloc in allocated:
                     # It is normal to find a duplicate IP for another tenant,
                     # so first see if we find its network under this
@@ -200,11 +251,33 @@ class LoadBalancerCallbacks(object):
                         continue
                     if net['tenant_id'] != pool['tenant_id']:
                         continue
+
                     member['network'] = net
                     self.set_member_subnet_info(context, host,
                                                 member,
                                                 alloc['subnet_id'],
                                                 ports_cache)
+                    member['port'] = self.plugin._core_plugin.get_port(
+                                             adminctx, alloc['port_id'])
+                    member['vxlan_vteps'] = []
+                    member['gre_vteps'] = []
+                    if 'provider:network_type' in member['network']:
+                        nettype = member['network']['provider:network_type']
+                        if nettype == 'vxlan':
+                            if 'binding:host_id' in member['port']:
+                                host = member['port']['binding:host_id']
+                                member['vxlan_vteps'] = \
+                                    self._get_vxlan_endpoints(context, host)
+                        if nettype == 'gre':
+                            if 'binding:host_id' in member['port']:
+                                host = member['port']['binding:host_id']
+                                member['vxlan_vteps'] = \
+                                    self._get_gre_endpoints(context, host)
+                    else:
+                        member['network']['provider:network_type'] = \
+                                                                   'undefined'
+                    if not 'provider:segmentation_id' in member['network']:
+                        member['network']['provider:segmentation_id'] = 0
                     retval['members'].append(member)
                     break
                 else:
@@ -223,11 +296,33 @@ class LoadBalancerCallbacks(object):
                                                     member,
                                                     alloc['subnet_id'],
                                                     ports_cache)
+                        member['port'] = self.plugin._core_plugin.get_port(
+                                             adminctx, alloc['port_id'])
+                        member['vxlan_vteps'] = []
+                        member['gre_vteps'] = []
+                        if 'provider:network_type' in member['network']:
+                            nettype = \
+                               member['network']['provider:network_type']
+                            if nettype == 'vxlan':
+                                vteps = self._get_vxlan_endpoints(context,
+                                                        alloc['port_id'])
+                                member['vxlan_vteps'] = vteps
+                            if nettype == 'gre':
+                                vteps = self._get_gre_endpoints(context,
+                                                        alloc['port_id'])
+                                member['gre_vteps'] = vteps
+                        else:
+                            member['network']['provider:network_type'] = \
+                                                                   'undefined'
+                        if not 'provider:segmentation_id' in member['network']:
+                            member['network']['provider:segmentation_id'] = 0
                         retval['members'].append(member)
                         break
                     else:
-                        raise Exception(
-                                "Could not find network for pool member")
+                        member['network'] = None
+                        member['subnet'] = None
+                        member['port'] = None
+                        retval['members'].append(member)
 
             retval['health_monitors'] = []
             for hm in retval['pool']['health_monitors']:
@@ -339,8 +434,11 @@ class LoadBalancerCallbacks(object):
                 'fixed_ips': fixed_ips
             }
             port_data[portbindings.HOST_ID] = host
+            port_data[portbindings.VIF_TYPE] = VIF_TYPE
+            port_data[portbindings.CAPABILITIES] = {'port_filter': False}
             port = self.plugin._core_plugin.create_port(context,
                                                         {'port': port_data})
+            # Because ML2 marks ports DOWN by default on creation
             update_data = {
                 'status': q_const.PORT_STATUS_ACTIVE
             }
@@ -374,8 +472,11 @@ class LoadBalancerCallbacks(object):
                 'fixed_ips': [fixed_ip]
             }
             port_data[portbindings.HOST_ID] = host
+            port_data[portbindings.VIF_TYPE] = 'f5'
+            port_data[portbindings.CAPABILITIES] = {'port_filer': False}
             port = self.plugin._core_plugin.create_port(context,
                                                         {'port': port_data})
+            # Because ML2 marks ports DOWN by default on creation
             update_data = {
                 'status': q_const.PORT_STATUS_ACTIVE
             }
@@ -604,36 +705,66 @@ class LoadBalancerCallbacks(object):
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
         self.plugin.update_pool_stats(context, pool_id, stats)
 
-    def _get_vxlan_endpoints(self, context):
+    def _get_vxlan_endpoints(self, context, host=None):
         endpoints = []
-        if hasattr(self.plugin._core_plugin, 'get_agents'):
-            agents = self.plugin._core_plugin.get_agents(context)
-            for agent in agents:
-                if 'configurations' in agent:
-                    if 'tunnel_types' in agent['configurations']:
-                        if 'vxlan' in agent['configurations']['tunnel_types']:
-                            if 'tunneling_ip' in agent['configurations']:
+        # populate if we are supposed to get all endpoints
+        # or the host we are looking for is not cached already
+        if not host or (host not in self.agent_cache):
+            if hasattr(self.plugin._core_plugin, 'get_agents'):
+                agents = self.plugin._core_plugin.get_agents(context)
+                for agent in agents:
+                    self.agent_cache[agent['host']] = agent
+        for agent in self.agent_cache.values():
+            if 'configurations' in agent:
+                if 'tunnel_types' in agent['configurations']:
+                    if 'vxlan' in agent['configurations']['tunnel_types']:
+                        if 'tunneling_ip' in agent['configurations']:
+                            if not host:
                                 endpoints.append(
-                                     agent['configurations']['tunneling_ip'])
-                            if 'tunneling_ips' in agent['configurations']:
-                                for ip in agent['configurations']['tunneling_ips']:
+                                      agent['configurations']['tunneling_ip'])
+                            else:
+                                if agent['host'] == host:
+                                    endpoints.append(
+                                 agent['configurations']['tunneling_ip'])
+                        if 'tunneling_ips' in agent['configurations']:
+                            for ip in \
+                                agent['configurations']['tunneling_ips']:
+                                if not host:
                                     endpoints.append(ip)
+                                else:
+                                    if agent['host'] == host:
+                                        endpoints.append(ip)
         return endpoints
 
-    def _get_gre_endpoints(self, context):
+    def _get_gre_endpoints(self, context, host=None):
         endpoints = []
-        if hasattr(self.plugin._core_plugin, 'get_agents'):
-            agents = self.plugin._core_plugin.get_agents(context)
-            for agent in agents:
-                if 'configurations' in agent:
-                    if 'tunnel_types' in agent['configurations']:
-                        if 'gre' in agent['configurations']['tunnel_types']:
-                            if 'tunneling_ip' in agent['configurations']:
+        # populate if we are supposed to get all endpoints
+        # or the host we are looking for is not cached already
+        if not host or (host not in self.agent_cache):
+            if hasattr(self.plugin._core_plugin, 'get_agents'):
+                agents = self.plugin._core_plugin.get_agents(context)
+                for agent in agents:
+                    self.agent_cache[agent['host']] = agent
+        for agent in self.agent_cache.values():
+            if 'configurations' in agent:
+                if 'tunnel_types' in agent['configurations']:
+                    if 'gre' in agent['configurations']['tunnel_types']:
+                        if 'tunneling_ip' in agent['configurations']:
+                            if not host:
                                 endpoints.append(
-                                     agent['configurations']['tunneling_ip'])
-                            if 'tunneling_ips' in agent['configurations']:
-                                for ip in agent['configurations']['tunneling_ips']:
+                                      agent['configurations']['tunneling_ip'])
+                            else:
+                                if agent['host'] == host:
+                                    endpoints.append(
+                                 agent['configurations']['tunneling_ip'])
+                        if 'tunneling_ips' in agent['configurations']:
+                            for ip in \
+                                agent['configurations']['tunneling_ips']:
+                                if not host:
                                     endpoints.append(ip)
+                                else:
+                                    if agent['host'] == host:
+                                        endpoints.append(ip)
         return endpoints
 
 

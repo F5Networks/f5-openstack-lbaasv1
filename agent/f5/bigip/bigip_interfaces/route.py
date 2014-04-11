@@ -87,21 +87,24 @@ class Route(object):
 
     @icontrol_folder
     def delete_domain(self, folder='Common'):
-        domains = [self._get_domain_name(folder)]
-        try:
-            self.net_domain.delete_route_domain(domains)
-        except WebFault as wf:
-            if "is referenced" in str(wf.message):
-                Log.error('Route', 'delete route domain %s failed %s'
-                          % (folder, wf.message))
-                return False
-            elif "All objects must be removed" in str(wf.message):
-                Log.error('Route', 'delete route domain %s failed %s'
-                          % (folder, wf.message))
-                return False
-            else:
-                raise wf
-        return True
+        if self.domain_exists(folder=folder):
+            try:
+                domains = [self._get_domain_name(folder)]
+                self.net_domain.delete_route_domain(domains)
+            except WebFault as wf:
+                if "is referenced" in str(wf.message):
+                    Log.error('Route', 'delete route domain %s failed %s'
+                              % (folder, wf.message))
+                    return False
+                elif "All objects must be removed" in str(wf.message):
+                    Log.error('Route', 'delete route domain %s failed %s'
+                              % (folder, wf.message))
+                    return False
+                else:
+                    raise wf
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def domain_exists(self, folder='Common'):

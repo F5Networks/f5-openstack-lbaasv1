@@ -84,14 +84,15 @@ class VirtualServer(object):
                     self.lb_vs.set_snat_automap([name])
 
             # add enabled VLANs
-            enabled_state = self.lb_vs.typefactory.create(
-                'Common.EnabledState').STATE_ENABLED
-            filter_list = self.lb_vs.typefactory.create(
-                'Common.VLANFilterList')
-            filter_list.state = enabled_state
-            filter_list.vlans = [vlan_name]
+            if vlan_name:
+                enabled_state = self.lb_vs.typefactory.create(
+                    'Common.EnabledState').STATE_ENABLED
+                filter_list = self.lb_vs.typefactory.create(
+                    'Common.VLANFilterList')
+                filter_list.state = enabled_state
+                filter_list.vlans = [vlan_name]
 
-            self.lb_vs.set_vlan([name], [filter_list])
+                self.lb_vs.set_vlan([name], [filter_list])
 
             while not self.virtual_address_exists(named_address=ip_address,
                                                   folder=folder):
@@ -149,16 +150,16 @@ class VirtualServer(object):
                 else:
                     self.lb_vs.set_snat_automap([name])
 
-        
             # add enabled VLANs
-            enabled_state = self.lb_vs.typefactory.create(
-                'Common.EnabledState').STATE_ENABLED
-            filter_list = self.lb_vs.typefactory.create(
-                'Common.VLANFilterList')
-            filter_list.state = enabled_state
-            filter_list.vlans = [vlan_name]
+            if vlan_name:
+                enabled_state = self.lb_vs.typefactory.create(
+                    'Common.EnabledState').STATE_ENABLED
+                filter_list = self.lb_vs.typefactory.create(
+                    'Common.VLANFilterList')
+                filter_list.state = enabled_state
+                filter_list.vlans = [vlan_name]
 
-            self.lb_vs.set_vlan([name], [filter_list])
+                self.lb_vs.set_vlan([name], [filter_list])
 
             while not self.virtual_address_exists(named_address=ip_address,
                                                   folder=folder):
@@ -226,14 +227,15 @@ class VirtualServer(object):
                     self.lb_vs.set_snat_automap([name])
 
             # add enabled VLANs
-            enabled_state = self.lb_vs.typefactory.create(
-                'Common.EnabledState').STATE_ENABLED
-            filter_list = self.lb_vs.typefactory.create(
-                'Common.VLANFilterList')
-            filter_list.state = enabled_state
-            filter_list.vlans = [vlan_name]
+            if vlan_name:
+                enabled_state = self.lb_vs.typefactory.create(
+                    'Common.EnabledState').STATE_ENABLED
+                filter_list = self.lb_vs.typefactory.create(
+                    'Common.VLANFilterList')
+                filter_list.state = enabled_state
+                filter_list.vlans = [vlan_name]
 
-            self.lb_vs.set_vlan([name], [filter_list])
+                self.lb_vs.set_vlan([name], [filter_list])
 
             while not self.virtual_address_exists(named_address=ip_address,
                                                   folder=folder):

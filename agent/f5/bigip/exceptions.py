@@ -12,15 +12,7 @@ class BigIPDeviceLockAcquireFailed(Exception):
     pass
 
 
-class APICDeviceConfig(Exception):
-    pass
-
-
 class BigIPClusterSyncFailure(Exception):
-    pass
-
-
-class APICClusterConfig(Exception):
     pass
 
 
@@ -35,3 +27,6 @@ class UnknownMonitorType(Exception):
 class MissingVTEPAddress(Exception):
     pass
 
+
+class InvalidNetworkType(Exception):
+    pass
