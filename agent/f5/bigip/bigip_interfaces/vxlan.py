@@ -4,6 +4,7 @@ from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 import json
 import requests
+import urllib
 
 
 class VXLAN(object):
@@ -33,8 +34,6 @@ class VXLAN(object):
             request_url = self.icr_url + '/net/tunnels/vxlan/'
             response = self.icr_session.post(request_url,
                                   data=json.dumps(payload))
-            Log.debug('VXLAN::create_multipoint_profile',
-                      '%s' % response.json())
             if response.status_code < 400:
                 return True
             else:
@@ -48,7 +47,6 @@ class VXLAN(object):
         request_url += '~' + folder + '~' + name
 
         response = self.icr_session.delete(request_url)
-        Log.debug('VXLAN::delete_profile', response.json())
 
         if response.status_code < 400:
             return True
@@ -72,8 +70,6 @@ class VXLAN(object):
             request_url = self.icr_url + '/net/tunnels/tunnel/'
             response = self.icr_session.post(request_url,
                                   data=json.dumps(payload))
-            Log.debug('VXLAN::create_multipoint_tunnel response',
-                      '%s' % response.json())
             if response.status_code < 400:
                 if not folder == 'Common':
                     self.bigip.route.add_vlan_to_domain(
@@ -91,8 +87,6 @@ class VXLAN(object):
         request_url += '~' + folder + '~' + name
 
         response = self.icr_session.delete(request_url)
-        Log.debug('VXLAN::delete_tunnel response',
-                  '%s' % response.json())
 
         if response.status_code < 400:
             return True
@@ -126,6 +120,7 @@ class VXLAN(object):
                       tunnel_name=None,
                       mac_address=None,
                       vtep_ip_address=None,
+                      arp_ip_address=None,
                       folder=None):
         request_url = self.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + tunnel_name
@@ -141,6 +136,13 @@ class VXLAN(object):
         response = self.icr_session.put(request_url,
                                         data=json.dumps(payload))
         if response.status_code < 400:
+            if arp_ip_address:
+                if self.bigip.arp.create(ip_address=arp_ip_address,
+                                         mac_address=mac_address,
+                                         folder=folder):
+                    return True
+                else:
+                    return False
             return True
         else:
             return False
@@ -149,8 +151,13 @@ class VXLAN(object):
     def delete_fdb_entry(self,
                          tunnel_name=None,
                          mac_address=None,
+                         arp_ip_address=None,
                          folder='Common'):
-        request_url = self.icr_url + '/net/fdb/tunnel'
+        if arp_ip_address:
+            self.bigip.arp.delete(ip_address=arp_ip_address,
+                                  folder=folder)
+
+        request_url = self.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + tunnel_name
         records = self.get_fdb_entry(tunnel_name=tunnel_name,
                                      mac=None,
@@ -191,7 +198,10 @@ class VXLAN(object):
         response = self.icr_session.get(request_url)
         if response.status_code < 400:
             return_obj = json.loads(response.text)
-            return return_obj['items']
+            if 'items' in return_obj:
+                return return_obj['items']
+            else:
+                return None
         else:
             return None
 
@@ -214,7 +224,10 @@ class VXLAN(object):
         response = self.icr_session.get(request_url)
         if response.status_code < 400:
             return_obj = json.loads(response.text)
-            return return_obj['items']
+            if 'items' in return_obj:
+                return return_obj['items']
+            else:
+                return None
         else:
             return None
 

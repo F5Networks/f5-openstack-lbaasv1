@@ -48,6 +48,7 @@ TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
 TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'
 VIF_TYPE = 'f5'
 
+
 class LoadBalancerCallbacks(object):
     """Callbacks made by the agent to update the data model."""
     RPC_API_VERSION = '1.0'
@@ -57,7 +58,6 @@ class LoadBalancerCallbacks(object):
         self.plugin = plugin
         self.net_cache = {}
         self.subnet_cache = {}
-        self.agent_cache = {}
 
     def create_rpc_dispatcher(self):
         return q_rpc.PluginRpcDispatcher(
@@ -112,7 +112,6 @@ class LoadBalancerCallbacks(object):
                     if hm.status in ACTIVE_PENDING:
                         hm.status = constants.ACTIVE
             retval = {}
-            ports_cache = {}
             retpool = self.plugin._make_pool_dict(pool)
             retval['pool'] = retpool
 
@@ -138,18 +137,6 @@ class LoadBalancerCallbacks(object):
                 if not 'provider:segmentation_id' in retpool['network']:
                     retpool['network']['provider:segmentation_id'] = 0
                 self.net_cache[pool_network_id] = retpool['network']
-
-            # get pool subnet ports
-            if pool_subnet_id in ports_cache:
-                retpool['subnet_ports'] = ports_cache[pool_subnet_id]
-            else:
-                pool_subnet_fixed_ip_filters = {'network_id':
-                                                [pool_network_id],
-                'device_id': [str(uuid.uuid5(uuid.NAMESPACE_DNS, str(host)))]}
-                retpool['subnet_ports'] = \
-                               self.plugin._core_plugin.get_ports(context,
-                                      filters=pool_subnet_fixed_ip_filters)
-                ports_cache[pool_subnet_id] = retpool['subnet_ports']
 
             if pool.vip:
                 retval['vip'] = self.plugin._make_vip_dict(pool.vip)
@@ -211,19 +198,11 @@ class LoadBalancerCallbacks(object):
                                                       fixed_ip['subnet_id'])
                                                )
                     retval['vip']['address'] = fixed_ip['ip_address']
-                vip_subnet_fixed_ip_filters = {'network_id':
-                        [retval['vip']['subnet']['network_id']],
-                        'device_id': [
-                            str(uuid.uuid5(uuid.NAMESPACE_DNS, str(host)))]}
-                retval['vip']['subnet_ports'] = \
-                             self.plugin._core_plugin.get_ports(context,
-                                      filters=vip_subnet_fixed_ip_filters)
             else:
                 retval['vip'] = {}
                 retval['vip']['port'] = {}
                 retval['vip']['port']['network'] = None
                 retval['vip']['port']['subnet'] = None
-                retval['vip']['subnet_ports'] = []
             retval['members'] = []
 
             adminctx = get_admin_context()
@@ -255,8 +234,7 @@ class LoadBalancerCallbacks(object):
                     member['network'] = net
                     self.set_member_subnet_info(context, host,
                                                 member,
-                                                alloc['subnet_id'],
-                                                ports_cache)
+                                                alloc['subnet_id'])
                     member['port'] = self.plugin._core_plugin.get_port(
                                              adminctx, alloc['port_id'])
                     member['vxlan_vteps'] = []
@@ -294,8 +272,7 @@ class LoadBalancerCallbacks(object):
                         member['network'] = net
                         self.set_member_subnet_info(context, host,
                                                     member,
-                                                    alloc['subnet_id'],
-                                                    ports_cache)
+                                                    alloc['subnet_id'])
                         member['port'] = self.plugin._core_plugin.get_port(
                                              adminctx, alloc['port_id'])
                         member['vxlan_vteps'] = []
@@ -329,30 +306,15 @@ class LoadBalancerCallbacks(object):
                 retval['health_monitors'].append(
                       self.plugin.get_health_monitor(context, hm))
 
-            retval['vxlan_endpoints'] = self._get_vxlan_endpoints(context)
-            retval['gre_endpoints'] = self._get_gre_endpoints(context)
-
             return retval
 
-    def set_member_subnet_info(self, context, host, member,
-                                subnet_id, ports_cache):
+    def set_member_subnet_info(self, context, host, member, subnet_id):
         if subnet_id in self.subnet_cache:
             member['subnet'] = self.subnet_cache[subnet_id]
         else:
             core_plugin = self.plugin._core_plugin
             member['subnet'] = core_plugin.get_subnet(context, subnet_id)
             self.subnet_cache[subnet_id] = member['subnet']
-
-        if subnet_id in ports_cache:
-            member['subnet_ports'] = ports_cache[subnet_id]
-        else:
-            member_subnet_fixed_ip_filters = {'network_id':
-                                            [member['subnet']['network_id']],
-                'device_id': [str(uuid.uuid5(uuid.NAMESPACE_DNS, str(host)))]}
-            core_plugin = self.plugin._core_plugin
-            member['subnet_ports'] = core_plugin.get_ports(context,
-                                        filters=member_subnet_fixed_ip_filters)
-            ports_cache[subnet_id] = member['subnet_ports']
 
     @log.log
     def create_network(self, context, tenant_id=None, name=None, shared=False,
@@ -705,16 +667,10 @@ class LoadBalancerCallbacks(object):
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
         self.plugin.update_pool_stats(context, pool_id, stats)
 
+    @log.log
     def _get_vxlan_endpoints(self, context, host=None):
         endpoints = []
-        # populate if we are supposed to get all endpoints
-        # or the host we are looking for is not cached already
-        if not host or (host not in self.agent_cache):
-            if hasattr(self.plugin._core_plugin, 'get_agents'):
-                agents = self.plugin._core_plugin.get_agents(context)
-                for agent in agents:
-                    self.agent_cache[agent['host']] = agent
-        for agent in self.agent_cache.values():
+        for agent in self.plugin._core_plugin.get_agents(context):
             if 'configurations' in agent:
                 if 'tunnel_types' in agent['configurations']:
                     if 'vxlan' in agent['configurations']['tunnel_types']:
@@ -723,7 +679,7 @@ class LoadBalancerCallbacks(object):
                                 endpoints.append(
                                       agent['configurations']['tunneling_ip'])
                             else:
-                                if agent['host'] == host:
+                                if str(agent['host']) == str(host):
                                     endpoints.append(
                                  agent['configurations']['tunneling_ip'])
                         if 'tunneling_ips' in agent['configurations']:
@@ -738,14 +694,7 @@ class LoadBalancerCallbacks(object):
 
     def _get_gre_endpoints(self, context, host=None):
         endpoints = []
-        # populate if we are supposed to get all endpoints
-        # or the host we are looking for is not cached already
-        if not host or (host not in self.agent_cache):
-            if hasattr(self.plugin._core_plugin, 'get_agents'):
-                agents = self.plugin._core_plugin.get_agents(context)
-                for agent in agents:
-                    self.agent_cache[agent['host']] = agent
-        for agent in self.agent_cache.values():
+        for agent in self.plugin._core_plugin.get_agents(context):
             if 'configurations' in agent:
                 if 'tunnel_types' in agent['configurations']:
                     if 'gre' in agent['configurations']['tunnel_types']:

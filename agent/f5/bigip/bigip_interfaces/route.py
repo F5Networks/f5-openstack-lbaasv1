@@ -108,12 +108,15 @@ class Route(object):
 
     @icontrol_folder
     def domain_exists(self, folder='Common'):
-        self._domain_exists(folder)
+        return self._domain_exists(folder)
 
     def _domain_exists(self, folder='Common'):
         domain_name = self._get_domain_name(folder)
         all_route_domains = self.net_domain.get_list()
-        return domain_name in all_route_domains
+        if domain_name in all_route_domains:
+            return True
+        else:
+            return False
 
     @icontrol_folder
     def get_domain(self, folder='Common'):

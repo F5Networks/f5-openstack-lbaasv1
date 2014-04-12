@@ -141,6 +141,8 @@ def domain_address(method):
                                 else:
                                     netaddr.IPAddress(
                                                    address[:decorator_index])
+                                    if address.find('%0') > 0:
+                                        address = address.replace('%0', '')
                                 return_list.append(address)
                             kwargs[name] = return_list
                         else:
@@ -152,13 +154,23 @@ def domain_address(method):
                                     kwargs[name] = kwargs[name] + \
                                                             "%" + str(rid)
                             else:
-                                netaddr.IPAddress(
-                                               kwargs[name][:decorator_index])
+                                address = kwargs[name][:decorator_index]
+                                netaddr.IPAddress(address)
+                                if kwargs[name].find('%0') > 0:
+                                    kwargs[name] = \
+                                               kwargs[name].replace('%0', '')
                     else:
                         if isinstance(kwargs[name], list):
-                            for address in kwargs[name]:
-                                netaddr.IPAddress(address)
+                            for i in range(len(kwargs[name])):
+                                address = kwargs[name][i]
+                                decorator_index = address.find('%')
+                                if decorator_index < 0:
+                                    kwargs[name][i] = address[:decorator_index]
+                                netaddr.IPAddress(kwargs[name][i])
                         else:
+                            decorator_index = kwargs[name].find('%')
+                            if decorator_index < 0:
+                                kwargs[name] = kwargs[name][:decorator_index]
                             netaddr.IPAddress(kwargs[name])
         return method(*args, **kwargs)
     return wrapper

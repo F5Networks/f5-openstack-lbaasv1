@@ -3,6 +3,7 @@ import logging
 
 from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
+from f5.bigip import bigip_interfaces
 
 from f5.bigip.bigip_interfaces.cluster import Cluster
 from f5.bigip.bigip_interfaces.device import Device
@@ -19,6 +20,7 @@ from f5.bigip.bigip_interfaces.virtual_server import VirtualServer
 from f5.bigip.bigip_interfaces.vlan import Vlan
 from f5.bigip.bigip_interfaces.vxlan import VXLAN
 from f5.bigip.bigip_interfaces.l2gre import L2GRE
+from f5.bigip.bigip_interfaces.arp import ARP
 
 LOG = logging.getLogger(__name__)
 
@@ -104,6 +106,15 @@ class BigIP(object):
             l2gre = L2GRE(self)
             self.interfaces['l2gre'] = l2gre
             return l2gre
+
+    @property
+    def arp(self):
+        if 'arp' in self.interfaces:
+            return self.interfaces['arp']
+        else:
+            arp = ARP(self)
+            self.interfaces['arp'] = arp
+            return arp
 
     @property
     def selfip(self):
@@ -210,6 +221,10 @@ class BigIP(object):
                 return name
         else:
             return None
+
+    def decorate_folder(self, folder='Common'):
+        folder = str(folder).replace('/', '')
+        return bigip_interfaces.prefixed(folder)
 
     def get_domain_index(self, folder='/Common'):
         if folder == '/Common' or folder == 'Common':

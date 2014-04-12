@@ -1,21 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-#
-# Copyright 2013 New Dream Network, LLC (DreamHost)
-#
-#    Licensed under the Apache License, Version 2.0 (the "License"); you may
-#    not use this file except in compliance with the License. You may obtain
-#    a copy of the License at
-#
-#         http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-#    License for the specific language governing permissions and limitations
-#    under the License.
-#
-# @author: Mark McClain, DreamHost
-
 import weakref
 
 from oslo.config import cfg
@@ -406,7 +388,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver.create_pool(pool, service)
             self.cache.put(service)
-        except Exception as e:
+        except IOError as e:
             message = 'could not create pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
                                                plugin_const.ERROR,
@@ -430,7 +412,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver.delete_pool(pool, service)
             self.cache.remove_by_pool_id(pool['id'])
-        except Exception as e:
+        except IOError as e:
             message = 'could not delete pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
                                               plugin_const.ERROR,

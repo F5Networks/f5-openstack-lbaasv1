@@ -458,10 +458,9 @@ class iControlDriver(object):
             self.do_not_delete_subnets = []
 
     class SubnetInfo:
-        def __init__(self, network=None, subnet=None, subnet_ports=None):
+        def __init__(self, network=None, subnet=None):
             self.network = network
             self.subnet = subnet
-            self.subnet_ports = subnet_ports
 
     def _assure_service(self, service):
         bigip = self._get_bigip()
@@ -776,6 +775,19 @@ class iControlDriver(object):
                                   ip_address=ip_address,
                                   port=int(member['protocol_port']),
                                   folder=pool['tenant_id'])
+                if 'provider:network_type' in member['network']:
+                    if member['network']['provider:network_type'] == 'vxlan':
+                        tunnel_name = self._get_tunnel_name(member['network'])
+                        bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
+                                    mac_address=member['port']['mac_address'],
+                                    arp_ip_address=ip_address,
+                                    folder=pool['tenant_id'])
+                    if member['network']['provider:network_type'] == 'gre':
+                        tunnel_name = self._get_tunnel_name(member['network'])
+                        bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
+                                    mac_address=member['port']['mac_address'],
+                                    arp_ip_address=ip_address,
+                                    folder=pool['tenant_id'])
                 # avoids race condition:
                 # deletion of pool member objects must sync before we
                 # remove the selfip from the peer bigips.
@@ -792,8 +804,7 @@ class iControlDriver(object):
                     ctx.check_for_delete_subnets[subnet['id']] = \
                                                 self.SubnetInfo(
                                                     network,
-                                                    subnet,
-                                                    member['subnet_ports'])
+                                                    subnet)
             else:
                 just_added = False
                 if not found_existing_member:
@@ -858,6 +869,27 @@ class iControlDriver(object):
                                       " took %.5f secs" %
                                       (time() - start_time))
                         using_ratio = True
+
+                    if member['network']['provider:network_type'] == 'vxlan':
+                        tunnel_name = self._get_tunnel_name(member['network'])
+                        if 'vxlan_vteps' in member:
+                            for vtep in member['vxlan_vteps']:
+                                bigip.vxlan.add_fdb_entry(
+                                    tunnel_name=tunnel_name,
+                                    mac_address=member['port']['mac_address'],
+                                    vtep_ip_address=vtep,
+                                    arp_ip_address=ip_address,
+                                    folder=pool['tenant_id'])
+                    if member['network']['provider:network_type'] == 'gre':
+                        tunnel_name = self._get_tunnel_name(member['network'])
+                        if 'gre_vteps' in member:
+                            for vtep in member['gre_vteps']:
+                                bigip.l2gre.add_fdb_entry(
+                                    tunnel_name=tunnel_name,
+                                    mac_address=member['port']['mac_address'],
+                                    vtep_ip_address=vtep,
+                                    arp_ip_address=ip_address,
+                                    folder=pool['tenant_id'])
 
                     if on_last_bigip:
                         if member['status'] == plugin_const.PENDING_UPDATE:
@@ -937,7 +969,6 @@ class iControlDriver(object):
             snat_pool_name = None
             network = vip['network']
             subnet = vip['subnet']
-            subnet_ports = vip['subnet_ports']
 
             if self.conf.f5_global_routed_mode:
                 network_name = None
@@ -980,6 +1011,28 @@ class iControlDriver(object):
                 bigip.rule.delete(name=RPS_THROTTLE_RULE_PREFIX +
                                   vip['id'],
                                   folder=vip['tenant_id'])
+
+                if 'provider:network_type' in vip['network']:
+                    if network['provider:network_type'] == 'vxlan':
+                        if 'vxlan_vteps' in vip:
+                            tunnel_name = self._get_tunnel_name(network)
+                            for vtep in vip['vxlan_vteps']:
+                                bigip.vxlan.delete_fdb_entry(
+                                    tunnel_name=tunnel_name,
+                                    mac_address=self._get_tunnel_fake_mac(
+                                                            network, vtep),
+                                    arp_ip_address=None,
+                                    folder=vip['tenant_id'])
+                    if network['provider:network_type'] == 'gre':
+                        if 'gre_vteps' in vip:
+                            tunnel_name = self._get_tunnel_name(network)
+                            for vtep in vip['gre_vteps']:
+                                bigip.l2gre.delete_fdb_entry(
+                                    tunnel_name=tunnel_name,
+                                    mac_address=self._get_tunnel_fake_mac(
+                                                            network, vtep),
+                                    arp_ip_address=None,
+                                    folder=vip['tenant_id'])
                 # avoids race condition:
                 # deletion of vip address must sync before we
                 # remove the selfip from the peer bigips.
@@ -994,8 +1047,7 @@ class iControlDriver(object):
                    subnet['id'] not in ctx.do_not_delete_subnets:
                     ctx.check_for_delete_subnets[subnet['id']] = \
                                                 self.SubnetInfo(network,
-                                                                subnet,
-                                                                subnet_ports)
+                                                                subnet)
                 try:
                     if on_last_bigip:
                         self.plugin_rpc.vip_destroyed(vip['id'])
@@ -1256,6 +1308,32 @@ class iControlDriver(object):
                                 connection_limit=0,
                                 folder=pool['tenant_id'])
 
+                    if 'provider:network_type' in vip['network']:
+                        if network['provider:network_type'] == 'vxlan':
+                            if 'vxlan_vteps' in vip:
+                                tunnel_name = self._get_tunnel_name(network)
+                                for vtep in vip['vxlan_vteps']:
+                                    mac_address = self._get_tunnel_fake_mac(
+                                                                network, vtep)
+                                    bigip.vxlan.add_fdb_entry(
+                                              tunnel_name=tunnel_name,
+                                              mac_address=mac_address,
+                                              vtep_ip_address=vtep,
+                                              arp_ip_address=None,
+                                              folder=vip['tenant_id'])
+                        if network['provider:network_type'] == 'gre':
+                            if 'gre_vteps' in vip:
+                                tunnel_name = self._get_tunnel_name(network)
+                                for vtep in vip['gre_vteps']:
+                                    mac_address = self._get_tunnel_fake_mac(
+                                                                network, vtep)
+                                    bigip.l2gre.add_fdb_entry(
+                                              tunnel_name=tunnel_name,
+                                              mac_address=mac_address,
+                                              vtep_ip_address=vtep,
+                                              arp_ip_address=None,
+                                              folder=vip['tenant_id'])
+
                     if on_last_bigip:
                         self.plugin_rpc.update_vip_status(
                                             vip['id'],
@@ -1404,10 +1482,12 @@ class iControlDriver(object):
     def _remove_tenant(self, service, bigip):
         try:
             if self.conf.sync_mode == 'replication':
+                bigip.arp.delete_all(folder=service['pool']['tenant_id'])
                 bigip.route.delete_domain(
                             folder=service['pool']['tenant_id'])
-                bigip.system.delete_folder(folder='/uuid_' +
-                                             service['pool']['tenant_id'])
+                bigip.system.delete_folder(
+                            folder=bigip.decorate_folder(
+                                           service['pool']['tenant_id']))
             else:
                 # syncing the folder delete seems to cause problems,
                 # so try deleting it on each device
@@ -1424,11 +1504,14 @@ class iControlDriver(object):
                 # all domains must be gone before we attempt to delete
                 # the folder or it won't delete due to not being empty
                 for set_bigip in self.__bigips.values():
+                    set_bigip.arp.delete_all(
+                                        folder=service['pool']['tenant_id'])
                     set_bigip.route.delete_domain(
                             folder=service['pool']['tenant_id'])
                     set_bigip.system.set_folder('/Common')
-                    set_bigip.system.delete_folder(folder='/uuid_' +
-                                             service['pool']['tenant_id'])
+                    set_bigip.system.delete_folder(
+                            folder=set_bigip.decorate_folder(
+                                                service['pool']['tenant_id']))
                 # turn off sync on all devices so we can delete the folder
                 # on each device individually
                 for set_bigip in self.__bigips.values():
@@ -1474,9 +1557,7 @@ class iControlDriver(object):
                 network = service['vip']['network']
                 subnet = service['vip']['subnet']
                 self._assure_network(network,
-                    bigip, on_first_bigip, on_last_bigip,
-                    vxlan_endpoints=service['vxlan_endpoints'],
-                    gre_endpoints=service['gre_endpoints'])
+                    bigip, on_first_bigip, on_last_bigip)
                 self._assure_selfip_and_snats(service,
                                         self.SubnetInfo(network, subnet),
                                         bigip, on_first_bigip, on_last_bigip)
@@ -1487,9 +1568,7 @@ class iControlDriver(object):
                 subnet = member['subnet']
                 start_time = time()
                 self._assure_network(network, bigip,
-                                on_first_bigip, on_last_bigip,
-                                vxlan_endpoints=service['vxlan_endpoints'],
-                                gre_endpoints=service['gre_endpoints'])
+                                on_first_bigip, on_last_bigip)
                 if time() - start_time > .001:
                     LOG.debug("        _assure_device_service_networks:"
                               "assure_network took %.5f secs" %
@@ -1508,16 +1587,14 @@ class iControlDriver(object):
                 if not self.conf.f5_snat_mode:
                     self._assure_gateway_on_subnet(
                             self.SubnetInfo(network,
-                                            subnet,
-                                            member['subnet_ports']),
+                                            subnet),
                             bigip, on_first_bigip, on_last_bigip)
 
     # called for every bigip only in replication mode.
     # otherwise called once
-    def _assure_network(self, network, bigip, on_first_bigip, on_last_bigip,
-                        vxlan_endpoints=[], gre_endpoints=[]):
+    def _assure_network(self, network, bigip, on_first_bigip, on_last_bigip):
         if not network:
-            LOG.error(_('Attempted to delete a network with no id..skipping.'))
+            LOG.error(_('Attempted to assure a network with no id..skipping.'))
             return
         start_time = time()
         if self.conf.sync_mode == 'replication' and not on_first_bigip:
@@ -1528,18 +1605,14 @@ class iControlDriver(object):
         for bigip in bigips:
             if network['id'] in bigip.assured_networks:
                 continue
-            self._assure_device_network(network, bigip,
-                                  vxlan_endpoints, gre_endpoints)
+            self._assure_device_network(network, bigip)
             bigip.assured_networks.append(network['id'])
         if time() - start_time > .001:
             LOG.debug("        assure network took %.5f secs" %
                            (time() - start_time))
 
     # called for every bigip in every sync mode
-    @log.log
-    def _assure_device_network(self, network, bigip,
-                         vxlan_endpoints=[],
-                         gre_endpoints=[]):
+    def _assure_device_network(self, network, bigip):
 
         # setup all needed L2 network segments
         if network['provider:network_type'] == 'vlan':
@@ -1614,17 +1687,7 @@ class iControlDriver(object):
                                  self_ip_address=bigip.local_ip,
                                  vxlanid=network['provider:segmentation_id'],
                                  folder=network_folder)
-            # for each known vtep_endpoints to this tunnel
-            for vtep_ip in vxlan_endpoints:
-                if not vtep_ip == bigip.local_ip:
-                    # create fake fdb record to start broadcasts
-                    endpoint_mac = self._get_tunnel_fake_mac(network, vtep_ip)
-                    LOG.debug(_('VXLAN::adding fdb %s:%s to vtep %s'
-                                % (vtep_ip, endpoint_mac, bigip.local_ip)))
-                    bigip.vxlan.add_fdb_entry(tunnel_name=tunnel_name,
-                                              mac_address=endpoint_mac,
-                                              vtep_ip_address=vtep_ip,
-                                              folder=network_folder)
+
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.l2pop:
@@ -1661,17 +1724,7 @@ class iControlDriver(object):
                                  self_ip_address=bigip.local_ip,
                                  greid=network['provider:segmentation_id'],
                                  folder=network_folder)
-            # for each known vtep_endpoints to this tunnel
-            for vtep_ip in gre_endpoints:
-                if not vtep_ip == bigip.local_ip:
-                    # create fake fdb record to start broadcasts
-                    endpoint_mac = self._get_tunnel_fake_mac(network, vtep_ip)
-                    LOG.debug(_('L2GRE::adding fdb %s:%s to vtep %s'
-                                % (vtep_ip, endpoint_mac, bigip.local_ip)))
-                    bigip.l2gre.add_fdb_entry(tunnel_name=tunnel_name,
-                                              mac_address=endpoint_mac,
-                                              vtep_ip_address=vtep_ip,
-                                              folder=network_folder)
+
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.l2pop:
@@ -1697,7 +1750,6 @@ class iControlDriver(object):
 
     # called for every bigip only in replication mode.
     # otherwise called once
-    @log.log
     def _assure_selfip_and_snats(self, service, subnetinfo,
                                  bigip, on_first_bigip, on_last_bigip):
 
@@ -1770,7 +1822,6 @@ class iControlDriver(object):
                                      pool['tenant_id'])
 
     # called for every bigip
-    @log.log
     def _create_local_selfip(self,
                              bigip,
                              subnet,
@@ -1971,7 +2022,6 @@ class iControlDriver(object):
                         ' for network with no id.. skipping.'))
             return
         subnet = subnetinfo.subnet
-        subnet_ports = subnetinfo.subnet_ports
 
         # Sync special case:
         # In replication mode, even though _assure_floating_default_gateway is
@@ -1985,21 +2035,6 @@ class iControlDriver(object):
             # we already did this work
             return
 
-        # Do we already have a port with the gateway_ip belonging
-        # to this agent's host?
-        #
-        # This is another way to check if you want to iterate
-        # through all ports owned by this device
-        #
-        # for port in subnet_ports:
-        #    if not need_port_for_gateway:
-        #        break
-        #    for fixed_ips in port['fixed_ips']:
-        #        if fixed_ips['ip_address'] == \
-        #            subnet['gateway_ip']:
-        #            need_port_for_gateway = False
-        #            break
-
         # Create a name for the port and for the IP Forwarding Virtual Server
         # as well as the floating Self IP which will answer ARP for the members
         gw_name = "gw-" + subnet['id']
@@ -2009,7 +2044,7 @@ class iControlDriver(object):
         if len(ports) < 1:
             need_port_for_gateway = True
 
-        # There was not port on this agent's host, so get one from Neutron
+        # There was no port on this agent's host, so get one from Neutron
         if need_port_for_gateway:
             try:
                 new_port = \
@@ -2018,7 +2053,6 @@ class iControlDriver(object):
                             mac_address=None,
                             name=gw_name,
                             ip_address=subnet['gateway_ip'])
-                subnet_ports.append(new_port)
             except Exception as exc:
                 ermsg = 'Invalid default gateway for subnet %s:%s - %s.' \
                     % (subnet['id'],
@@ -2291,7 +2325,6 @@ class iControlDriver(object):
             ' for network with no id... skipping.'))
             return
         subnet = subnetinfo.subnet
-        subnet_ports = subnetinfo.subnet_ports
         # Create a name for the port and for the IP Forwarding Virtual Server
         # as well as the floating Self IP which will answer ARP for the members
         gw_name = "gw-" + subnet['id']
@@ -2312,18 +2345,12 @@ class iControlDriver(object):
                                     folder=network_folder)
 
         if on_last_bigip:
-            # remove neutron default gateway port
-            gateway_port_id = None
-            for port in subnet_ports:
-                if gateway_port_id:
-                    break
-                for fixed_ips in port['fixed_ips']:
-                    if str(fixed_ips['ip_address']).strip() == \
-                            str(subnet['gateway_ip']).strip():
-                        gateway_port_id = port['id']
-                        break
-
-            # There was not port on this agent's host, so get one from Neutron
+            ports = self.plugin_rpc.get_port_by_name(port_name=gw_name)
+            if len(ports) < 1:
+                gateway_port_id = None
+            else:
+                gateway_port_id = ports[0]['id']
+            # There was a port on this agent's host, so remove it
             if gateway_port_id:
                 try:
                     self.plugin_rpc.delete_port(port_id=gateway_port_id,
