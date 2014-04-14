@@ -32,6 +32,8 @@ class BigIQ(object):
         request = urllib2.Request('https://' + hostname + '/mgmt/shared/echo')        
         response = urllib2.urlopen(request)
         
+        # requests lib
+        
         # The '_' looks to have a global def of gettext.gettext(message)
         # gettext is used for internationalization and localization
-        LOG.info(_('Echo worker response: %s' % response.read()))
+        LOG.debug(_('Echo worker response: %s' % response.read()))

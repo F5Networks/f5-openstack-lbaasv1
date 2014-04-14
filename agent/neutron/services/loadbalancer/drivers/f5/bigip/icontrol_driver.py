@@ -10,6 +10,8 @@ from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
 
+from f5.bigiq import bigiq as f5_bigiq
+
 from eventlet import greenthread
 
 import uuid
@@ -82,6 +84,21 @@ OPTS = [
         'icontrol_connection_retry_interval',
         default=10,
         help=_('How many seconds to wait between retry connection attempts'),
+    ),
+    cfg.StrOpt(
+        'bigiq_hostname',
+        help=_('The hostname (name of IP address) to use for the BIG-IQ host'),
+    ),
+    cfg.StrOpt(
+        'bigiq_admin_username',
+        default='admin',
+        help=_('The admin username to use for BIG-IQ access'),
+    ),
+    cfg.StrOpt(
+        'bigiq_admin_password',
+        default='admin',
+        secret=True,
+        help=_('The admin password to use for BIG-IQ access')
     )
 ]
 
@@ -209,9 +226,12 @@ def check_monitor_delete(service):
 
 class iControlDriver(object):
 
-    # containers
+    # BIG-IP containers
     __bigips = {}
     __traffic_groups = []
+    
+    # BIG-IQ containers
+    __bigiqs = []
 
     # mappings
     __vips_to_traffic_group = {}
@@ -260,6 +280,7 @@ class iControlDriver(object):
                                                     self.interface_mapping
 
         self._init_connection()
+        self._init_bigiq_connections()
 
         LOG.debug(_('iControlDriver initialized to %d hosts with username:%s'
                     % (len(self.__bigips), self.username)))
@@ -2485,6 +2506,28 @@ class iControlDriver(object):
         rule_text += " }\n"
         rule_text += "}\n"
         return rule_text
+
+    def _init_bigiq_connections(self):
+        if self.conf.bigiq_hostname:
+            try:
+                if not self.conf.bigiq_admin_username:
+                    raise InvalidConfigurationOption(
+                                opt_name='bigiq_admin_username',
+                                opt_value='valid username')
+                    
+                if not self.conf.bigiq_admin_password:
+                    raise InvalidConfigurationOption(
+                                opt_name='bigiq_admin_password',
+                                opt_value='valid password')
+                
+                bigiq = f5_bigiq.BigIQ(
+                                self.conf.bigiq_hostname,
+                                self.conf.bigiq_admin_username,
+                                self.conf.bigiq_admin_password)
+                
+                self.__bigiqs.append(bigiq)
+            except Exception as exc:
+                LOG.error(_('Could not communicate with BIG-IQ device: %s' % exc.message))
 
     def _init_connection(self):
         if not self.connected:
