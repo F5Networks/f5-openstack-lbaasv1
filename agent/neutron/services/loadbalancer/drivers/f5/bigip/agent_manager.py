@@ -1,4 +1,5 @@
 import weakref
+import datetime
 
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
@@ -166,6 +167,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.driver.context = self.context
         # create the cache of provisioned services
         self.cache = LogicalServiceCache()
+        #
+        self.last_resync = datetime.datetime.now()
         # setup all rpc and callback objects
         self._setup_rpc()
         # cause a sync of what Neutron believes
@@ -248,6 +251,13 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @periodic_task.periodic_task
     def periodic_resync(self, context):
+        now = datetime.datetime.now()
+        if (now - self.last_resync).seconds > \
+                            constants.RESYNC_INTERVAL:
+            LOG.debug('forcing resync of services on timer.')
+            self.needs_resync = True
+            self.last_resync = now
+        # resync if we need to
         if self.needs_resync:
             self.needs_resync = False
             if self.tunnel_sync():

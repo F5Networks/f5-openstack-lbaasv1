@@ -1,3 +1,6 @@
+# Service resync interval
+RESYNC_INTERVAL = 300
+
 # Topic for tunnel notifications between the plugin and agent
 TUNNEL = 'tunnel'
 

@@ -1,4 +1,6 @@
 import uuid
+import netaddr
+import datetime
 
 from oslo.config import cfg
 
@@ -47,6 +49,7 @@ cfg.CONF.register_opts(OPTS)
 TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
 TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'
 VIF_TYPE = 'f5'
+NET_CACHE_SECONDS = 1800
 
 
 class LoadBalancerCallbacks(object):
@@ -58,6 +61,8 @@ class LoadBalancerCallbacks(object):
         self.plugin = plugin
         self.net_cache = {}
         self.subnet_cache = {}
+
+        self.last_cache_update = datetime.datetime.now()
 
     def create_rpc_dispatcher(self):
         return q_rpc.PluginRpcDispatcher(
@@ -93,6 +98,12 @@ class LoadBalancerCallbacks(object):
     def get_service_by_pool_id(self, context, pool_id=None,
                             activate=False, host=None,
                            **kwargs):
+        # invalidate cache if it is too old
+        if  (datetime.datetime.now() - self.last_cache_update).seconds \
+                                              > NET_CACHE_SECONDS:
+            self.net_cache = {}
+            self.subnet_cache = {}
+
         with context.session.begin(subtransactions=True):
             qry = context.session.query(ldb.Pool)
             qry = qry.filter_by(id=pool_id)
@@ -143,8 +154,12 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port'] = (
                     self.plugin._core_plugin._make_port_dict(pool.vip.port)
                 )
-                retval['vip']['network'] = \
-                 self.plugin._core_plugin.get_network(context,
+                if retval['vip']['port']['network_id'] in self.net_cache:
+                    retval['vip']['network'] = \
+                         self.net_cache[retval['vip']['port']['network_id']]
+                else:
+                    retval['vip']['network'] = \
+                         self.plugin._core_plugin.get_network(context,
                                         retval['vip']['port']['network_id'])
                 retval['vip']['vxlan_vteps'] = []
                 retval['vip']['gre_vteps'] = []
@@ -203,8 +218,8 @@ class LoadBalancerCallbacks(object):
                 retval['vip']['port'] = {}
                 retval['vip']['port']['network'] = None
                 retval['vip']['port']['subnet'] = None
-            retval['members'] = []
 
+            retval['members'] = []
             adminctx = get_admin_context()
             for m in pool.members:
                 member = self.plugin._make_member_dict(m)
@@ -296,9 +311,105 @@ class LoadBalancerCallbacks(object):
                         retval['members'].append(member)
                         break
                     else:
+                        LOG.debug(_('member without port for address %s'
+                                    % member['address']))
+                        # member network / subnet not set
                         member['network'] = None
                         member['subnet'] = None
                         member['port'] = None
+                        # Let's see if we have it cached.
+                        nets_matched = []
+                        na_add = netaddr.IPAddress(member['address'])
+
+                        for subnet in self.subnet_cache:
+                            c_subnet = self.subnet_cache[subnet]
+                            na_net = netaddr.IPNetwork(c_subnet['cidr'])
+                            if na_add in na_net:
+                                if c_subnet['tenant_id'] == \
+                                   member['tenant_id']:
+                                    LOG.debug(_('%s in subnet %s from cache'
+                                            % (member['address'], subnet)))
+                                    member['subnet'] = \
+                                        self.set_member_subnet_info(adminctx,
+                                                                  host,
+                                                                  member,
+                                                                  subnet)
+                                    if c_subnet['network_id'] in \
+                                                              self.net_cache:
+                                        member['network'] = \
+                                         self.net_cache[c_subnet['network_id']]
+                                    break
+                                else:
+                                    nets_matched.append(subnet)
+                        if not member['subnet']:
+                            # did we only have one match - use it
+                            if len(nets_matched) == 1:
+                                LOG.debug(_('%s in subnet %s from cache'
+                                       % (member['address'], nets_matched[0])))
+                                member['subnet'] = \
+                                  self.set_member_subnet_info(adminctx,
+                                                              host,
+                                                              member,
+                                                              nets_matched[0])
+                                if c_subnet['network_id'] in self.net_cache:
+                                        member['network'] = \
+                                         self.net_cache[c_subnet['network_id']]
+                        # found a subnet, now get a network
+                        if member['subnet'] and (not member['network']):
+                            member['network'] = \
+                                self.plugin._core_plugin.get_network(adminctx,
+                                                member['subnet']['network_id'])
+                            self.net_cache[member['network']['id']] = \
+                                                              member['network']
+
+                        # No cached values either - let's search
+                        if not member['subnet']:
+                            LOG.debug(_('no match for %s querying all subnets!'
+                                        % member['address']))
+                            subnets = \
+                            self.plugin._core_plugin._get_all_subnets(adminctx)
+                            for subnet in subnets:
+                                subnet_dict = \
+                             self.plugin._core_plugin._make_subnet_dict(subnet)
+                                self.subnet_cache[subnet_dict['id']] = \
+                                                                    subnet_dict
+                                na_net = netaddr.IPNetwork(subnet_dict['cidr'])
+                                if na_add in na_net:
+                                    if c_subnet['tenant_id'] == \
+                                       member['tenant_id']:
+                                        LOG.debug(_(
+                                                '%s in subnet %s from cache'
+                                                % (member['address'],
+                                                subnet['id'])))
+                                        member['subnet'] = subnet_dict
+                                        if c_subnet['network_id'] in \
+                                                                self.net_cache:
+                                            member['network'] = \
+                                         self.net_cache[c_subnet['network_id']]
+                                    else:
+                                        nets_matched.append(subnet_dict)
+                            if not member['subnet']:
+                                # did we only have one match - use it
+                                if len(nets_matched) == 1:
+                                    LOG.debug(_('%s in subnet %s from cache'
+                                                % (member['address'],
+                                                   nets_matched[0]['id'])))
+                                    member['subnet'] = nets_matched[0]
+                                    if c_subnet['network_id'] in \
+                                                             self.net_cache:
+                                            member['network'] = \
+                                      self.net_cache[c_subnet['network_id']]
+                            # found a subnet, now get a network
+                            if member['subnet'] and (not member['network']):
+                                member['network'] = \
+                                self.plugin._core_plugin.get_network(adminctx,
+                                                member['subnet']['network_id'])
+                                self.net_cache[member['network']['id']] = \
+                                                              member['network']
+                            # If it member subnet is still None...
+                            # someone deleted the instance (not port)
+                            # and someone deleted the subnet. At least
+                            # we filled the cache.
                         retval['members'].append(member)
 
             retval['health_monitors'] = []
