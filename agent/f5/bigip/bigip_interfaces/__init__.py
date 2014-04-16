@@ -11,7 +11,21 @@ def prefixed(name):
 
 
 def icontrol_folder(method):
-    """Decorator to put the right folder on iControl object."""
+    """
+    Returns the iControl folder + object name if
+    a kwarg name is 'name' or else ends in '_name'.
+
+    The folder and the name will be prefixed with the global
+    prefix OBJ_PREFIX.
+
+    It also sets the iControl active folder to folder kwarg
+    assuring get_list returns just the appopriate objects
+    for the specific administrative partition. It does this
+    for kwarg named 'name', ends in '_name', or 'named_address'.
+
+    If the value in the name already includes '/Common/' the
+    decoration honors that full path.
+    """
     def wrapper(*args, **kwargs):
         instance = args[0]
         if 'folder' in kwargs:
@@ -70,22 +84,26 @@ def icontrol_folder(method):
 
 
 def icontrol_rest_folder(method):
-    """Decorator to put the right folder on iControl object."""
+    """
+    Returns iControl REST folder + object name if
+    a kwarg name is 'name' or else ends in '_name'.
+
+    The folder and the name will be prefixed with the global
+    prefix OBJ_PREFIX.
+    """
     def wrapper(*args, **kwargs):
         if 'folder' in kwargs:
             if kwargs['folder'].find('Common') < 0:
                 kwargs['folder'] = \
                     kwargs['folder'].replace('~', '').replace('/', '')
-                if not kwargs['folder'].startswith(OBJ_PREFIX):
-                    kwargs['folder'] = OBJ_PREFIX + kwargs['folder']
+                kwargs['folder'] = prefixed(kwargs['folder'])
         if 'name' in kwargs and kwargs['name']:
             if kwargs['name'].find('/') > -1:
                 kwargs['name'] = os.path.basename(kwargs['name'])
             if kwargs['name'].find('~') > -1:
                 path_parts = kwargs['name'].split('~')
                 kwargs['name'] = path_parts[-1]
-            if not kwargs['name'].startswith(OBJ_PREFIX):
-                kwargs['name'] = OBJ_PREFIX + kwargs['name']
+            kwargs['name'] = prefixed(kwargs['name'])
         for name in kwargs:
             if name.find('_name') > 0 and kwargs[name]:
                 if kwargs[name].find('/') > -1:
@@ -93,26 +111,55 @@ def icontrol_rest_folder(method):
                 if kwargs[name].find('~') > -1:
                     path_parts = kwargs[name].split('~')
                     kwargs[name] = path_parts[-1]
-                if not kwargs[name].startswith(OBJ_PREFIX):
-                    kwargs[name] = OBJ_PREFIX + kwargs[name]
+                kwargs[name] = prefixed(kwargs[name])
         return method(*args, **kwargs)
     return wrapper
 
 
 def domain_address(method):
-    """Decorator to put the right route domain decoration an address."""
+    """
+    Validates the format of IPv4 or IPv6 address values and
+    puts the right route domain decoration on address
+    values with kwargs named 'ip_address' or else ending
+    in '_ip_address'. Handles single values or a list.
+
+    Netmask formats are validated too for any kwarg with name
+    including 'mask'. These can be single values or a list.
+
+    It will discover the route domain ID based upon kwarg values
+    with the name 'folder' or else with the name ending '_folder'
+    where the prefix to the '_folder' name matches the characters
+    in front of the '_ip_address' of the address name.
+
+    It is assuming that there is only one route domain for the
+    discovered folder.
+
+    The route domain decoration is by-passed in one of two
+    conditions:
+
+    1) the bigip object route_domain_required attribute is False
+    2) the address value passed in has a '%' in it already
+
+    IP address validation always takes place.
+
+    This decorator assume the requirement for an object name
+    prefix for folders.  It will prepend the OBJ_PREFIX to
+    all folders.
+    """
     def wrapper(*args, **kwargs):
         instance = args[0]
         if not instance.bigip.route_domain_required:
             return method(*args, **kwargs)
 
         folder = 'Common'
+        # discover the folder add global prefix
         if 'folder' in kwargs:
             folder = os.path.basename(kwargs['folder'])
             if not folder == 'Common':
-                if not folder.startswith(OBJ_PREFIX):
-                    folder = OBJ_PREFIX + folder
+                folder = prefixed(folder)
+        # iterate through kwargs
         for name in kwargs:
+            # validate netmask IP formatting
             if name.find('mask') > -1:
                 if isinstance(kwargs[name], list):
                     for mask in kwargs[name]:
@@ -120,58 +167,63 @@ def domain_address(method):
                 else:
                     if kwargs[name]:
                         netaddr.IPAddress(kwargs[name])
+            # find any argument ending in ip_address
             if name.find('ip_address') > -1:
+                # if it has a value process the route domain ID
                 if kwargs[name]:
+
+                    # if this name has _ip_address in it, check
+                    # for _folder argument with the same prefix.
+                    # if found use that argument to overwrite
+                    # the folder argument
                     if name.find('_ip_address') > -1:
                         name_prefix = name[0:name.index('_ip_address')]
                         specific_folder_name = name_prefix + "_folder"
+                        # do we also find another kwargs with a
+                        # folder name for this _ip_address argument
                         if specific_folder_name in kwargs:
                             folder = kwargs[specific_folder_name]
-                    if instance.bigip.route_domain_required:
-                        if isinstance(kwargs[name], list):
-                            return_list = []
-                            for address in kwargs[name]:
-                                decorator_index = address.find('%')
-                                if decorator_index < 0:
-                                    netaddr.IPAddress(address)
-                                    rid = instance.bigip.get_domain_index(
-                                                                     folder)
+
+                    # handle if they passed in a list of value
+                    if isinstance(kwargs[name], list):
+                        return_list = []
+                        for address in kwargs[name]:
+                            decorator_index = address.find('%')
+                            if decorator_index < 0:
+                                # validate address format
+                                netaddr.IPAddress(address)
+                                if instance.bigip.route_domain_required:
+                                    # discover route domain
+                                    rid = \
+                                      instance.bigip.get_domain_index(folder)
+                                    # decorate address
                                     if rid > 0:
                                         address = address + "%" + str(rid)
-                                else:
-                                    netaddr.IPAddress(
-                                                   address[:decorator_index])
-                                    if address.find('%0') > 0:
-                                        address = address.replace('%0', '')
-                                return_list.append(address)
-                            kwargs[name] = return_list
-                        else:
-                            decorator_index = kwargs[name].find('%')
-                            if decorator_index < 0:
-                                netaddr.IPAddress(kwargs[name])
+                            else:
+                                # validate_address format
+                                netaddr.IPAddress(
+                                               address[:decorator_index])
+                            return_list.append(address)
+                        # overwrite argument value with now decorated
+                        # values list
+                        kwargs[name] = return_list
+                    else:
+                        # handle an individual value
+                        decorator_index = kwargs[name].find('%')
+                        if decorator_index < 0:
+                            # validate address
+                            netaddr.IPAddress(kwargs[name])
+                            if instance.bigip.route_domain_required:
+                                # discover route domain
                                 rid = instance.bigip.get_domain_index(folder)
+                                # decorate address
                                 if rid > 0:
                                     kwargs[name] = kwargs[name] + \
-                                                            "%" + str(rid)
-                            else:
-                                address = kwargs[name][:decorator_index]
-                                netaddr.IPAddress(address)
-                                if kwargs[name].find('%0') > 0:
-                                    kwargs[name] = \
-                                               kwargs[name].replace('%0', '')
-                    else:
-                        if isinstance(kwargs[name], list):
-                            for i in range(len(kwargs[name])):
-                                address = kwargs[name][i]
-                                decorator_index = address.find('%')
-                                if decorator_index < 0:
-                                    kwargs[name][i] = address[:decorator_index]
-                                netaddr.IPAddress(kwargs[name][i])
+                                                        "%" + str(rid)
                         else:
-                            decorator_index = kwargs[name].find('%')
-                            if decorator_index < 0:
-                                kwargs[name] = kwargs[name][:decorator_index]
-                            netaddr.IPAddress(kwargs[name])
+                            # validate address
+                            address = kwargs[name][:decorator_index]
+                            netaddr.IPAddress(address)
         return method(*args, **kwargs)
     return wrapper
 
@@ -179,18 +231,14 @@ def domain_address(method):
 def decorate_name(name=None, folder='Common'):
     folder = os.path.basename(folder)
     if not folder == 'Common':
-        if not folder.startswith(OBJ_PREFIX):
-            folder = OBJ_PREFIX + folder
-
+        folder = prefixed(folder)
     if name.startswith('/Common/'):
         name = os.path.basename(name)
-        if not name.startswith(OBJ_PREFIX):
-            name = OBJ_PREFIX + name
+        name = prefixed(name)
         name = '/Common/' + name
     else:
         name = os.path.basename(name)
-        if not name.startswith(OBJ_PREFIX):
-            name = OBJ_PREFIX + name
+        name = prefixed(name)
         name = '/' + folder + '/' + name
     return name
 

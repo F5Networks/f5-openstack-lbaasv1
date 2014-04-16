@@ -53,6 +53,9 @@ class ARP(object):
     @domain_address
     def create(self, ip_address=None, mac_address=None, folder='Common'):
         if not self.exists(ip_address=ip_address, folder=folder):
+            # ARP entries can't handle %0 on them like other
+            # TMOS objects.
+            ip_address = self._remove_route_domain_zero(ip_address)
             entry = \
               self.net_arp.typefactory.create('Networking.ARP.StaticEntry')
             entry.address = ip_address
@@ -77,6 +80,9 @@ class ARP(object):
     @domain_address
     def delete(self, ip_address=None, folder='Common'):
         if self.exists(ip_address=ip_address, folder=folder):
+            # ARP entries can't handle %0 on them like other
+            # TMOS objects.
+            ip_address = self._remove_route_domain_zero(ip_address)
             self.net_arp.delete_static_entry_v2(
                                 ['/' + folder + '/' + ip_address])
 
@@ -138,8 +144,17 @@ class ARP(object):
     @icontrol_folder
     @domain_address
     def exists(self, ip_address=None, folder='Common'):
+        # ARP entries can't handle %0 on them like other
+        # TMOS objects.
+        ip_address = self._remove_route_domain_zero(ip_address)
         if '/' + folder + '/' + ip_address in \
                   self.net_arp.get_static_entry_list():
             return True
         else:
             return False
+
+    def _remove_route_domain_zero(self, ip_address):
+        decorator_index = ip_address.find('%0')
+        if decorator_index > 0:
+            ip_address = ip_address[:decorator_index]
+        return ip_address
