@@ -1,11 +1,11 @@
-from f5.common.logger import Log
-from f5.bigip.bigip_interfaces import icontrol_rest_folder
+#from f5.common.logger import Log
+#from f5.bigip.bigip_interfaces import icontrol_rest_folder
 from f5.bigip.bigip_interfaces import icontrol_folder
 from f5.bigip.bigip_interfaces import domain_address
 
-import json
-import requests
-import urllib
+#import json
+#import requests
+#import urllib
 
 
 class ARP(object):
@@ -31,7 +31,8 @@ class ARP(object):
     #@icontrol_rest_folder
     #@domain_address
     #def create(self, ip_address=None, mac_address=None, folder='Common'):
-    #    Log.debug('ARP::create',"ip_address=%s, mac_address=%s, folder=%s" % (ip_address, mac_address, folder))
+    #    Log.debug('ARP::create',"ip_address=%s, mac_address=%s, folder=%s"
+    #              % (ip_address, mac_address, folder))
     #    if not self.exists(ip_address=ip_address, folder=folder):
     #        payload = dict()
     #        payload['name'] = ip_address

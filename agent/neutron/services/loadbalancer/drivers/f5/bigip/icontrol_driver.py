@@ -1,5 +1,4 @@
 from oslo.config import cfg
-from neutron.common import log
 from neutron.common import constants as q_const
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
@@ -9,8 +8,6 @@ from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
-
-from f5.bigiq import bigiq as f5_bigiq
 
 from eventlet import greenthread
 
@@ -84,21 +81,6 @@ OPTS = [
         'icontrol_connection_retry_interval',
         default=10,
         help=_('How many seconds to wait between retry connection attempts'),
-    ),
-    cfg.StrOpt(
-        'bigiq_hostname',
-        help=_('The hostname (name of IP address) to use for the BIG-IQ host'),
-    ),
-    cfg.StrOpt(
-        'bigiq_admin_username',
-        default='admin',
-        help=_('The admin username to use for BIG-IQ access'),
-    ),
-    cfg.StrOpt(
-        'bigiq_admin_password',
-        default='admin',
-        secret=True,
-        help=_('The admin password to use for BIG-IQ access')
     )
 ]
 
@@ -229,9 +211,6 @@ class iControlDriver(object):
     # BIG-IP containers
     __bigips = {}
     __traffic_groups = []
-    
-    # BIG-IQ containers
-    __bigiqs = []
 
     # mappings
     __vips_to_traffic_group = {}
@@ -280,7 +259,6 @@ class iControlDriver(object):
                                                     self.interface_mapping
 
         self._init_connection()
-        self._init_bigiq_connections()
 
         LOG.debug(_('iControlDriver initialized to %d hosts with username:%s'
                     % (len(self.__bigips), self.username)))
@@ -792,11 +770,24 @@ class iControlDriver(object):
 
             # Delete those pending delete
             if member['status'] == plugin_const.PENDING_DELETE:
-                bigip.pool.remove_member(name=pool['id'],
+                if not network:
+                    # Seems the pool member network could not
+                    # be populated.  Try deleting both on a
+                    # shared network and a tenant specific
+                    bigip.pool.remove_member(name=pool['id'],
+                                  ip_address=ip_address + '%0',
+                                  port=int(member['protocol_port']),
+                                  folder=pool['tenant_id'])
+                    bigip.pool.remove_member(name=pool['id'],
                                   ip_address=ip_address,
                                   port=int(member['protocol_port']),
                                   folder=pool['tenant_id'])
-                if 'provider:network_type' in member['network']:
+                else:
+                    bigip.pool.remove_member(name=pool['id'],
+                                      ip_address=ip_address,
+                                      port=int(member['protocol_port']),
+                                      folder=pool['tenant_id'])
+                if network and 'provider:network_type' in member['network']:
                     if member['network']['provider:network_type'] == 'vxlan':
                         tunnel_name = self._get_tunnel_name(member['network'])
                         bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
@@ -2074,6 +2065,8 @@ class iControlDriver(object):
                             mac_address=None,
                             name=gw_name,
                             ip_address=subnet['gateway_ip'])
+                LOG.info(_('gateway IP for subnet %s will be port %'
+                            % (subnet['id'], new_port['id'])))
             except Exception as exc:
                 ermsg = 'Invalid default gateway for subnet %s:%s - %s.' \
                     % (subnet['id'],
@@ -2507,28 +2500,6 @@ class iControlDriver(object):
         rule_text += "}\n"
         return rule_text
 
-    def _init_bigiq_connections(self):
-        if self.conf.bigiq_hostname:
-            try:
-                if not self.conf.bigiq_admin_username:
-                    raise InvalidConfigurationOption(
-                                opt_name='bigiq_admin_username',
-                                opt_value='valid username')
-                    
-                if not self.conf.bigiq_admin_password:
-                    raise InvalidConfigurationOption(
-                                opt_name='bigiq_admin_password',
-                                opt_value='valid password')
-                
-                bigiq = f5_bigiq.BigIQ(
-                                self.conf.bigiq_hostname,
-                                self.conf.bigiq_admin_username,
-                                self.conf.bigiq_admin_password)
-                
-                self.__bigiqs.append(bigiq)
-            except Exception as exc:
-                LOG.error(_('Could not communicate with BIG-IQ device: %s' % exc.message))
-
     def _init_connection(self):
         if not self.connected:
             try:
@@ -2567,6 +2538,21 @@ class iControlDriver(object):
                                         5,
                                         self.conf.use_namespaces,
                                         self.conf.f5_route_domain_strictness)
+
+                major_version = first_bigip.system.get_major_version()
+                if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+                    raise f5ex.MajorVersionValidateFailed(
+                                'device %s must be at least TMOS %s.%s'
+                                % (self.hostnames[0],
+                                   f5const.MIN_TMOS_MAJOR_VERSION,
+                                   f5const.MIN_TMOS_MINOR_VERSION))
+                minor_version = first_bigip.system.get_minor_version()
+                if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+                    raise f5ex.MinorVersionValidateFailed(
+                            'device %s must be at least TMOS %s.%s'
+                            % (self.hostnames[0],
+                               f5const.MIN_TMOS_MAJOR_VERSION,
+                               f5const.MIN_TMOS_MINOR_VERSION))
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
@@ -2607,6 +2593,21 @@ class iControlDriver(object):
                                         self.conf.f5_route_domain_strictness)
                     self.__bigips[host] = hostbigip
 
+                    major_version = hostbigip.system.get_major_version()
+                    if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
+                        raise f5ex.MajorVersionValidateFailed(
+                                    'device %s must be at least TMOS %s.%s'
+                                    % (host,
+                                       f5const.MIN_TMOS_MAJOR_VERSION,
+                                       f5const.MIN_TMOS_MINOR_VERSION))
+                    minor_version = hostbigip.system.get_minor_version()
+                    if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
+                        raise f5ex.MinorVersionValidateFailed(
+                                'device %s must be at least TMOS %s.%s'
+                                % (host,
+                                   f5const.MIN_TMOS_MAJOR_VERSION,
+                                   f5const.MIN_TMOS_MINOR_VERSION))
+
                 #if self.conf.debug and \
                 #   (f5const.LOG_LEVEL == std_logging.DEBUG):
                 #    sudslog = std_logging.getLogger('suds.client')
@@ -2641,21 +2642,6 @@ class iControlDriver(object):
 
                 for host in self.__bigips:
                     hostbigip = self.__bigips[host]
-                    major_version = hostbigip.system.get_major_version()
-                    if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
-                        raise f5ex.MajorVersionValidateFailed(
-                                'device %s must be at least TMOS %s.%s'
-                                % (host,
-                                   f5const.MIN_TMOS_MAJOR_VERSION,
-                                   f5const.MIN_TMOS_MINOR_VERSION))
-                    minor_version = hostbigip.system.get_minor_version()
-                    if minor_version < f5const.MIN_TMOS_MINOR_VERSION:
-                        raise f5ex.MinorVersionValidateFailed(
-                                'device %s must be at least TMOS %s.%s'
-                                % (host,
-                                   f5const.MIN_TMOS_MAJOR_VERSION,
-                                   f5const.MIN_TMOS_MINOR_VERSION))
-
                     hostbigip.device_name = hostbigip.device.get_device_name()
 
                     if not self.conf.f5_global_routed_mode:

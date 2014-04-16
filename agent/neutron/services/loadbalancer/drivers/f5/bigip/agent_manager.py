@@ -388,7 +388,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver.create_pool(pool, service)
             self.cache.put(service)
-        except IOError as e:
+        except Exception as e:
             message = 'could not create pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
                                                plugin_const.ERROR,
@@ -412,7 +412,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver.delete_pool(pool, service)
             self.cache.remove_by_pool_id(pool['id'])
-        except IOError as e:
+        except Exception as e:
             message = 'could not delete pool:' + e.message
             self.plugin_rpc.update_pool_status(pool['id'],
                                               plugin_const.ERROR,

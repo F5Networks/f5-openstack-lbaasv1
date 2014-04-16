@@ -1,9 +1,9 @@
-from f5.common.logger import Log
+# from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 import json
 import requests
-import urllib
+# import urllib
 
 
 class L2GRE(object):
@@ -189,7 +189,7 @@ class L2GRE(object):
 
     @icontrol_rest_folder
     def get_profiles(self, folder='Common'):
-        request_url = self.icr_url + '/net/tunnels/vxlan'
+        request_url = self.icr_url + '/net/tunnels/gre'
         request_filter = 'partition eq ' + folder
         request_url += '?$filter=' + request_filter
         response = self.icr_session.get(request_url)
@@ -204,7 +204,7 @@ class L2GRE(object):
 
     @icontrol_rest_folder
     def profile_exists(self, name=None, folder='Common'):
-        request_url = self.icr_url + '/net/tunnels/vxlan/'
+        request_url = self.icr_url + '/net/tunnels/gre/'
         request_url += '~' + folder + '~' + name
 
         response = self.icr_session.get(request_url)
