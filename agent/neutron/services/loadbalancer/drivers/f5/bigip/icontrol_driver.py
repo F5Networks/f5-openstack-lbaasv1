@@ -378,7 +378,7 @@ class iControlDriver(object):
         # it can result in the process of a stats request after the pool
         # and tenant are long gone
         if not bigip.system.folder_exists(
-                '/uuid_' + service['pool']['tenant_id']):
+                bigip_interfaces.OBJ_PREFIX + service['pool']['tenant_id']):
             return None
 
         pool = service['pool']
@@ -774,6 +774,8 @@ class iControlDriver(object):
                     # Seems the pool member network could not
                     # be populated.  Try deleting both on a
                     # shared network and a tenant specific
+                    LOG.error('Removing member %s without a network defined'
+                              % member['address'])
                     bigip.pool.remove_member(name=pool['id'],
                                   ip_address=ip_address + '%0',
                                   port=int(member['protocol_port']),
@@ -2522,8 +2524,8 @@ class iControlDriver(object):
                 self.hostnames = [item.strip() for item in self.hostnames]
                 self.hostnames = sorted(self.hostnames)
 
-                self.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS,
-                                               self.hostnames[0]))
+                self.agent_id = None
+
                 self.username = self.conf.icontrol_username
                 self.password = self.conf.icontrol_password
 
@@ -2562,9 +2564,10 @@ class iControlDriver(object):
                                                               'Standalone':
                         first_bigip.system.set_folder('/Common')
                         this_devicename = \
-                         first_bigip.device.mgmt_dev.get_local_device()
+                         first_bigip.device.get_device_name()
                         devices = first_bigip.device.get_all_device_names()
-                        devices.remove(this_devicename)
+                        if this_devicename in devices:
+                            devices.remove(this_devicename)
                         self.hostnames = self.hostnames + \
                     first_bigip.device.mgmt_dev.get_management_address(devices)
                     else:
@@ -2684,6 +2687,9 @@ class iControlDriver(object):
                                    major_version, minor_version)))
 
                 self.connected = True
+
+                self.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS,
+                                               self.hostnames[0]))
 
             except Exception as exc:
                 LOG.error(_('Could not communicate with all ' +

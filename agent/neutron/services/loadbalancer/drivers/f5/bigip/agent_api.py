@@ -21,6 +21,10 @@ from neutron.agent import rpc as agent_rpc
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron.common import log
 
+import logging
+
+LOG = logging.getLogger(__name__)
+
 
 class CoreAgentApi(agent_rpc.PluginApi):
     pass
@@ -44,8 +48,7 @@ class LbaasAgentApi(proxy.RpcProxy):
     def get_active_pending_pool_ids(self):
         return self.call(
                self.context,
-               self.make_msg('get_active_pending_pool_ids',
-                             host=self.host),
+               self.make_msg('get_active_pending_pool_ids', host=self.host),
                topic=self.topic
         )
 

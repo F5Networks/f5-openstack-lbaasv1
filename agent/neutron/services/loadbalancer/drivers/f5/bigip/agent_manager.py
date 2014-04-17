@@ -142,7 +142,14 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
-            self.agent_host = conf.host + ":" + self.driver.agent_id
+            if self.driver.agent_id:
+                self.agent_host = conf.host + ":" + self.driver.agent_id
+                LOG.debug('setting agent host to %s' % self.agent_host)
+            else:
+                LOG.error(_('Agent host attribute is not configured'
+                            'by the driver. Fix the driver config'
+                            'and restart the agent.'))
+                return
         except ImportError:
             msg = _('Error importing loadbalancer device driver: %s')
             raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
@@ -169,6 +176,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.cache = LogicalServiceCache()
         #
         self.last_resync = datetime.datetime.now()
+
         # setup all rpc and callback objects
         self._setup_rpc()
         # cause a sync of what Neutron believes
