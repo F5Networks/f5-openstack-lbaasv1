@@ -45,20 +45,29 @@ class LbaasAgentApi(proxy.RpcProxy):
         self.host = host
 
     @log.log
-    def get_active_pending_pool_ids(self):
+    def get_active_pool_ids(self):
         return self.call(
                self.context,
-               self.make_msg('get_active_pending_pool_ids', host=self.host),
+               self.make_msg('get_active_pool_ids', host=self.host),
                topic=self.topic
         )
 
     @log.log
-    def get_service_by_pool_id(self, pool_id):
+    def get_pending_pool_ids(self):
+        return self.call(
+               self.context,
+               self.make_msg('get_pending_pool_ids', host=self.host),
+               topic=self.topic
+        )
+
+    @log.log
+    def get_service_by_pool_id(self, pool_id, global_routed_mode=False):
         return self.call(
             self.context,
             self.make_msg(
                 'get_service_by_pool_id',
                 pool_id=pool_id,
+                global_routed_mode=global_routed_mode,
                 host=self.host
             ),
             topic=self.topic

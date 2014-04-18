@@ -135,7 +135,15 @@ class Pool(object):
                                   port=port,
                                   folder=folder)):
             addr_port_seq = self._get_addr_port_seq(ip_address, port)
-            self.lb_pool.add_member_v2([name], [addr_port_seq])
+            try:
+                self.lb_pool.add_member_v2([name], [addr_port_seq])
+            except WebFault as wf:
+                if "already exists in partition" in str(wf.message):
+                    Log.error('Pool',
+                              'tried to create a Pool member when exists')
+                    return False
+                else:
+                    raise wf
             return True
         else:
             return False

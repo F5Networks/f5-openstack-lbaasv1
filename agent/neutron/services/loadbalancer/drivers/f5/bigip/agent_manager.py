@@ -142,6 +142,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
+            self.global_routed_mode = conf.f5_global_routed_mode
             if self.driver.agent_id:
                 self.agent_host = conf.host + ":" + self.driver.agent_id
                 LOG.debug('setting agent host to %s' % self.agent_host)
@@ -159,6 +160,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'agent_type': neutron_constants.AGENT_TYPE_LOADBALANCER,
+            'global_routed_mode': self.global_routed_mode,
             'start_flag': True}
 
         self.admin_state_up = True
@@ -245,6 +247,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.agent_state['configurations']['l2_population'] = True
             else:
                 self.agent_state['configurations']['l2_population'] = False
+            if self.global_routed_mode:
+                self.agent_state['configurations']['global_routed_mode'] = True
+            else:
+                self.agent_state['configurations']['global_routed_mode'] = \
+                                                                          False
             if self.driver.agent_configurations:
                 self.agent_state['configurations'].update(
                                              self.driver.agent_configurations)
@@ -280,7 +287,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         for pool_id in pool_ids:
             try:
                 stats = self.driver.get_stats(
-                        self.plugin_rpc.get_service_by_pool_id(pool_id))
+                        self.plugin_rpc.get_service_by_pool_id(pool_id,
+                                                    self.global_routed_mode))
                 if stats:
                     self.plugin_rpc.update_pool_stats(pool_id, stats)
             except Exception:
@@ -298,14 +306,19 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         resync = False
         known_services = set(self.cache.get_pool_ids())
         try:
-            ready_pool_ids = set(
-                    self.plugin_rpc.get_active_pending_pool_ids())
+            active_pool_ids = set(self.plugin_rpc.get_active_pool_ids())
             LOG.debug(_('plugin produced the list of active pool ids: %s'
-                        % ready_pool_ids))
-            LOG.debug(_('currently known pool ids are: %s' % known_services))
-            for deleted_id in known_services - ready_pool_ids:
+                        % list(active_pool_ids)))
+            LOG.debug(_('currently known pool ids are: %s' % list(known_services)))
+            for deleted_id in known_services - active_pool_ids:
                 self.destroy_service(deleted_id)
-            for pool_id in ready_pool_ids:
+            for pool_id in active_pool_ids:
+                if not self.cache.get_by_pool_id(pool_id):
+                    self.validate_service(pool_id)
+            pending_pool_ids = self.plugin_rpc.get_pending_pool_ids()
+            LOG.debug(_('plugin produced the list of pending pool ids: %s'
+                        % pending_pool_ids))
+            for pool_id in pending_pool_ids:
                 self.refresh_service(pool_id)
         except Exception:
             LOG.exception(_('Unable to retrieve ready services'))
@@ -314,19 +327,37 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.remove_orphans()
 
     @log.log
+    def validate_service(self, pool_id):
+        try:
+            service = self.plugin_rpc.get_service_by_pool_id(pool_id,
+                                                self.global_routed_mode)
+            if not self.driver.exists(service):
+                LOG.error(_('active pool %s is not on BIG-IP.. syncing'
+                            % pool_id))
+                # update is create or update
+                self.driver.sync(service)
+            self.cache.put(service)
+        except Exception:
+            LOG.exception(_('Unable to validate service for pool: %s'),
+                          pool_id)
+
+    @log.log
     def refresh_service(self, pool_id):
         try:
-            service = self.plugin_rpc.get_service_by_pool_id(pool_id)
+            service = self.plugin_rpc.get_service_by_pool_id(pool_id,
+                                                self.global_routed_mode)
             # update is create or update
             self.driver.sync(service)
             self.cache.put(service)
         except Exception:
-            LOG.exception(_('Unable to refresh service for pool: %s'), pool_id)
+            LOG.exception(_('Unable to refresh service for pool: %s'),
+                          pool_id)
             self.needs_resync = True
 
     @log.log
     def destroy_service(self, pool_id):
-        service = self.plugin_rpc.get_service_by_pool_id(pool_id)
+        service = self.plugin_rpc.get_service_by_pool_id(pool_id,
+                                                self.global_routed_mode)
         if not service:
             return
         try:
@@ -334,7 +365,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                     service)
             self.plugin_rpc.pool_destroyed(pool_id)
         except Exception:
-            LOG.exception(_('Unable to destroy service for pool: %s'), pool_id)
+            LOG.exception(_('Unable to destroy service for pool: %s'),
+                          pool_id)
             self.needs_resync = True
         self.cache.remove(service)
 
@@ -442,7 +474,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             self.driver.create_member(member, service)
             self.cache.put(service)
-        except Exception as e:
+        except IOError as e:
             message = 'could not create member:' + e.message
             self.plugin_rpc.update_member_status(member['id'],
                                                plugin_const.ERROR,

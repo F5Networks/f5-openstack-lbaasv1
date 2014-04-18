@@ -10,13 +10,15 @@ class System(object):
         self.bigip.icontrol.add_interfaces(['System.Session',
                                             'System.Inet',
                                             'System.SystemInfo',
-                                            'Management.Folder'])
+                                            'Management.Folder',
+                                            'Management.LicenseAdministration'])
 
         # iControl helper objects
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_inet = self.bigip.icontrol.System.Inet
         self.sys_info = self.bigip.icontrol.System.SystemInfo
         self.mgmt_folder = self.bigip.icontrol.Management.Folder
+        self.mgmt_license = self.bigip.icontrol.Management.LicenseAdministration
 
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
@@ -25,10 +27,15 @@ class System(object):
 
     def folder_exists(self, folder):
         try:
+            if not str(folder).startswith('/'):
+                folder = '/' + folder
             self.sys_session.set_active_folder(folder)
+            self.current_folder = folder
         except WebFault as wf:
             if "was not found" in str(wf.message):
                 return False
+            else:
+                raise
         else:
             if self.current_folder:
                 self.sys_session.set_active_folder(self.current_folder)
@@ -58,6 +65,8 @@ class System(object):
         return folders
 
     def set_folder(self, folder):
+        if not str(folder).startswith('/'):
+            folder = '/' + folder
         if self.current_folder and folder == self.current_folder:
             return
         try:

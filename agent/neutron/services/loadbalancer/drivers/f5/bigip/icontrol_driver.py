@@ -265,6 +265,11 @@ class iControlDriver(object):
         LOG.debug(_('iControlDriver agent configurations:%s'
                     % self.agent_configurations))
 
+    @serialized('exists')
+    @is_connected
+    def exists(self, service):
+        return self._service_exists(service)
+
     @serialized('sync')
     @is_connected
     def sync(self, service):
@@ -370,49 +375,51 @@ class iControlDriver(object):
         # the service definition... not the vip
         #
         stats = {}
-
+        stats[lb_const.STATS_IN_BYTES] = 0
+        stats[lb_const.STATS_OUT_BYTES] = 0
+        stats[lb_const.STATS_ACTIVE_CONNECTIONS] = 0
+        stats[lb_const.STATS_TOTAL_CONNECTIONS] = 0
+        members = {}
         bigip = self._get_bigip()
-
-        # It appears that stats are collected for pools in a pending delete
-        # state which means that if those messages are queued (or delayed)
-        # it can result in the process of a stats request after the pool
-        # and tenant are long gone
-        if not bigip.system.folder_exists(
-                bigip_interfaces.OBJ_PREFIX + service['pool']['tenant_id']):
-            return None
-
-        pool = service['pool']
-        bigip_stats = bigip.pool.get_statistics(name=pool['id'],
-                                                folder=pool['tenant_id'])
-        if 'STATISTIC_SERVER_SIDE_BYTES_IN' in bigip_stats:
-            stats[lb_const.STATS_IN_BYTES] = \
-                bigip_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
-            stats[lb_const.STATS_OUT_BYTES] = \
-                bigip_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
-            stats[lb_const.STATS_ACTIVE_CONNECTIONS] = \
-                bigip_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
-            stats[lb_const.STATS_TOTAL_CONNECTIONS] = \
-                bigip_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
-
-            # need to get members for this pool and update their status
-            get_mon_status = bigip.pool.get_members_monitor_status
-            states = get_mon_status(name=pool['id'],
-                                    folder=pool['tenant_id'])
-            # format is data = {'members': { uuid:{'status':'state1'},
-            #                             uuid:{'status':'state2'}} }
-            members = {'members': {}}
-            if hasattr(service, 'members'):
-                for member in service['members']:
-                    for state in states:
-                        if state == 'MONITOR_STATUS_UP':
-                            members['members'][member['id']] = 'ACTIVE'
-                        else:
-                            members['members'][member['id']] = 'DOWN'
-            stats['members'] = members
-
-            return stats
-        else:
-            return None
+        for hostbigip in bigip.group_bigips:
+            # It appears that stats are collected for pools in a pending delete
+            # state which means that if those messages are queued (or delayed)
+            # it can result in the process of a stats request after the pool
+            # and tenant are long gone. Check if the tenant exists.
+            if not hostbigip.system.folder_exists(
+               bigip_interfaces.OBJ_PREFIX + service['pool']['tenant_id']):
+                return None
+            pool = service['pool']
+            bigip_stats = hostbigip.pool.get_statistics(name=pool['id'],
+                                                    folder=pool['tenant_id'])
+            if 'STATISTIC_SERVER_SIDE_BYTES_IN' in bigip_stats:
+                stats[lb_const.STATS_IN_BYTES] += \
+                    bigip_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
+                stats[lb_const.STATS_OUT_BYTES] += \
+                    bigip_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
+                stats[lb_const.STATS_ACTIVE_CONNECTIONS] += \
+                    bigip_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
+                stats[lb_const.STATS_TOTAL_CONNECTIONS] += \
+                    bigip_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
+                if hasattr(service, 'members'):
+                    # need to get members for this pool and update their status
+                    states = hostbigip.pool.get_members_monitor_status(
+                                                    name=pool['id'],
+                                                    folder=pool['tenant_id'])
+                    for member in service['members']:
+                        for state in states:
+                            if member['address'] == state['addr'] and\
+                               member['protocol_port'] == state['port']:
+                                if state['state'] == 'MONITOR_STATUS_UP':
+                                    if member['id'] in members:
+                                        # member has to be up on all host
+                                        # in the the BIG-IP cluster
+                                        if members[member['id']] != 'DOWN':
+                                            members[member['id']] = 'ACTIVE'
+                                else:
+                                    members[member['id']] = 'DOWN'
+        stats['members'] = {'members': members}
+        return stats
 
     def remove_orphans(self, known_pool_ids):
         raise NotImplementedError()
@@ -461,7 +468,16 @@ class iControlDriver(object):
             self.network = network
             self.subnet = subnet
 
+    def _service_exists(self, service):
+        bigip = self._get_bigip()
+        if not service['pool']:
+            return        
+        return bigip.pool.exists(name=service['pool']['id'],
+                                 folder=service['pool']['tenant_id'])
+
     def _assure_service(self, service):
+        if not service['pool']:
+            return
         bigip = self._get_bigip()
         if self.conf.sync_mode == 'replication':
             bigips = bigip.group_bigips
@@ -743,12 +759,12 @@ class iControlDriver(object):
         for member in service['members']:
             member_start_time = time()
 
-            #LOG.debug(_("Pool %s assuring member %s:%d - status %s"
-            #            % (pool['id'],
-            #               member['address'],
-            #               member['protocol_port'],
-            #               member['status'])
-            #            ))
+            LOG.debug(_("Pool %s assuring member %s:%d - status %s"
+                        % (pool['id'],
+                           member['address'],
+                           member['protocol_port'],
+                           member['status'])
+                        ))
 
             ip_address = member['address']
 
@@ -762,11 +778,14 @@ class iControlDriver(object):
                     ip_address = ip_address + '%0'
 
             found_existing_member = None
+
             for existing_member in existing_members:
-                if member['address'] == existing_member['addr'] and \
-                        member['protocol_port'] == existing_member['port']:
+                LOG.debug('comparing: %s:%s to %s:%s' % (member['address'],member['protocol_port'],
+                                                         existing_member['addr'],existing_member['port']))
+                if (member['address'] == existing_member['addr']) and (member['protocol_port'] == existing_member['port']):
                     found_existing_member = existing_member
                     break
+            LOG.debug('found_existing_member is: %s' % found_existing_member)
 
             # Delete those pending delete
             if member['status'] == plugin_const.PENDING_DELETE:
@@ -780,7 +799,8 @@ class iControlDriver(object):
                                   ip_address=ip_address + '%0',
                                   port=int(member['protocol_port']),
                                   folder=pool['tenant_id'])
-                    bigip.pool.remove_member(name=pool['id'],
+                    if not self.conf.f5_global_routed_mode:
+                        bigip.pool.remove_member(name=pool['id'],
                                   ip_address=ip_address,
                                   port=int(member['protocol_port']),
                                   folder=pool['tenant_id'])
@@ -789,15 +809,15 @@ class iControlDriver(object):
                                       ip_address=ip_address,
                                       port=int(member['protocol_port']),
                                       folder=pool['tenant_id'])
-                if network and 'provider:network_type' in member['network']:
-                    if member['network']['provider:network_type'] == 'vxlan':
-                        tunnel_name = self._get_tunnel_name(member['network'])
+                if network and 'provider:network_type' in network:
+                    if network['provider:network_type'] == 'vxlan':
+                        tunnel_name = self._get_tunnel_name(network)
                         bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
                                     folder=pool['tenant_id'])
-                    if member['network']['provider:network_type'] == 'gre':
-                        tunnel_name = self._get_tunnel_name(member['network'])
+                    if network['provider:network_type'] == 'gre':
+                        tunnel_name = self._get_tunnel_name(network)
                         bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
@@ -822,6 +842,8 @@ class iControlDriver(object):
             else:
                 just_added = False
                 if not found_existing_member:
+                    LOG.debug('found_existing_member was: %s so creating %s:%s' %
+                              (found_existing_member, ip_address, member['protocol_port']))
                     start_time = time()
                     result = bigip.pool.add_member(
                                       name=pool['id'],
@@ -884,8 +906,8 @@ class iControlDriver(object):
                                       (time() - start_time))
                         using_ratio = True
 
-                    if member['network']['provider:network_type'] == 'vxlan':
-                        tunnel_name = self._get_tunnel_name(member['network'])
+                    if network and network['provider:network_type'] == 'vxlan':
+                        tunnel_name = self._get_tunnel_name(network)
                         if 'vxlan_vteps' in member:
                             for vtep in member['vxlan_vteps']:
                                 bigip.vxlan.add_fdb_entry(
@@ -894,8 +916,8 @@ class iControlDriver(object):
                                     vtep_ip_address=vtep,
                                     arp_ip_address=ip_address,
                                     folder=pool['tenant_id'])
-                    if member['network']['provider:network_type'] == 'gre':
-                        tunnel_name = self._get_tunnel_name(member['network'])
+                    if network and network['provider:network_type'] == 'gre':
+                        tunnel_name = self._get_tunnel_name(network)
                         if 'gre_vteps' in member:
                             for vtep in member['gre_vteps']:
                                 bigip.l2gre.add_fdb_entry(
@@ -1026,7 +1048,8 @@ class iControlDriver(object):
                                   vip['id'],
                                   folder=vip['tenant_id'])
 
-                if 'provider:network_type' in vip['network']:
+                if network and \
+                   'provider:network_type' in vip['network']:
                     if network['provider:network_type'] == 'vxlan':
                         if 'vxlan_vteps' in vip:
                             tunnel_name = self._get_tunnel_name(network)
@@ -1322,7 +1345,8 @@ class iControlDriver(object):
                                 connection_limit=0,
                                 folder=pool['tenant_id'])
 
-                    if 'provider:network_type' in vip['network']:
+                    if vip['network'] and \
+                       'provider:network_type' in vip['network']:
                         if network['provider:network_type'] == 'vxlan':
                             if 'vxlan_vteps' in vip:
                                 tunnel_name = self._get_tunnel_name(network)
@@ -1544,6 +1568,8 @@ class iControlDriver(object):
                                service['pool']['tenant_id'])
 
     def _assure_service_networks(self, service):
+        if not service['pool']:
+            return
         if self.conf.f5_global_routed_mode:
             return
         start_time = time()
@@ -2226,12 +2252,12 @@ class iControlDriver(object):
                              }
                     self.l2pop_rpc.remove_fdb_entries(self.context,
                                                       fdb_entries)
+            else:
+                LOG.error(_('Unsupported network type %s. Can not delete.'
+                      % network['provider:network_type']))
 
             if network['id'] in set_bigip.assured_networks:
                 set_bigip.assured_networks.remove(network['id'])
-        else:
-            LOG.error(_('Unsupported network type %s. Can not delete network.'
-                      % network['provider:network_type']))
 
     # called for every bigip only in replication mode.
     # otherwise called once
