@@ -139,10 +139,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def __init__(self, conf):
         LOG.debug(_('Initializing LbaasAgentManager with conf %s' % conf))
         self.conf = conf
+
         try:
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
-            self.global_routed_mode = conf.f5_global_routed_mode
             if self.driver.agent_id:
                 self.agent_host = conf.host + ":" + self.driver.agent_id
                 LOG.debug('setting agent host to %s' % self.agent_host)
@@ -160,16 +160,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'agent_type': neutron_constants.AGENT_TYPE_LOADBALANCER,
-            'global_routed_mode': self.global_routed_mode,
+            'l2_population': self.conf.l2_population,
+            'configurations': {'global_routed_mode':
+                                self.conf.f5_global_routed_mode},
             'start_flag': True}
 
         self.admin_state_up = True
-        self.driver.l2pop = conf.l2_population
-
-        if self.driver.l2pop:
-            self.agent_state['l2_population'] = True
-        else:
-            self.agent_state['l2_population'] = False
 
         self.context = context.get_admin_context_without_session()
         # pass context to driver
@@ -196,13 +192,6 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         )
         self.driver.plugin_rpc = self.plugin_rpc
 
-        # Core plugin Callbacks API
-        self.driver.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
-
-        # L2 Populate plugin Callbacks API
-        if self.driver.l2pop:
-            self.driver.l2pop_rpc = agent_api.L2PopulationApi()
-
         # Agent state Callbacks API
         self.state_rpc = agent_rpc.PluginReportStateAPI(
             plugin_driver.TOPIC_PROCESS_ON_HOST)
@@ -212,25 +201,32 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self._report_state)
             heartbeat.start(interval=report_interval)
 
-        # Besides LBaaS Plugin calls... what else to consume
+        if not self.conf.f5_global_routed_mode:
+            # Core plugin Callbacks API
+            self.driver.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
 
-        # tunnel updates to support vxlan and gre endpoint
-        # NOTE:  the driver can decide to handle endpoint
-        # membership based on the rpc notification or through
-        # other means (i.e. as part of a service definition)
-        consumers = [[constants.TUNNEL, topics.UPDATE]]
+            # L2 Populate plugin Callbacks API
+            if self.conf.l2_population:
+                self.driver.l2pop_rpc = agent_api.L2PopulationApi()
 
-        # L2 populate fdb calls
-        # NOTE:  the driver can decide to handle fdb updates
-        # or use some other mechanism (i.e. flooding) to
-        # learn about port updates.
-        if self.driver.l2pop:
-            consumers.append([topics.L2POPULATION,
-                              topics.UPDATE, cfg.CONF.host])
+            # Besides LBaaS Plugin calls... what else to consume
 
-        agent_rpc.create_consumers(dispatcher.RpcDispatcher([self]),
-                                   plugin_driver.TOPIC_LOADBALANCER_AGENT,
-                                   consumers)
+            # tunnel updates to support vxlan and gre endpoint
+            # NOTE:  the driver can decide to handle endpoint
+            # membership based on the rpc notification or through
+            # other means (i.e. as part of a service definition)
+            consumers = [[constants.TUNNEL, topics.UPDATE]]
+            # L2 populate fdb calls
+            # NOTE:  the driver can decide to handle fdb updates
+            # or use some other mechanism (i.e. flooding) to
+            # learn about port updates.
+            if self.conf.l2_population:
+                consumers.append([topics.L2POPULATION,
+                                  topics.UPDATE, cfg.CONF.host])
+
+            agent_rpc.create_consumers(dispatcher.RpcDispatcher([self]),
+                           plugin_driver.TOPIC_LOADBALANCER_AGENT,
+                           consumers)
 
     def _report_state(self):
         try:
@@ -239,19 +235,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.driver._init_connection()
 
             service_count = len(self.cache.services)
-            self.agent_state['configurations'] = {
-                            'device_driver': self.driver.__class__.__name__,
-                            'device_type': self.driver.device_type}
             self.agent_state['configurations']['services'] = service_count
-            if self.driver.l2pop:
-                self.agent_state['configurations']['l2_population'] = True
-            else:
-                self.agent_state['configurations']['l2_population'] = False
-            if self.global_routed_mode:
-                self.agent_state['configurations']['global_routed_mode'] = True
-            else:
-                self.agent_state['configurations']['global_routed_mode'] = \
-                                                                          False
             if self.driver.agent_configurations:
                 self.agent_state['configurations'].update(
                                              self.driver.agent_configurations)
@@ -288,7 +272,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             try:
                 stats = self.driver.get_stats(
                         self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                                    self.global_routed_mode))
+                                        self.conf.f5_global_routed_mode))
                 if stats:
                     self.plugin_rpc.update_pool_stats(pool_id, stats)
             except Exception:
@@ -309,7 +293,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             active_pool_ids = set(self.plugin_rpc.get_active_pool_ids())
             LOG.debug(_('plugin produced the list of active pool ids: %s'
                         % list(active_pool_ids)))
-            LOG.debug(_('currently known pool ids are: %s' % list(known_services)))
+            LOG.debug(_('currently known pool ids are: %s'
+                        % list(known_services)))
             for deleted_id in known_services - active_pool_ids:
                 self.destroy_service(deleted_id)
             for pool_id in active_pool_ids:
@@ -330,7 +315,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def validate_service(self, pool_id):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                                self.global_routed_mode)
+                                        self.conf.f5_global_routed_mode)
             if not self.driver.exists(service):
                 LOG.error(_('active pool %s is not on BIG-IP.. syncing'
                             % pool_id))
@@ -345,7 +330,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def refresh_service(self, pool_id):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                                self.global_routed_mode)
+                                         self.conf.f5_global_routed_mode)
             # update is create or update
             self.driver.sync(service)
             self.cache.put(service)
@@ -357,7 +342,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     @log.log
     def destroy_service(self, pool_id):
         service = self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                                self.global_routed_mode)
+                                          self.conf.f5_global_routed_mode)
         if not service:
             return
         try:

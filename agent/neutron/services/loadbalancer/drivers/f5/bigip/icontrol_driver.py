@@ -227,6 +227,7 @@ class iControlDriver(object):
         self.plugin_rpc = None
         self.connected = False
         self.service_queue = []
+        self.agent_configurations = {}
 
         if self.conf.f5_global_routed_mode:
             LOG.info(_('WARNING - f5_global_routed_mode enabled.'
@@ -237,13 +238,10 @@ class iControlDriver(object):
             self.conf.use_namespaces = False
             self.conf.f5_snat_mode = True
             self.conf.f5_snat_addresses_per_subnet = 0
-            self.agent_configurations = {'tunnel_types': []}
-            self.agent_configurations['bridge_mappings'] = {}
         else:
             self.interface_mapping = {}
             self.tagging_mapping = {}
-
-            self.agent_configurations = {'tunnel_types': ['vxlan', 'gre']}
+            self.agent_configurations['tunnel_types'] = ['vxlan', 'gre']
             mappings = str(self.conf.f5_external_physical_mappings).split(",")
             # map format is   phynet:interface:tagged
 
@@ -1730,7 +1728,7 @@ class iControlDriver(object):
 
             # notify all the compute nodes we are VTEPs
             # for this network now.
-            if self.l2pop:
+            if self.conf.l2_population:
                 fdb_entries = {network['id']:
                                {
                                 'ports': {
@@ -1767,7 +1765,7 @@ class iControlDriver(object):
 
             # notify all the compute nodes we are VTEPs
             # for this network now.
-            if self.l2pop:
+            if self.conf.l2_population:
                 fdb_entries = {network['id']:
                                {
                                 'ports': {
@@ -2207,7 +2205,7 @@ class iControlDriver(object):
                                           folder=network_folder)
                 # notify all the compute nodes we no longer
                 # VTEPs for this network now.
-                if self.l2pop:
+                if self.conf.l2_population:
                     fdb_entries = {network['id']:
                                {
                                 'ports': {
@@ -2237,7 +2235,7 @@ class iControlDriver(object):
                                           folder=network_folder)
                 # notify all the compute nodes we no longer
                 # VTEPs for this network now.
-                if self.l2pop:
+                if self.conf.l2_population:
                     fdb_entries = {network['id']:
                                {
                                 'ports': {

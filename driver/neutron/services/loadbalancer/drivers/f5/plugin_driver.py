@@ -7,10 +7,7 @@ from oslo.config import cfg
 from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
 from neutron.common import rpc as q_rpc
-from neutron.db import models_v2
-from neutron.plugins.ml2 import models as models_ml2
-from neutron.db import agents_db
-from neutron.db.loadbalancer import loadbalancer_db as ldb
+from neutron.db.loadbalancer import loadbalancer_db as lb_db
 from neutron.extensions import lbaas_agentscheduler
 from neutron.openstack.common import importutils
 from neutron.common import log
@@ -65,10 +62,6 @@ class LoadBalancerCallbacks(object):
 
         self.last_cache_update = datetime.datetime.now()
 
-    def create_rpc_dispatcher(self):
-        return q_rpc.PluginRpcDispatcher(
-            [self, agents_db.AgentExtRpcCallback(self.plugin)])
-
     @log.log
     def get_active_pool_ids(self, context, host=None):
         with context.session.begin(subtransactions=True):
@@ -83,16 +76,18 @@ class LoadBalancerCallbacks(object):
             pools = self.plugin.list_pools_on_lbaas_agent(context,
                                                           agents[0].id)
             pool_ids = [pool['id'] for pool in pools['pools']]
-            active_pools = set()
             up = True
-            # get pools for this agent which are active
-            pool_qry = (context.session.query(ldb.Pool.id))
-            pool_qry = pool_qry.filter(ldb.Pool.status == constants.ACTIVE)
-            pool_qry = pool_qry.filter(ldb.Pool.id.in_(pool_ids))
-            pool_qry = pool_qry.filter(ldb.Pool.admin_state_up == up)
-            for pool_id in pool_qry:
-                active_pools.add(pool_id[0])
-            return list(active_pools)
+            active_pool_ids = set()
+            pools = self.plugin.get_pools(context,
+                                         filters={
+                                                  'status': [constants.ACTIVE],
+                                                  'id': pool_ids,
+                                                  'admin_state_up': [up]
+                                                  },
+                                         fields=['id'])
+            for pool in pools:
+                active_pool_ids.add(pool['id'])
+            return active_pool_ids
 
     @log.log
     def get_pending_pool_ids(self, context, host=None):
@@ -110,34 +105,39 @@ class LoadBalancerCallbacks(object):
             pool_ids = [pool['id'] for pool in pools['pools']]
 
             pools_to_update = set()
-            pool_monitors = {}
 
-            # get all pools for this agent
-            pool_qry = (context.session.query(ldb.Pool))
-            pool_qry = pool_qry.filter(ldb.Pool.id.in_(pool_ids))
-            for pool in pool_qry:
+            pools = self.plugin.get_pools(context,
+                                         filters={
+                                                  'id': pool_ids,
+                                                  }
+                                          )
+            for pool in pools:
                 if pool['status'] != constants.ACTIVE:
                     pools_to_update.add(pool['id'])
-                pool_monitors[pool['id']] = pool.monitors
+                for hms in pool['health_monitors_status']:
+                    if hms['status'] != constants.ACTIVE:
+                        pools_to_update.add(pool['id'])
+
             # get vips associated with pools which are not active
-            vip_qry = (context.session.query(ldb.Vip.pool_id))
-            vip_qry = vip_qry.filter(ldb.Vip.pool_id.in_(pool_ids))
-            vip_qry = vip_qry.filter(ldb.Vip.status != constants.ACTIVE)
-            for pool_id in vip_qry:
-                pools_to_update.add(pool_id[0])
+            vips = self.plugin.get_vips(context,
+                                        filters={
+                                                  'pool_id': pool_ids,
+                                                 },
+                                        fields=['id', 'pool_id', 'status']
+                                        )
+            for vip in vips:
+                if vip['status'] != constants.ACTIVE:
+                    pools_to_update.add(vip['pool_id'])
 
-            member_qry = (context.session.query(ldb.Member.pool_id))
-            member_qry = member_qry.filter(
-                                  ldb.Member.pool_id.in_(pool_ids))
-            member_qry = member_qry.filter(
-                                  ldb.Member.status != constants.ACTIVE)
-            for pool_id in member_qry:
-                pools_to_update.add(pool_id[0])
-
-            for pool_id in pool_monitors:
-                for monitor in pool_monitors[pool_id]:
-                    if monitor.status != constants.ACTIVE:
-                        pools_to_update.add(pool_id)
+            members = self.plugin.get_members(context,
+                                        filters={
+                                                  'pool_id': pool_ids,
+                                                 },
+                                        fields=['id', 'pool_id', 'status']
+                                        )
+            for member in members:
+                if member['status'] != constants.ACTIVE:
+                    pools_to_update.add(member['pool_id'])
 
             return list(pools_to_update)
 
@@ -153,29 +153,14 @@ class LoadBalancerCallbacks(object):
             self.subnet_cache = {}
 
         with context.session.begin(subtransactions=True):
-            qry = context.session.query(ldb.Pool)
-            qry = qry.filter_by(id=pool_id)
             try:
-                pool = qry.one()
+                retpool = self.plugin.get_pool(context, pool_id)
             except:
                 return {'pool': None}
-            LOG.debug(_('getting service definition entry for %s' % pool))
-            if activate:
-                # set all resources to active
-                if pool.status in ACTIVE_PENDING:
-                    pool.status = constants.ACTIVE
-                if pool.vip:
-                    if pool.vip.status in ACTIVE_PENDING:
-                        pool.vip.status = constants.ACTIVE
-                for m in pool.members:
-                    if m.status in ACTIVE_PENDING:
-                        m.status = constants.ACTIVE
-                for hm in pool.monitors:
-                    if hm.status in ACTIVE_PENDING:
-                        hm.status = constants.ACTIVE
             retval = {}
-            retpool = self.plugin._make_pool_dict(pool)
             retval['pool'] = retpool
+            LOG.debug(_('getting service definition entry for %s'
+                        % retval['pool']['id']))
             if not global_routed_mode:
                 # get pool subnet
                 pool_subnet_id = retpool['subnet_id']
@@ -202,14 +187,16 @@ class LoadBalancerCallbacks(object):
             else:
                 retpool['subnet_id'] = None
                 retpool['network'] = None
+
             # is a Vip defined for this pool
-            if pool.vip:
-                retvip = self.plugin._make_vip_dict(pool.vip)
+            # if pool.vip:
+            if 'vip_id' in retpool and retpool['vip_id']:
+                retvip = self.plugin.get_vip(context, retpool['vip_id'])
                 retval['vip'] = retvip
                 if not global_routed_mode:
-                    retvip['port'] = (
-                        self.plugin._core_plugin._make_port_dict(pool.vip.port)
-                    )
+                    retvip['port'] = \
+                     self.plugin._core_plugin.get_port(context,
+                                                       retvip['port_id'])
                     if retvip['port']['network_id'] in self.net_cache:
                         retvip['network'] = \
                          self.net_cache[retvip['port']['network_id']]
@@ -225,13 +212,17 @@ class LoadBalancerCallbacks(object):
                         nettype = \
                          retvip['network']['provider:network_type']
                         if nettype == 'vxlan':
+                            # get resources needed to find port to host
+                            # binding so we can defined vteps and fdb entries
+                            # for this Vip's port
+                            from neutron.plugins.ml2 import models as ml2_db
                             segment_qry = context.session.query(
-                                                   models_ml2.NetworkSegment)
+                                                        ml2_db.NetworkSegment)
                             segment = segment_qry.filter_by(
                                     network_id=retvip['network']['id']).first()
                             segment_id = segment['id']
                             host_qry = context.session.query(
-                                                       models_ml2.PortBinding)
+                                                        ml2_db.PortBinding)
                             hosts = host_qry.filter_by(
                                                      segment=segment_id).all()
                             host_ids = set()
@@ -245,14 +236,18 @@ class LoadBalancerCallbacks(object):
                                         retvip['vxlan_vteps'] + \
                                         endpoints
                         if nettype == 'gre':
+                            # get resources needed to find port to host
+                            # binding so we can defined vteps and fdb entries
+                            # for this Vip's port
+                            from neutron.plugins.ml2 import models as ml2_db
                             segment_qry = context.session.query(
-                                                   models_ml2.NetworkSegment)
+                                                        ml2_db.NetworkSegment)
                             segment = segment_qry.filter_by(
                                  network_id=retvip['network']['id']
                                                            ).first()
                             segment_id = segment['id']
                             host_qry = context.session.query(
-                                                    models_ml2.PortBinding)
+                                                        ml2_db.PortBinding)
                             hosts = host_qry.filter_by(
                                                     segment=segment_id).all()
                             host_ids = set()
@@ -291,10 +286,18 @@ class LoadBalancerCallbacks(object):
 
             retval['members'] = []
             adminctx = get_admin_context()
-            for m in pool.members:
-                member = self.plugin._make_member_dict(m)
+
+            # if we have members defined, make resources
+            # available to find their network, subnet, ports
+            if 'members' in retpool and (len(retpool['members']) > 0):
+                from neutron.db import models_v2 as core_db
+            else:
+                retpool['members'] = []
+
+            for member_id in retpool['members']:
+                member = self.plugin.get_member(context, member_id)
                 if not global_routed_mode:
-                    alloc_qry = adminctx.session.query(models_v2.IPAllocation)
+                    alloc_qry = adminctx.session.query(core_db.IPAllocation)
                     allocated = alloc_qry.filter_by(
                                             ip_address=member['address']).all()
                     for alloc in allocated:
@@ -311,7 +314,7 @@ class LoadBalancerCallbacks(object):
                                 self.net_cache[alloc['network_id']] = net
                         except:
                             continue
-                        if net['tenant_id'] != pool['tenant_id']:
+                        if net['tenant_id'] != retpool['tenant_id']:
                             continue
                         member['network'] = net
                         self.set_member_subnet_info(context, host,
@@ -779,7 +782,7 @@ class LoadBalancerCallbacks(object):
         if vip['status'] == constants.PENDING_DELETE:
             status = constants.PENDING_DELETE
         self.plugin.update_status(context,
-                                  ldb.Vip,
+                                  lb_db.Vip,
                                   vip_id,
                                   status,
                                   status_description)
@@ -796,7 +799,7 @@ class LoadBalancerCallbacks(object):
                            host=None):
         """Agent confirmation hook to update pool status."""
         self.plugin.update_status(context,
-                                  ldb.Pool,
+                                  lb_db.Pool,
                                   pool_id,
                                   status,
                                   status_description)
@@ -816,7 +819,7 @@ class LoadBalancerCallbacks(object):
         if member['status'] == constants.PENDING_DELETE:
             status = constants.PENDING_DELETE
         self.plugin.update_status(context,
-                                  ldb.Member,
+                                  lb_db.Member,
                                   member_id,
                                   status,
                                   status_description)
@@ -857,6 +860,11 @@ class LoadBalancerCallbacks(object):
             self.plugin.update_pool_stats(context, pool_id, stats)
         except Exception as ex:
             LOG.error(_('error updating pool stats: %s' % ex.message))
+
+    def create_rpc_dispatcher(self):
+        from neutron.db import agents_db
+        return q_rpc.PluginRpcDispatcher(
+            [self, agents_db.AgentExtRpcCallback(self.plugin)])
 
     @log.log
     def _get_vxlan_endpoints(self, context, host=None):
