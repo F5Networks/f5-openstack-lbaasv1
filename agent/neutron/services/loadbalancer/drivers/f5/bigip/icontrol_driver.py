@@ -1,3 +1,11 @@
+##############################################################################
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+##############################################################################
+
 from oslo.config import cfg
 from neutron.common import constants as q_const
 from neutron.openstack.common import log as logging
@@ -469,7 +477,7 @@ class iControlDriver(object):
     def _service_exists(self, service):
         bigip = self._get_bigip()
         if not service['pool']:
-            return        
+            return False
         return bigip.pool.exists(name=service['pool']['id'],
                                  folder=service['pool']['tenant_id'])
 
@@ -778,9 +786,8 @@ class iControlDriver(object):
             found_existing_member = None
 
             for existing_member in existing_members:
-                LOG.debug('comparing: %s:%s to %s:%s' % (member['address'],member['protocol_port'],
-                                                         existing_member['addr'],existing_member['port']))
-                if (member['address'] == existing_member['addr']) and (member['protocol_port'] == existing_member['port']):
+                if (member['address'] == existing_member['addr']) and \
+                   (member['protocol_port'] == existing_member['port']):
                     found_existing_member = existing_member
                     break
             LOG.debug('found_existing_member is: %s' % found_existing_member)
@@ -840,8 +847,6 @@ class iControlDriver(object):
             else:
                 just_added = False
                 if not found_existing_member:
-                    LOG.debug('found_existing_member was: %s so creating %s:%s' %
-                              (found_existing_member, ip_address, member['protocol_port']))
                     start_time = time()
                     result = bigip.pool.add_member(
                                       name=pool['id'],

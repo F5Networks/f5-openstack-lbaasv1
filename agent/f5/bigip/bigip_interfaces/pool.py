@@ -1,3 +1,17 @@
+##############################################################################
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# 
+# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+##############################################################################
+
+# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+##############################################################################
+
+# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+################################################################################
+
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
@@ -250,12 +264,18 @@ class Pool(object):
 
     @icontrol_folder
     def remove_node(self, name=None, folder='Common'):
-        self.lb_node.delete_node_address([name])
+        try:
+            self.lb_node.delete_node_address([name])
+        except:
+            return False
         return True
 
     @icontrol_folder
     def remove_nodes(self, node_names=None, folder='Common'):
-        self.lb_node.delete_node_address([node_names])
+        try:
+            self.lb_node.delete_node_address([node_names])
+        except:
+            return False
         return True
 
     @icontrol_folder

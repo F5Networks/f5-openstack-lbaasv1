@@ -1,3 +1,11 @@
+##############################################################################
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+##############################################################################
+
 # CONSTANTS MODULE
 MIN_TMOS_MAJOR_VERSION = 11
 MIN_TMOS_MINOR_VERSION = 4
@@ -25,6 +33,11 @@ VLAN_PREFIX = 'vlan'
 BIGIP_VE_PLATFORM_ID = 'Z100'
 # DEVICE CONSTANTS
 DEVICE_DEFAULT_DOMAIN = ".local"
+DEVICE_HEALTH_SCORE_CPU_WEIGHT = 1
+DEVICE_HEALTH_SCORE_MEM_WEIGHT = 1
+DEVICE_HEALTH_SCORE_CPS_WEIGHT = 1
+DEVICE_HEALTH_SCORE_CPS_PERIOD = 5
+DEVICE_HEALTH_SCORE_CPS_MAX = 100
 # DEVICE GROUP CONSTANTS
 PEER_ADD_ATTEMPTS_MAX = 10
 PEER_ADD_ATTEMPT_DELAY = 2

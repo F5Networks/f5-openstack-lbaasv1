@@ -1,3 +1,11 @@
+##############################################################################
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+##############################################################################
+
 from f5.common.logger import Log
 from suds import WebFault
 
@@ -11,14 +19,16 @@ class System(object):
                                             'System.Inet',
                                             'System.SystemInfo',
                                             'Management.Folder',
-                                            'Management.LicenseAdministration'])
+                                            'Management.LicenseAdministration']
+                                           )
 
         # iControl helper objects
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_inet = self.bigip.icontrol.System.Inet
         self.sys_info = self.bigip.icontrol.System.SystemInfo
         self.mgmt_folder = self.bigip.icontrol.Management.Folder
-        self.mgmt_license = self.bigip.icontrol.Management.LicenseAdministration
+        self.mgmt_license = \
+            self.bigip.icontrol.Management.LicenseAdministration
 
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
