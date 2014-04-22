@@ -62,6 +62,12 @@ OPTS = [
         'f5_snat_addresses_per_subnet',
         default='1',
         help=_('Interface and VLAN for the VTEP overlay network')
+    ),
+    cfg.StrOpt(
+        'f5_static_agent_configuration_data',
+        default=None,
+        help=_(
+    'static name:value entries to add to the agent configurations dictionary')
     )
 ]
 
@@ -155,6 +161,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 self.agent_host = conf.host + ":" + self.driver.agent_id
                 LOG.debug('setting agent host to %s' % self.agent_host)
             else:
+                self.agent_host = None
                 LOG.error(_('Agent host attribute is not configured'
                             'by the driver. Fix the driver config'
                             'and restart the agent.'))
@@ -163,14 +170,24 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             msg = _('Error importing loadbalancer device driver: %s')
             raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
 
+        agent_configurations = \
+               {'global_routed_mode': self.conf.f5_global_routed_mode}
+
+        if self.conf.f5_static_agent_configuration_data:
+            entries = \
+              str(self.conf.f5_static_agent_configuration_data).split(',')
+            for entry in entries:
+                nv = entry.strip().split(':')
+                if len(nv) > 1:
+                    agent_configurations[nv[0]] = nv[1]
+
         self.agent_state = {
             'binary': 'f5-bigip-lbaas-agent',
             'host': self.agent_host,
             'topic': plugin_driver.TOPIC_LOADBALANCER_AGENT,
             'agent_type': neutron_constants.AGENT_TYPE_LOADBALANCER,
             'l2_population': self.conf.l2_population,
-            'configurations': {'global_routed_mode':
-                                self.conf.f5_global_routed_mode},
+            'configurations': agent_configurations,
             'start_flag': True}
 
         self.admin_state_up = True

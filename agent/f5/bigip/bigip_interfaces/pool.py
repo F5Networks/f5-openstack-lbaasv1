@@ -63,7 +63,11 @@ class Pool(object):
                                                 folder=folder)
             self.lb_pool.delete_pool([name])
             if len(nodes) > 0:
-                self.lb_node.delete_node_address(nodes)
+                # allow for nodes which are still in other pools
+                try:
+                    self.lb_node.delete_node_address(nodes)
+                except:
+                    pass
             return True
         else:
             return False

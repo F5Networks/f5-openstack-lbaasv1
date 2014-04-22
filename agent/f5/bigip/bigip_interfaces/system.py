@@ -32,8 +32,8 @@ class System(object):
 
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
-        self.platform = None
         self.current_folder = None
+        self.systeminfo = None
 
     def folder_exists(self, folder):
         try:
@@ -137,10 +137,14 @@ class System(object):
         self.sys_inet.set_ntp_server_address([addr])
 
     def get_platform(self):
-        if not self.platform:
-            self.platform = self.sys_info.get_system_information().platform
+        if not self.systeminfo:
+            self.systeminfo = self.sys_info.get_system_information()
+        return self.systeminfo.product_category
 
-        return self.platform
+    def get_serial_number(self):
+        if not self.systeminfo:
+            self.systeminfo = self.sys_info.get_system_information()
+        return self.systeminfo.chassis_serial
 
     def get_version(self):
         if not self.version:

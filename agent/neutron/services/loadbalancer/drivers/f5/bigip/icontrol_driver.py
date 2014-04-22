@@ -2672,9 +2672,21 @@ class iControlDriver(object):
 
                 local_ips = []
 
+                icontrol_endpoints = {}
+
                 for host in self.__bigips:
                     hostbigip = self.__bigips[host]
-                    hostbigip.device_name = hostbigip.device.get_device_name()
+                    icontrol_endpoints[host] = {}
+                    icontrol_endpoints[host]['version'] = \
+                                       hostbigip.system.get_version()
+                    hostbigip.device_name = \
+                                       hostbigip.device.get_device_name()
+                    icontrol_endpoints[host]['device_name'] = \
+                                       hostbigip.device_name
+                    icontrol_endpoints[host]['platform'] = \
+                                       hostbigip.system.get_platform()
+                    icontrol_endpoints[host]['serial_number'] = \
+                                       hostbigip.system.get_serial_number()
 
                     if not self.conf.f5_global_routed_mode:
                         if not vtep_folder or (vtep_folder.lower() == 'none'):
@@ -2710,6 +2722,8 @@ class iControlDriver(object):
                                                vtep_selfip_name))
 
                     self.agent_configurations['tunneling_ips'] = local_ips
+                    self.agent_configurations['icontrol_endpoints'] = \
+                                                            icontrol_endpoints
 
                     LOG.debug(_('connected to iControl %s @ %s ver %s.%s'
                                 % (self.username, host,
@@ -2737,6 +2751,8 @@ class iControlDriver(object):
     @is_connected
     def backup_configuration(self):
         for bigip in self.__bigips.values():
+            LOG.debug(_('saving %s device configuration.'
+                        % bigip.icontrol.hostname))
             bigip.system.set_folder('/Common')
             bigip.cluster.save_base_config()
             bigip.cluster.save_service_config()
