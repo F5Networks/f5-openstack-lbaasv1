@@ -6,11 +6,16 @@
 # Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
 ##############################################################################
 
+
 class MinorVersionValidateFailed(Exception):
     pass
 
 
 class MajorVersionValidateFailed(Exception):
+    pass
+
+
+class ProvisioningExtraMBValidateFailed(Exception):
     pass
 
 

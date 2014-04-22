@@ -2584,6 +2584,11 @@ class iControlDriver(object):
                             % (self.hostnames[0],
                                f5const.MIN_TMOS_MAJOR_VERSION,
                                f5const.MIN_TMOS_MINOR_VERSION))
+                extramb = first_bigip.system.get_provision_extramb()
+                if int(extramb) < f5const.MIN_EXTRA_MB:
+                    raise f5ex.ProvisioningExtraMBValidateFailed(
+                            '!! device %s NOT PROVISIONED MANAGEMENT LARGE.!!'
+                            % self.hostnames[0])
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
@@ -2639,7 +2644,11 @@ class iControlDriver(object):
                                 % (host,
                                    f5const.MIN_TMOS_MAJOR_VERSION,
                                    f5const.MIN_TMOS_MINOR_VERSION))
-
+                    extramb = hostbigip.system.get_provision_extramb()
+                    if int(extramb) < f5const.MIN_EXTRA_MB:
+                        raise f5ex.ProvisioningExtraMBValidateFailed(
+                            '!! device %s NOT PROVISIONED MANAGEMENT LARGE.!!'
+                            % self.host)
                 #if self.conf.debug and \
                 #   (f5const.LOG_LEVEL == std_logging.DEBUG):
                 #    sudslog = std_logging.getLogger('suds.client')

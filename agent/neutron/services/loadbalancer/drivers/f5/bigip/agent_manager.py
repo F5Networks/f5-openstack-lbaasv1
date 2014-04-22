@@ -154,6 +154,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         LOG.debug(_('Initializing LbaasAgentManager with conf %s' % conf))
         self.conf = conf
 
+        # create the cache of provisioned services
+        self.cache = LogicalServiceCache()
+        self.last_resync = datetime.datetime.now()
+        self.needs_resync = False
+        self.plugin_rpc = None
+
         try:
             self.driver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
@@ -195,10 +201,6 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.context = context.get_admin_context_without_session()
         # pass context to driver
         self.driver.context = self.context
-        # create the cache of provisioned services
-        self.cache = LogicalServiceCache()
-        #
-        self.last_resync = datetime.datetime.now()
 
         # setup all rpc and callback objects
         self._setup_rpc()
@@ -291,6 +293,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @periodic_task.periodic_task(spacing=6)
     def collect_stats(self, context):
+        if not self.plugin_rpc:
+            return
         pool_ids = self.cache.get_pool_ids()
         LOG.debug('collecting stats on pools: %s' % pool_ids)
         for pool_id in pool_ids:
@@ -312,6 +316,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         return self.driver.tunnel_sync()
 
     def sync_state(self):
+        if not self.plugin_rpc:
+            return
         resync = False
         known_services = set(self.cache.get_pool_ids())
         try:
@@ -338,6 +344,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @log.log
     def validate_service(self, pool_id):
+        if not self.plugin_rpc:
+            return
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                         self.conf.f5_global_routed_mode)
@@ -353,6 +361,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @log.log
     def refresh_service(self, pool_id):
+        if not self.plugin_rpc:
+            return
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                          self.conf.f5_global_routed_mode)
@@ -366,6 +376,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @log.log
     def destroy_service(self, pool_id):
+        if not self.plugin_rpc:
+            return
         service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                           self.conf.f5_global_routed_mode)
         if not service:
@@ -396,6 +408,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @log.log
     def get_pool_stats(self, pool, service):
+        if not self.plugin_rpc:
+            return
         try:
             stats = self.driver.get_stats(pool, service)
             if stats:

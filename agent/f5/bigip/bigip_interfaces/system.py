@@ -9,10 +9,21 @@
 from f5.common.logger import Log
 from suds import WebFault
 
+import requests
+import json
+
 
 class System(object):
     def __init__(self, bigip):
         self.bigip = bigip
+
+        self.icr_session = requests.session()
+        self.icr_session.auth = (bigip.icontrol.username,
+                                     bigip.icontrol.password)
+        self.icr_session.verify = False
+        self.icr_session.headers.update(
+                                 {'Content-Type': 'application/json'})
+        self.icr_url = 'https://%s/mgmt/tm' % bigip.icontrol.hostname
 
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(['System.Session',
@@ -157,3 +168,24 @@ class System(object):
 
     def get_minor_version(self):
         return self.get_version().split('_v')[1].split('.')[1]
+
+    def get_provision_extramb(self):
+        request_url = self.icr_url + '/sys/db/provision.extramb'
+        response = self.icr_session.get(request_url)
+
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'value' in response_obj:
+                return response_obj['value']
+            return 0
+        else:
+            return 0
+
+    def set_provision_extramb(self, extramdb=500):
+        request_url = self.icr_url + '/sys/db/provision.extramb'
+        response = self.icr_session.put(request_url,
+                                        data=json.dumps({'value': extramdb}))
+        if response.status_code < 400:
+            return True
+        else:
+            return False
