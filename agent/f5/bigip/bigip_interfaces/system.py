@@ -17,14 +17,6 @@ class System(object):
     def __init__(self, bigip):
         self.bigip = bigip
 
-        self.icr_session = requests.session()
-        self.icr_session.auth = (bigip.icontrol.username,
-                                     bigip.icontrol.password)
-        self.icr_session.verify = False
-        self.icr_session.headers.update(
-                                 {'Content-Type': 'application/json'})
-        self.icr_url = 'https://%s/mgmt/tm' % bigip.icontrol.hostname
-
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(['System.Session',
                                             'System.Inet',
@@ -170,8 +162,8 @@ class System(object):
         return self.get_version().split('_v')[1].split('.')[1]
 
     def get_provision_extramb(self):
-        request_url = self.icr_url + '/sys/db/provision.extramb'
-        response = self.icr_session.get(request_url)
+        request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
+        response = self.bigip.icr_session.get(request_url)
 
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -182,8 +174,8 @@ class System(object):
             return 0
 
     def set_provision_extramb(self, extramdb=500):
-        request_url = self.icr_url + '/sys/db/provision.extramb'
-        response = self.icr_session.put(request_url,
+        request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
+        response = self.bigip.icr_session.put(request_url,
                                         data=json.dumps({'value': extramdb}))
         if response.status_code < 400:
             return True

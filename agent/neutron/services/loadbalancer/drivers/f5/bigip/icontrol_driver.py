@@ -70,6 +70,11 @@ OPTS = [
         default=False,
         help=_('Strict route domain isolation'),
     ),
+    cfg.BoolOpt(
+        'f5_common_external_networks',
+        default=True,
+        help=_('Treat external networks as common')
+    ),
     cfg.StrOpt(
         'icontrol_hostname',
         help=_('The hostname (name or IP address) to use for iControl access'),
@@ -246,6 +251,8 @@ class iControlDriver(object):
             self.conf.use_namespaces = False
             self.conf.f5_snat_mode = True
             self.conf.f5_snat_addresses_per_subnet = 0
+            self.agent_configurations['tunnel_types'] = []
+            self.agent_configurations['bridge_mappings'] = {}
         else:
             self.interface_mapping = {}
             self.tagging_mapping = {}
@@ -266,9 +273,9 @@ class iControlDriver(object):
 
         self._init_connection()
 
-        LOG.debug(_('iControlDriver initialized to %d hosts with username:%s'
+        LOG.info(_('iControlDriver initialized to %d hosts with username:%s'
                     % (len(self.__bigips), self.username)))
-        LOG.debug(_('iControlDriver agent configurations:%s'
+        LOG.info(_('iControlDriver dynamic agent configurations:%s'
                     % self.agent_configurations))
 
     @serialized('exists')
@@ -291,6 +298,12 @@ class iControlDriver(object):
     @serialized('update_vip')
     @is_connected
     def update_vip(self, old_vip, vip, service):
+        if not old_vip['pool_id'] == vip['pool_id']:
+            old_pool_service = self.plugin_rpc.get_service_by_pool_id(
+                                        old_vip['pool_id'],
+                                        self.conf.f5_global_routed_mode)
+            self._assure_service_networks(old_pool_service)
+            self._assure_service(old_pool_service)
         self._assure_service_networks(service)
         self._assure_service(service)
 
@@ -326,6 +339,12 @@ class iControlDriver(object):
     @serialized('update_member')
     @is_connected
     def update_member(self, old_member, member, service):
+        if not old_member['pool_id'] == member['pool_id']:
+            old_pool_service = self.plugin_rpc.get_service_by_pool_id(
+                                        old_member['pool_id'],
+                                        self.conf.f5_global_routed_mode)
+            self._assure_service_networks(old_pool_service)
+            self._assure_service(old_pool_service)
         self._assure_service_networks(service)
         self._assure_service(service)
 
@@ -551,28 +570,29 @@ class iControlDriver(object):
     def _assure_device_pool_create(self, pool, bigip, on_last_bigip):
         if not pool['status'] == plugin_const.PENDING_DELETE:
             desc = pool['name'] + ':' + pool['description']
-            if not bigip.pool.create(name=pool['id'],
-                                     lb_method=pool['lb_method'],
-                                     description=desc,
-                                     folder=pool['tenant_id']):
-
-                if pool['status'] == plugin_const.PENDING_UPDATE:
-                    # make sure pool attributes are correct
-                    bigip.pool.set_lb_method(name=pool['id'],
-                                             lb_method=pool['lb_method'])
-                    bigip.pool.set_description(name=pool['id'],
-                                               description=desc)
-                    if on_last_bigip:
-                        update_pool = self.plugin_rpc.update_pool_status
-                        update_pool(pool['id'],
-                                    status=plugin_const.ACTIVE,
-                                    status_description='pool updated')
-            else:
+            bigip.pool.create(name=pool['id'],
+                              lb_method=pool['lb_method'],
+                              description=desc,
+                              folder=pool['tenant_id'])
+            if pool['status'] == plugin_const.PENDING_UPDATE:
+                # make sure pool attributes are correct
+                bigip.pool.set_lb_method(name=pool['id'],
+                                         lb_method=pool['lb_method'],
+                                         folder=pool['tenant_id'])
+                bigip.pool.set_description(name=pool['id'],
+                                           description=desc,
+                                           folder=pool['tenant_id'])
                 if on_last_bigip:
                     update_pool = self.plugin_rpc.update_pool_status
                     update_pool(pool['id'],
                                 status=plugin_const.ACTIVE,
-                                status_description='pool created')
+                                status_description='pool updated')
+            if pool['status'] == plugin_const.PENDING_CREATE:
+                if on_last_bigip:
+                        update_pool = self.plugin_rpc.update_pool_status
+                        update_pool(pool['id'],
+                                    status=plugin_const.ACTIVE,
+                                    status_description='pool created')
 
     #
     # Provision Health Monitors - Create/Update
@@ -616,7 +636,12 @@ class iControlDriver(object):
                         pool_id=pool['id'])
                 # not sure if the monitor might be in use
                 try:
+                    LOG.debug(_('Deleting %s monitor /%s/%s'
+                                % (monitor['type'],
+                                   pool['tenant_id'],
+                                   monitor['id'])))
                     bigip.monitor.delete(name=monitor['id'],
+                                         mon_type=monitor['type'],
                                          folder=pool['tenant_id'])
                 except:
                     pass
@@ -625,12 +650,8 @@ class iControlDriver(object):
                 if not found_existing_monitor:
                     timeout = int(monitor['max_retries']) * \
                               int(monitor['timeout'])
-                    if monitor['type'] == 'PING':
-                        mon_type = "ICMP"
-                    else:
-                        mon_type = monitor['type']
                     bigip.monitor.create(name=monitor['id'],
-                                         mon_type=mon_type,
+                                         mon_type=monitor['type'],
                                          interval=monitor['delay'],
                                          timeout=timeout,
                                          send_text=None,
@@ -665,6 +686,7 @@ class iControlDriver(object):
         # get rid of monitors no longer in service definition
         for monitor in existing_monitors:
             bigip.monitor.delete(name=monitor,
+                                 mon_type=None,
                                  folder=pool['tenant_id'])
 
     def _update_monitor(self, bigip, monitor, set_times=True):
@@ -673,9 +695,11 @@ class iControlDriver(object):
                       int(monitor['timeout'])
             # make sure monitor attributes are correct
             bigip.monitor.set_interval(name=monitor['id'],
+                               mon_type=monitor['type'],
                                interval=monitor['delay'],
                                folder=monitor['tenant_id'])
             bigip.monitor.set_timeout(name=monitor['id'],
+                              mon_type=monitor['type'],
                               timeout=timeout,
                               folder=monitor['tenant_id'])
 
@@ -725,9 +749,11 @@ class iControlDriver(object):
                       % (send_text, recv_text))
 
             bigip.monitor.set_send_string(name=monitor['id'],
+                                          mon_type=monitor['type'],
                                           send_text=send_text,
                                           folder=monitor['tenant_id'])
             bigip.monitor.set_recv_string(name=monitor['id'],
+                                          mon_type=monitor['type'],
                                           recv_text=recv_text,
                                           folder=monitor['tenant_id'])
 
@@ -782,6 +808,10 @@ class iControlDriver(object):
             else:
                 if network and network['shared']:
                     ip_address = ip_address + '%0'
+                elif 'router:external' in network and \
+                     network['router:external'] and \
+                     self.conf.f5_common_external_networks:
+                    ip_address = ip_address + '%0'
 
             found_existing_member = None
 
@@ -790,18 +820,15 @@ class iControlDriver(object):
                    (member['protocol_port'] == existing_member['port']):
                     found_existing_member = existing_member
                     break
-            LOG.debug('found_existing_member is: %s' % found_existing_member)
-
+            
             # Delete those pending delete
             if member['status'] == plugin_const.PENDING_DELETE:
                 if not network:
                     # Seems the pool member network could not
                     # be populated.  Try deleting both on a
                     # shared network and a tenant specific
-                    LOG.error('Removing member %s without a network defined'
-                              % member['address'])
                     bigip.pool.remove_member(name=pool['id'],
-                                  ip_address=ip_address + '%0',
+                                  ip_address=ip_address,
                                   port=int(member['protocol_port']),
                                   folder=pool['tenant_id'])
                     if not self.conf.f5_global_routed_mode:
@@ -972,7 +999,13 @@ class iControlDriver(object):
         if using_ratio:
             #LOG.debug(_("Pool: %s changing to ratio based lb"
             #        % pool['id']))
-            bigip.pool.set_lb_method(
+            if pool['lb_method'] == lb_const.LB_METHOD_LEAST_CONNECTIONS:
+                bigip.pool.set_lb_method(
+                                name=pool['id'],
+                                lb_method='RATIO_LEAST_CONNECTIONS',
+                                folder=pool['tenant_id'])
+            else:
+                bigip.pool.set_lb_method(
                                 name=pool['id'],
                                 lb_method='RATIO',
                                 folder=pool['tenant_id'])
@@ -1033,6 +1066,11 @@ class iControlDriver(object):
                 if network['shared']:
                     network_name = '/Common/' + network_name
                     ip_address = ip_address + '%0'
+                elif 'router:external' in network and \
+                     network['router:external'] and \
+                     self.conf.f5_common_external_networks:
+                    network_name = '/Common/' + network_name
+                    ip_address = ip_address + '%0'
 
                 if self.conf.f5_snat_mode and \
                    self.conf.f5_snat_addresses_per_subnet > 0:
@@ -1048,6 +1086,15 @@ class iControlDriver(object):
                 bigip_vs.delete(name=vip['id'], folder=vip['tenant_id'])
 
                 bigip.rule.delete(name=RPS_THROTTLE_RULE_PREFIX +
+                                  vip['id'],
+                                  folder=vip['tenant_id'])
+
+                bigip_vs.delete_uie_persist_profile(
+                                        name=APP_COOKIE_RULE_PREFIX +
+                                              vip['id'],
+                                        folder=vip['tenant_id'])
+
+                bigip.rule.delete(name=APP_COOKIE_RULE_PREFIX +
                                   vip['id'],
                                   folder=vip['tenant_id'])
 
@@ -1189,7 +1236,8 @@ class iControlDriver(object):
 
                     desc = vip['name'] + ':' + vip['description']
                     bigip_vs.set_description(name=vip['id'],
-                                             description=desc)
+                                             description=desc,
+                                             folder=pool['tenant_id'])
 
                     bigip_vs.set_pool(name=vip['id'],
                                       pool_name=pool['id'],
@@ -1238,15 +1286,14 @@ class iControlDriver(object):
                             # an HTTP profile
                             LOG.debug('adding http profile'
                                       ' and primary universal persistence')
-                            bigip_vs.virtual_server.add_profile(
+                            bigip_vs.add_profile(
                                 name=vip['id'],
                                 profile_name='/Common/http',
                                 folder=vip['tenant_id'])
                             # make sure they gave us a cookie_name
-                            if 'cookie_name' in \
-                          vip['session_persistence']['cookie_name']:
+                            if 'cookie_name' in vip['session_persistence']:
                                 cookie_name = \
-                          vip['session_persistence']['cookie_name']
+                                   vip['session_persistence']['cookie_name']
                                 # create and add irule to capture cookie
                                 # from the service response.
                                 rule_definition = \
@@ -1661,6 +1708,10 @@ class iControlDriver(object):
         if network['provider:network_type'] == 'vlan':
             if network['shared']:
                 network_folder = 'Common'
+            elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                network_folder = 'Common'
             else:
                 network_folder = network['tenant_id']
 
@@ -1694,6 +1745,10 @@ class iControlDriver(object):
         elif network['provider:network_type'] == 'flat':
             if network['shared']:
                 network_folder = 'Common'
+            elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                network_folder = 'Common'
             else:
                 network_folder = network['tenant_id']
             interface = self.interface_mapping['default']
@@ -1719,6 +1774,10 @@ class iControlDriver(object):
                 LOG.error('VXLAN:' + error_message)
                 raise f5ex.MissingVTEPAddress('VXLAN:' + error_message)
             if network['shared']:
+                network_folder = 'Common'
+            elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
                 network_folder = 'Common'
             else:
                 network_folder = network['tenant_id']
@@ -1756,6 +1815,10 @@ class iControlDriver(object):
                 LOG.error('L2GRE:' + error_message)
                 raise f5ex.MissingVTEPAddress('L2GRE:' + error_message)
             if network['shared']:
+                network_folder = 'Common'
+            elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
                 network_folder = 'Common'
             else:
                 network_folder = network['tenant_id']
@@ -1818,6 +1881,10 @@ class iControlDriver(object):
         # Where to put all these objects?
         network_folder = pool['tenant_id']
         if network['shared']:
+            network_folder = 'Common'
+        elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
             network_folder = 'Common'
 
         if network['provider:network_type'] == 'vlan':
@@ -1920,7 +1987,11 @@ class iControlDriver(object):
                 ip_address = new_port['fixed_ips'][0]['ip_address']
             if network['shared']:
                 ip_address = ip_address + '%0'
-            if network['shared']:
+                index_snat_name = '/Common/' + index_snat_name
+            elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
             tglo = '/Common/traffic-group-local-only',
@@ -1972,6 +2043,12 @@ class iControlDriver(object):
             if network['shared']:
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
+            elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                ip_address = ip_address + '%0'
+                index_snat_name = '/Common/' + index_snat_name
+
             if self.conf.sync_mode == 'replication':
                 bigips = bigip.group_bigips
             else:
@@ -2028,8 +2105,13 @@ class iControlDriver(object):
                     ip_address = new_port['fixed_ips'][0]['ip_address']
                 if network['shared']:
                     ip_address = ip_address + '%0'
-                if network['shared']:
                     index_snat_name = '/Common/' + index_snat_name
+                elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                    ip_address = ip_address + '%0'
+                    index_snat_name = '/Common/' + index_snat_name
+
                 if self.conf.sync_mode == 'replication':
                     bigips = bigip.group_bigips
                 else:
@@ -2129,6 +2211,11 @@ class iControlDriver(object):
         if network['shared']:
             network_folder = 'Common'
             network_name = '/Common/' + network_name
+        elif 'router:external' in network and \
+             network['router:external'] and \
+             self.conf.f5_common_external_networks:
+            network_folder = 'Common'
+            network_name = '/Common/' + network_name
 
         # Select a traffic group for the floating SelfIP
         vip_tg = self._get_least_gw_traffic_group()
@@ -2181,6 +2268,10 @@ class iControlDriver(object):
             if network['provider:network_type'] == 'vlan':
                 if network['shared']:
                     network_folder = 'Common'
+                elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                    network_folder = 'Common'
                 else:
                     network_folder = network['tenant_id']
                 vlan_name = self._get_vlan_name(network)
@@ -2190,6 +2281,10 @@ class iControlDriver(object):
             elif network['provider:network_type'] == 'flat':
                 if network['shared']:
                     network_folder = 'Common'
+                elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
+                    network_folder = 'Common'
                 else:
                     network_folder = network['id']
                 vlan_name = self._get_vlan_name(network)
@@ -2198,6 +2293,10 @@ class iControlDriver(object):
 
             elif network['provider:network_type'] == 'vxlan':
                 if network['shared']:
+                    network_folder = 'Common'
+                elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
                     network_folder = 'Common'
                 else:
                     network_folder = network['tenant_id']
@@ -2227,6 +2326,10 @@ class iControlDriver(object):
                                                       fdb_entries)
             elif network['provider:network_type'] == 'gre':
                 if network['shared']:
+                    network_folder = 'Common'
+                elif 'router:external' in network and \
+                 network['router:external'] and \
+                 self.conf.f5_common_external_networks:
                     network_folder = 'Common'
                 else:
                     network_folder = network['tenant_id']
@@ -2275,6 +2378,10 @@ class iControlDriver(object):
         network_folder = service['pool']['tenant_id']
         if network['shared']:
             network_folder = 'Common'
+        elif 'router:external' in network and \
+              network['router:external'] and \
+              self.conf.f5_common_external_networks:
+            network_folder = 'Common'
         snat_pool_name = service['pool']['tenant_id']
         # Setup required SNAT addresses on this subnet
         # based on the HA requirements
@@ -2286,7 +2393,11 @@ class iControlDriver(object):
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
                     if network['shared']:
-                        tmos_snat_name = "/Common/" + index_snat_name
+                        tmos_snat_name = '/Common/' + index_snat_name
+                    elif 'router:external' in network and \
+                         network['router:external'] and \
+                         self.conf.f5_common_external_networks:
+                        tmos_snat_name = '/Common/' + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
                     bigip.snat.remove_from_pool(name=snat_pool_name,
@@ -2306,7 +2417,11 @@ class iControlDriver(object):
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
                     if network['shared']:
-                        tmos_snat_name = "/Common/" + index_snat_name
+                        tmos_snat_name = '/Common/' + index_snat_name
+                    elif 'router:external' in network and \
+                         network['router:external'] and \
+                         self.conf.f5_common_external_networks:
+                        tmos_snat_name = '/Common/' + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
                     bigip.snat.remove_from_pool(name=snat_pool_name,
@@ -2328,9 +2443,14 @@ class iControlDriver(object):
                                     "-" + subnet['id']
                         index_snat_name = snat_name + "_" + str(i)
                         if network['shared']:
-                            tmos_snat_name = "/Common/" + index_snat_name
+                            tmos_snat_name = '/Common/' + index_snat_name
+                        elif 'router:external' in network and \
+                         network['router:external'] and \
+                         self.conf.f5_common_external_networks:
+                            tmos_snat_name = '/Common/' + index_snat_name
                         else:
                             tmos_snat_name = index_snat_name
+
                         bigip.snat.remove_from_pool(name=snat_pool_name,
                                         member_name=tmos_snat_name,
                                         folder=service['pool']['tenant_id'])
@@ -2380,6 +2500,10 @@ class iControlDriver(object):
 
         network_folder = subnet['tenant_id']
         if network['shared']:
+            network_folder = 'Common'
+        elif 'router:external' in network and \
+             network['router:external'] and \
+             self.conf.f5_common_external_networks:
             network_folder = 'Common'
 
         bigip.selfip.delete(name=floating_selfip_name,
@@ -2558,7 +2682,7 @@ class iControlDriver(object):
                 self.username = self.conf.icontrol_username
                 self.password = self.conf.icontrol_password
 
-                LOG.debug(_('opening iControl connections to %s @ %s' % (
+                LOG.info(_('Opening iControl connections to %s @ %s' % (
                                                             self.username,
                                                             self.hostnames[0])
                             ))
@@ -2587,26 +2711,36 @@ class iControlDriver(object):
                 extramb = first_bigip.system.get_provision_extramb()
                 if int(extramb) < f5const.MIN_EXTRA_MB:
                     raise f5ex.ProvisioningExtraMBValidateFailed(
-                            '!! device %s NOT PROVISIONED MANAGEMENT LARGE.!!'
-                            % self.hostnames[0])
+                       'device %s BIG-IP not provisioned for management LARGE.'
+                       % self.host)
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
                 # devices trusted by this device.
+                cluster_name = first_bigip.device.get_device_group()
                 if len(self.hostnames) < 2:
                     if not first_bigip.cluster.get_sync_status() == \
                                                               'Standalone':
                         first_bigip.system.set_folder('/Common')
                         this_devicename = \
                          first_bigip.device.get_device_name()
-                        devices = first_bigip.device.get_all_device_names()
-                        if this_devicename in devices:
-                            devices.remove(this_devicename)
+                        dg_devices = \
+                               first_bigip.cluster.devices(cluster_name)
+                        if this_devicename in dg_devices:
+                            dg_devices.remove(this_devicename)
                         self.hostnames = self.hostnames + \
-                    first_bigip.device.mgmt_dev.get_management_address(devices)
+                first_bigip.device.mgmt_dev.get_management_address(dg_devices)
                     else:
-                        LOG.debug(_(
-                            'only one host connected and it is Standalone.'))
+                        if not self.conf.f5_ha_type == 'standalone':
+                            raise f5ex.BigIPClusterInvalidHA(
+                              'HA mode is %s and only one host found.'
+                              % self.conf.f5_ha_type)
+
+                if not cluster_name and self.conf.f5_ha_type != 'standalone':
+                    raise f5ex.BigIPClusterInvalidHA(
+                     'HA mode is %s and no sync failover device group found.'
+                     % self.conf.f5_ha_type)
+
                 # populate traffic groups
                 first_bigip.system.set_folder(folder='/Common')
                 self.__traffic_groups = first_bigip.cluster.mgmt_tg.get_list()
@@ -2647,8 +2781,33 @@ class iControlDriver(object):
                     extramb = hostbigip.system.get_provision_extramb()
                     if int(extramb) < f5const.MIN_EXTRA_MB:
                         raise f5ex.ProvisioningExtraMBValidateFailed(
-                            '!! device %s NOT PROVISIONED MANAGEMENT LARGE.!!'
-                            % self.host)
+                       'device %s BIG-IP not provisioned for management LARGE.'
+                       % self.host)
+
+                    if hostbigip.device.get_device_group() != cluster_name:
+                        raise f5ex.BigIPClusterInvalidHA(
+                                       'Invalid HA. Not all devices in the' +
+                                       ' same sync failover device group'
+                                       )
+
+                if not cluster_name and self.conf.f5_ha_type != 'standalone':
+                    raise f5ex.BigIPClusterInvalidHA(
+                     'HA mode is %s and no sync failover device group found.'
+                     % self.conf.f5_ha_type)
+
+                if self.conf.f5_ha_type == 'standalone' and \
+                   len(self.__bigips) > 1:
+                    raise f5ex.BigIPClusterInvalidHA(
+                         'HA mode is %s and there are %d devices present.'
+                         % (self.conf.f5_ha_type, len(self.__bigips)))
+
+                if self.conf.f5_ha_type == 'pair' and \
+                   len(self.__bigips) > 2:
+                    raise f5ex.BigIPClusterInvalidHA(
+                         'HA mode is %s and there are %d devices present.'
+                         % (self.conf.f5_ha_type, len(self.__bigips)))
+
+                #import logging as std_logging
                 #if self.conf.debug and \
                 #   (f5const.LOG_LEVEL == std_logging.DEBUG):
                 #    sudslog = std_logging.getLogger('suds.client')
@@ -2670,6 +2829,7 @@ class iControlDriver(object):
                 for set_bigip in bigips:
                     device_group = set_bigip.device.get_device_group()
                     if device_group:
+                        set_bigip.system.set_folder('Common')
                         set_bigip.cluster.mgmt_dg.set_autosync_enabled_state(
                                 [device_group], [autosync_state])
 

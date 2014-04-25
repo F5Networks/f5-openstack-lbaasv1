@@ -9,6 +9,7 @@
 from f5.bigip import exceptions
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 from suds import WebFault
 
@@ -27,12 +28,11 @@ class Monitor(object):
     def create(self, name=None, mon_type=None, interval=5,
                timeout=16, send_text=None, recv_text=None,
                folder='Common'):
-        if not self.exists(name=name, folder=folder):
-            monitor_type = self._get_monitor_type(mon_type)
+        if not self.exists(name=name, mon_type=mon_type, folder=folder):
             template = self.lb_monitor.typefactory.create(
                                     'LocalLB.Monitor.MonitorTemplate')
             template.template_name = name
-            template.template_type = monitor_type
+            template.template_type = self._get_monitor_type(mon_type)
 
             monitor_ipport = self.lb_monitor.typefactory.create(
                                             'LocalLB.MonitorIPPort')
@@ -49,7 +49,7 @@ class Monitor(object):
             template_attributes = self.lb_monitor.typefactory.create(
                                     'LocalLB.Monitor.CommonAttributes')
 
-            if str(mon_type) == 'ICMP':
+            if str(mon_type) == 'PING':
                 template_attributes.parent_template = 'gateway_icmp'
             else:
                 template_attributes.parent_template = mon_type.lower()
@@ -78,25 +78,27 @@ class Monitor(object):
             return False
 
     @icontrol_folder
-    def delete(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def delete(self, name=None, mon_type=None, folder='Common'):
+        if not mon_type:
+            mon_type = self.get_type(name=name, folder=folder)
+        if mon_type and self.exists(name=name,
+                                    mon_type=mon_type,
+                                    folder=folder):
             try:
                 self.lb_monitor.delete_template([name])
             except WebFault as wf:
                 if "is in use" in str(wf.message):
                     return False
             return True
-        else:
-            return False
+        return False
 
     @icontrol_folder
     def get_type(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
+        try:
             monitor_temp_type_type = self.lb_monitor.typefactory.create(
                                         'LocalLB.Monitor.TemplateType')
             monitor_temp_type = self.lb_monitor.get_template_type(
                                                             [name])[0]
-
             if monitor_temp_type == monitor_temp_type_type.TTYPE_HTTP:
                 return 'HTTP'
             elif monitor_temp_type == monitor_temp_type_type.TTYPE_TCP:
@@ -105,20 +107,25 @@ class Monitor(object):
                     monitor_temp_type_type.TTYPE_GATEWAY_ICMP:
                 return 'ICMP'
             else:
-                raise exceptions.UnknownMonitorType(
-                         'Unknown Monitor type: %s' % monitor_temp_type)
+                return None
+        except WebFault as wf:
+            if "was not found" in str(wf.message):
+                return None
+            else:
+                raise
 
     @icontrol_folder
-    def get_interval(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def get_interval(self, name=None, mon_type=None, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                     'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
             return self.lb_monitor.get_template_integer_property(
                                         [name], [prop_type])[0].value
 
     @icontrol_folder
-    def set_interval(self, name=None, interval=5, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def set_interval(self, name=None,
+                     mon_type=None, interval=5, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder):
             value = self.lb_monitor.typefactory.create(
                         'LocalLB.Monitor.IntegerValue')
             value.type = self.lb_monitor.typefactory.create(
@@ -130,16 +137,17 @@ class Monitor(object):
             return False
 
     @icontrol_folder
-    def get_timeout(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def get_timeout(self, name=None, mon_type=None, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                         'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
             return self.lb_monitor.get_template_integer_property(
                                             [name], [prop_type])[0].value
 
     @icontrol_folder
-    def set_timeout(self, name=None, timeout=16, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def set_timeout(self, name=None, mon_type=None,
+                    timeout=16, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder):
             value = self.lb_monitor.typefactory.create(
                                 'LocalLB.Monitor.IntegerValue')
             value.type = self.lb_monitor.typefactory.create(
@@ -151,16 +159,18 @@ class Monitor(object):
             return False
 
     @icontrol_folder
-    def get_send_string(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def get_send_string(self, name=None, mon_type=None, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                          'LocalLB.Monitor.StrPropertyType').STYPE_SEND
             return self.lb_monitor.get_template_string_property(
                                         [name], [prop_type])[0].value
 
     @icontrol_folder
-    def set_send_string(self, name=None, send_text=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and send_text:
+    def set_send_string(self, name=None, mon_type=None,
+                        send_text=None, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder) and \
+           send_text:
             value = self.lb_monitor.typefactory.create(
                             'LocalLB.Monitor.StringValue')
             value.type = self.lb_monitor.typefactory.create(
@@ -172,16 +182,18 @@ class Monitor(object):
             return False
 
     @icontrol_folder
-    def get_recv_string(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
+    def get_recv_string(self, name=None, mon_type=None, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder):
             prop_type = self.lb_monitor.typefactory.create(
                          'LocalLB.Monitor.StrPropertyType').STYPE_RECEIVE
             return self.lb_monitor.get_template_string_property(
                                             [name], [prop_type])[0].value
 
     @icontrol_folder
-    def set_recv_string(self, name=None, recv_text=None, folder='Common'):
-        if self.exists(name=name, folder=folder) and recv_text:
+    def set_recv_string(self, name=None, mon_type=None,
+                        recv_text=None, folder='Common'):
+        if self.exists(name=name, mon_type=mon_type, folder=folder) and \
+           recv_text:
             value = self.lb_monitor.typefactory.create(
                          'LocalLB.Monitor.StringValue')
             value.type = self.lb_monitor.typefactory.create(
@@ -202,6 +214,8 @@ class Monitor(object):
             return monitor_temp_type.TTYPE_HTTP
         elif type_str == 'HTTPS':
             return monitor_temp_type.TTYPE_HTTPS
+        elif type_str == 'PING':
+            return monitor_temp_type.TTYPE_GATEWAY_ICMP
         elif type_str == 'ICMP':
             return monitor_temp_type.TTYPE_GATEWAY_ICMP
         elif type_str == 'UDP':
@@ -212,11 +226,47 @@ class Monitor(object):
             raise exceptions.UnknownMonitorType(
                                         'Unknown monitor %s' % type_str)
 
-    @icontrol_folder
-    def exists(self, name=None, folder='Common'):
-        for template in self.lb_monitor.get_template_list():
-            if template.template_name == name:
+    def _get_monitor_rest_type(self, type_str):
+        type_str = type_str.upper()
+        if type_str == 'TCP':
+            return 'tcp'
+        elif type_str == 'HTTP':
+            return 'http'
+        elif type_str == 'HTTPS':
+            return 'https'
+        elif type_str == 'PING':
+            return 'gateway-icmp'
+        elif type_str == 'ICMP':
+            return 'gateway-icmp'
+        elif type_str == 'UDP':
+            return 'udp'
+        elif type_str == 'INBAND':
+            return 'inband'
+        else:
+            raise exceptions.UnknownMonitorType(
+                                        'Unknown monitor %s' % type_str)
+
+    #TODO: turn this into iControl ReST.
+    #That will require us to know the type in every call
+    #to exists, because it's in the URL path.
+
+    @icontrol_rest_folder
+    def exists(self, name=None, mon_type=None, folder='Common'):
+        if name and mon_type:
+            mon_type = self._get_monitor_rest_type(mon_type)
+            request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+            request_url += '~' + folder + '~' + name
+            response = self.bigip.icr_session.get(request_url)
+            if response.status_code < 400:
                 return True
+            else:
+                return False
+        else:
+            return False
+
+        #for template in self.lb_monitor.get_template_list():
+        #    if template.template_name == name:
+        #        return True
 
     @icontrol_folder
     def get_monitors(self, folder='Common'):

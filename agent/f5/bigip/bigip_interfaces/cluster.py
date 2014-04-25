@@ -254,13 +254,32 @@ class Cluster(object):
             return False
 
     def cluster_exists(self, name):
-        if name in map(os.path.basename, self.mgmt_dg.get_list()):
-            if 'DGT_FAILOVER' == self.mgmt_dg.get_type([name])[0]:
+        request_url = self.bigip.icr_url + '/cm/device-group/~Common'
+        request_url += '~' + name
+        request_filter = '/?$select=name,type'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if response_obj['type'] == 'sync-failover':
                 return True
             else:
                 return False
         else:
             return False
+        #self.bigip.system.set_folder('/Common')
+        #return self.mgmt_dev.get_management_address(
+        #                        [self.get_device_name()])[0]
+        #self.bigip.system.set_folder('/')
+        #dgs = self.mgmt_dg.get_list()
+        #self.bigip.system.set_folder('/Common')
+        #if name in map(os.path.basename, dgs):
+        #    if 'DGT_FAILOVER' == self.mgmt_dg.get_type([name])[0]:
+        #        return True
+        #    else:
+        #        return False
+        #else:
+        #    return False
 
     def create(self, name, autosync=True):
         if not self.cluster_exists(name):

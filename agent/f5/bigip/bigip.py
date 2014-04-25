@@ -8,6 +8,7 @@
 
 import os
 import logging
+import requests
 
 from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
@@ -39,6 +40,14 @@ class BigIP(object):
                  strict_route_isolation=False):
         # get icontrol connection stub
         self.icontrol = self._get_icontrol(hostname, username, password)
+
+        self.icr_session = requests.session()
+        self.icr_session.auth = (username, password)
+        self.icr_session.verify = False
+        self.icr_session.headers.update(
+                                 {'Content-Type': 'application/json'})
+        self.icr_url = 'https://%s/mgmt/tm' % hostname
+
         if address_isolation:
             self.route_domain_required = True
         else:

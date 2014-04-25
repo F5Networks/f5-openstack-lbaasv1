@@ -26,16 +26,6 @@ class ARP(object):
         # iControl helper objects
         self.net_arp = self.bigip.icontrol.Networking.ARP
 
-        #icontrol = bigip.icontrol
-
-        #self.icr_session = requests.session()
-        #self.icr_session.auth = (icontrol.username,
-        #                             icontrol.password)
-        #self.icr_session.verify = False
-        #self.icr_session.headers.update(
-        #                         {'Content-Type': 'application/json'})
-        #self.icr_url = 'https://%s/mgmt/tm' % icontrol.hostname
-
     #@icontrol_rest_folder
     #@domain_address
     #def create(self, ip_address=None, mac_address=None, folder='Common'):

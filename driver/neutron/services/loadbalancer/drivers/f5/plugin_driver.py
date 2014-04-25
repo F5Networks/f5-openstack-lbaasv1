@@ -1203,7 +1203,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.get_pool_agent(context, pool['id'])
 
         if 'vip_id' in old_pool and old_pool['vip_id']:
-            old_pool['vip'] = self._get_vip(context, pool['vip_id'])
+            old_pool['vip'] = self._get_vip(context, old_pool['vip_id'])
         else:
             old_pool['vip'] = None
 
@@ -1403,6 +1403,9 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                                                 pool['subnet']['network_id'])
 
         return pool
+
+    def _get_vip(self, context, vip_id):
+        return self.plugin.get_vip(context, vip_id)
 
     def _get_vxlan_endpoints(self, context):
         endpoints = []

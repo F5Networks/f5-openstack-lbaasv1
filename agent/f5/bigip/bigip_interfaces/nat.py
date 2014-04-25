@@ -10,6 +10,7 @@ from f5.common import constants as const
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 from suds import WebFault
 import os
@@ -95,7 +96,15 @@ class NAT(object):
     def get_vlan(self, name=None, folder='Common'):
         self.lb_nat.get_vlan([name])[0]
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
-        if name in self.lb_nat.get_list():
+        request_url = self.bigip.icr_url + '/ltm/nat/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
             return True
+        else:
+            return False
+        #if name in self.lb_nat.get_list():
+        #    return True

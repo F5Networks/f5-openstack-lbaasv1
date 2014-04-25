@@ -8,6 +8,7 @@
 
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 from suds import WebFault
 
@@ -24,7 +25,7 @@ class Rule(object):
 
     @icontrol_folder
     def create(self, name=None, rule_definition=None, folder='Common'):
-        if not self.exists(name, folder):
+        if not self.exists(name=name, folder=folder):
             rule_def = self.lb_rule.typefactory.create(
                                         'LocalLB.Rule.RuleDefinition')
             rule_def.rule_name = name
@@ -36,9 +37,24 @@ class Rule(object):
                 if "already exists in partition" in str(wf.message):
                     Log.error('Rule',
                               'tried to create a Rule when exists')
-                    return False
+                    self.update(name=name,
+                                rule_definition=rule_definition,
+                                folder=folder)
+                    return True
                 else:
                     raise wf
+        else:
+            return False
+
+    @icontrol_folder
+    def update(self, name=None, rule_definition=None, folder='Common'):
+        if self.exists(name=name, folder=folder):
+            rule_def = self.lb_rule.typefactory.create(
+                                        'LocalLB.Rule.RuleDefinition')
+            rule_def.rule_name = name
+            rule_def.rule_definition = rule_definition
+            self.lb_rule.modify_rule([rule_def])
+            return True
         else:
             return False
 
@@ -61,9 +77,18 @@ class Rule(object):
         else:
             return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
-        for rule_name in self.lb_rule.get_list():
-            if rule_name == name:
-                return True
-        return False
+        request_url = self.bigip.icr_url + '/ltm/rule/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
+            return True
+        else:
+            return False
+
+        #for rule_name in self.lb_rule.get_list():
+        #    if rule_name == name:
+        #        return True
+        #return False

@@ -10,6 +10,7 @@ from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 from suds import WebFault
 
@@ -155,17 +156,35 @@ class SNAT(object):
                     return True
         return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def pool_exists(self, name=None, folder='Common'):
-        if name in self.lb_snatpool.get_list():
+        request_url = self.bigip.icr_url + '/ltm/snatpool/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
             return True
         else:
             return False
 
-    @icontrol_folder
+        #if name in self.lb_snatpool.get_list():
+        #    return True
+        #else:
+        #    return False
+
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
-        snat_addrs = self.lb_snataddress.get_list()
-        if name in snat_addrs:
+        request_url = self.bigip.icr_url + '/ltm/snat-translation/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
             return True
         else:
             return False
+
+        #snat_addrs = self.lb_snataddress.get_list()
+        #if name in snat_addrs:
+        #    return True
+        #else:
+        #    return False

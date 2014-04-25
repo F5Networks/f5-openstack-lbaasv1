@@ -37,11 +37,15 @@ def icontrol_folder(method):
     def wrapper(*args, **kwargs):
         instance = args[0]
         if 'folder' in kwargs:
+            if kwargs['folder'].find('~') > -1:
+                kwargs['folder'] = kwargs['folder'].replace('~', '/')
             kwargs['folder'] = os.path.basename(kwargs['folder'])
             if not kwargs['folder'] == 'Common':
                 kwargs['folder'] = prefixed(kwargs['folder'])
 
             if 'name' in kwargs and kwargs['name']:
+                if kwargs['name'].find('~') > -1:
+                    kwargs['name'] = kwargs['name'].replace('~', '/')
                 if kwargs['name'].startswith('/Common/'):
                     kwargs['name'] = os.path.basename(kwargs['name'])
                     kwargs['name'] = prefixed(kwargs['name'])
@@ -54,6 +58,9 @@ def icontrol_folder(method):
                                                            kwargs['folder'])
 
             if 'named_address' in kwargs and kwargs['named_address']:
+                if kwargs['named_address'].find('~') > -1:
+                    kwargs['named_address'] = \
+                                     kwargs['named_address'].replace('~', '/')
                 if kwargs['named_address'].startswith('/Common/'):
                     kwargs['named_address'] = \
                         os.path.basename(kwargs['named_address'])
@@ -69,6 +76,8 @@ def icontrol_folder(method):
 
             for name in kwargs:
                 if name.find('_name') > 0 and kwargs[name]:
+                    if kwargs[name].find('~') > -1:
+                        kwargs[name] = kwargs[name].replace('~', '/')
                     if kwargs[name].startswith('/Common/'):
                         kwargs[name] = os.path.basename(kwargs[name])
                         kwargs[name] = prefixed(kwargs[name])
@@ -102,23 +111,26 @@ def icontrol_rest_folder(method):
     def wrapper(*args, **kwargs):
         if 'folder' in kwargs:
             if kwargs['folder'].find('Common') < 0:
-                kwargs['folder'] = \
-                    kwargs['folder'].replace('~', '').replace('/', '')
+                if kwargs['folder'].find('~') > -1:
+                    kwargs['folder'] = kwargs['folder'].replace('~', '/')
+                    kwargs['folder'] = os.path.basename(kwargs['folder'])
+                if kwargs['folder'].find('/') > -1:
+                    kwargs['folder'] = os.path.basename(kwargs['folder'])
                 kwargs['folder'] = prefixed(kwargs['folder'])
         if 'name' in kwargs and kwargs['name']:
+            if kwargs['name'].find('~') > -1:
+                kwargs['name'] = kwargs['name'].replace('~', '/')
+                kwargs['name'] = os.path.basename(kwargs['name'])
             if kwargs['name'].find('/') > -1:
                 kwargs['name'] = os.path.basename(kwargs['name'])
-            if kwargs['name'].find('~') > -1:
-                path_parts = kwargs['name'].split('~')
-                kwargs['name'] = path_parts[-1]
             kwargs['name'] = prefixed(kwargs['name'])
         for name in kwargs:
             if name.find('_name') > 0 and kwargs[name]:
+                if kwargs[name].find('~') > -1:
+                    kwargs[name] = kwargs[name].replace('~', '/')
+                    kwargs[name] = os.path.basename(kwargs[name])
                 if kwargs[name].find('/') > -1:
                     kwargs[name] = os.path.basename(kwargs[name])
-                if kwargs[name].find('~') > -1:
-                    path_parts = kwargs[name].split('~')
-                    kwargs[name] = path_parts[-1]
                 kwargs[name] = prefixed(kwargs[name])
         return method(*args, **kwargs)
     return wrapper
@@ -254,6 +266,8 @@ def decorate_name(name=None, folder='Common'):
 def strip_folder_and_prefix(path):
     if isinstance(path, list):
         for i in range(len(path)):
+            if path[i].find('~') > -1:
+                path[i] = path[i].replace('~', '/')
             if path[i].startswith('/Common'):
                 path[i] = path[i].replace(OBJ_PREFIX, '')
             else:
@@ -261,6 +275,8 @@ def strip_folder_and_prefix(path):
                   os.path.basename(str(path[i])).replace(OBJ_PREFIX, '')
         return path
     else:
+        if path.find('~') > -1:
+            path = path.replace('~', '/')
         if path.startswith('/Common'):
             return str(path).replace(OBJ_PREFIX, '')
         else:

@@ -9,15 +9,20 @@
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
+import requests
+import urllib
+import json
 
 
 class Pool(object):
     def __init__(self, bigip):
         self.bigip = bigip
+
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(
                                            ['LocalLB.Pool',
@@ -285,7 +290,10 @@ class Pool(object):
             node_addresses = self.lb_node.get_address(nodes)
             for i in range(len(node_addresses)):
                 if node_addresses[i] == node_ip_address:
-                    self.lb_node.delete_node_address([nodes[i]])
+                    try:
+                        self.lb_node.delete_node_address([nodes[i]])
+                    except:
+                        return False
                     return True
         return False
 
@@ -359,6 +367,8 @@ class Pool(object):
                 return 'OBSERVED_MEMBER'
             elif lb_method == lb_method_type.LB_METHOD_PREDICTIVE_MEMBER:
                 return 'PREDICTIVE_MEMBER'
+            elif lb_method == lb_method_type.LB_METHOD_RATIO_MEMBER:
+                return 'RATIO'
             elif lb_method == \
                  lb_method_type.LB_METHOD_RATIO_LEAST_CONNECTION_MEMBER:
                 return 'RATIO'
@@ -465,6 +475,8 @@ class Pool(object):
 
         if lb_method == 'LEAST_CONNECTIONS':
             return lb_method_type.LB_METHOD_LEAST_CONNECTION_MEMBER
+        elif lb_method == 'RATIO_LEAST_CONNECTIONS':
+            return lb_method_type.LB_METHOD_RATIO_LEAST_CONNECTION_MEMBER
         elif lb_method == 'SOURCE_IP':
             return lb_method_type.LB_METHOD_LEAST_CONNECTION_NODE_ADDRESS
         elif lb_method == 'OBSERVED_MEMBER':
@@ -472,7 +484,7 @@ class Pool(object):
         elif lb_method == 'PREDICTIVE_MEMBER':
             return lb_method_type.LB_METHOD_PREDICTIVE_MEMBER
         elif lb_method == 'RATIO':
-            return lb_method_type.LB_METHOD_RATIO_LEAST_CONNECTION_MEMBER
+            return lb_method_type.LB_METHOD_RATIO_MEMBER
         else:
             return lb_method_type.LB_METHOD_ROUND_ROBIN
 
@@ -490,17 +502,37 @@ class Pool(object):
         else:
             return service_down_action_type.SERVICE_DOWN_ACTION_NONE
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
-        if name in self.lb_pool.get_list():
+        request_url = self.bigip.icr_url + '/ltm/pool/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
             return True
+        else:
+            return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
     @domain_address
     def member_exists(self, name=None, ip_address=None,
                       port=None, folder='Common'):
-        members = self.lb_pool.get_member_v2([name])
-        for member in members[0]:
-            if os.path.basename(member.address) == ip_address and \
-               int(member.port) == port:
+        request_url = self.bigip.icr_url + '/ltm/pool/'
+        request_url += '~' + folder + '~' + name
+        request_url += '/members/~' + folder + '~'
+        request_url += urllib.quote(ip_address) + ':' + str(port)
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'address' in response_obj:
                 return True
+            else:
+                return False
+        else:
+            return False
+
+        #members = self.lb_pool.get_member_v2([name])
+        #for member in members[0]:
+        #    if os.path.basename(member.address) == ip_address and \
+        #       int(member.port) == port:
+        #        return True

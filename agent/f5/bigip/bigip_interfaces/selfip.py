@@ -10,6 +10,7 @@ from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 from suds import WebFault
 import os
@@ -190,11 +191,28 @@ class SelfIP(object):
         access_list = self.net_self.get_allow_access_list([name])
         self.net_self.remove_allow_access_list([name], access_list)
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
-        current_list = self.net_self.get_list()
         no_prefix_name = name.replace(interfaces.OBJ_PREFIX, '')
-        if name in current_list or no_prefix_name in current_list:
+        request_url = self.bigip.icr_url + '/net/self/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
             return True
         else:
-            return False
+            request_url = self.bigip.icr_url + '/net/self/'
+            request_url += '~' + folder + '~' + no_prefix_name
+            request_url += '?$select=name'
+            response = self.bigip.icr_session.get(request_url)
+            if response.status_code < 400:
+                return True
+            else:
+                return False
+
+        #current_list = self.net_self.get_list()
+        #no_prefix_name = name.replace(interfaces.OBJ_PREFIX, '')
+        #if name in current_list or no_prefix_name in current_list:
+        #    return True
+        #else:
+        #    return False

@@ -9,6 +9,7 @@
 from f5.common import constants as const
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 from suds import WebFault
 import os
@@ -72,7 +73,8 @@ class Vlan(object):
 
     @icontrol_folder
     def delete(self, name=None, folder='Common'):
-        if not self._in_use(name) and self.exists(name):
+        if not self._in_use(name=name, folder=folder) and \
+           self.exists(name=name, folder=folder):
             self.net_vlan.delete_vlan([name])
             return True
         else:
@@ -155,13 +157,23 @@ class Vlan(object):
         if self.exists(name=name, folder=folder):
             return self.net_vlan.get_description([name])[0]
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
         if name:
-            if name.startswith('/Common/'):
-                self.bigip.system.set_folder('/Common')
-            if name in self.net_vlan.get_list():
+            request_url = self.bigip.icr_url + '/net/vlan/'
+            request_url += '~' + folder + '~' + name
+            request_url += '?$select=name'
+            response = self.bigip.icr_session.get(request_url)
+            if response.status_code < 400:
                 return True
+            else:
+                return False
+
+        #if name:
+        #    if name.startswith('/Common/'):
+        #        self.bigip.system.set_folder('/Common')
+        #    if name in self.net_vlan.get_list():
+        #        return True
 
     @icontrol_folder
     def _in_use(self, name=None, folder='Common'):

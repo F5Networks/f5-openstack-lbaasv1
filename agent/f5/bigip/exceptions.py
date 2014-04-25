@@ -23,6 +23,10 @@ class BigIPDeviceLockAcquireFailed(Exception):
     pass
 
 
+class BigIPClusterInvalidHA(Exception):
+    pass
+
+
 class BigIPClusterSyncFailure(Exception):
     pass
 

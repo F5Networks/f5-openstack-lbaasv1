@@ -10,17 +10,20 @@ from f5.common import constants as const
 from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import domain_address
 from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
 from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
 import time
+import urllib
 
 
 class VirtualServer(object):
 
     def __init__(self, bigip):
         self.bigip = bigip
+
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(
                                            ['LocalLB.VirtualServer',
@@ -260,6 +263,8 @@ class VirtualServer(object):
                     folder='Common'):
         if profile_name.startswith("/Common"):
             profile_name = strip_folder_and_prefix(profile_name)
+        Log.debug('VirtualServer', 'Does the following profile exist? %s %s'
+                  % (name, profile_name))
         if not self.virtual_server_has_profile(name=name,
                                            profile_name=profile_name,
                                            client_context=client_context,
@@ -321,9 +326,9 @@ class VirtualServer(object):
                        client_context=True,
                        server_context=True,
                        folder='Common'):
-        if self.exists(name, folder):
+        if self.exists(name=name, folder=folder):
             profile_name = strip_folder_and_prefix(profile_name)
-            profiles = self.get_profiles(name, folder)
+            profiles = self.get_profiles(name=name, folder=folder)
             for profile in profiles:
                 if profile_name in profile:
                     if client_context and \
@@ -350,7 +355,7 @@ class VirtualServer(object):
     @icontrol_folder
     def get_profiles(self, name=None, folder='Common'):
         return_profiles = []
-        if self.exists(name, folder):
+        if self.exists(name=name, folder=folder):
             profiles = self.lb_vs.get_profile([name])[0]
             for profile in profiles:
                 p = {}
@@ -464,6 +469,21 @@ class VirtualServer(object):
             else:
                 raise wf
 
+    @icontrol_rest_folder
+    def uie_persist_profile_exists(self, name=None, folder='Common'):
+        request_url = self.bigip.icr_url + '/ltm/persistence/universal/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
+            return True
+        else:
+            return False
+
+    def delete_uie_persist_profile(self, name=None, folder='Common'):
+        if self.uie_persist_profile_exists(name, folder):
+            self.delete_persist_profile(name, folder)
+
     @icontrol_folder
     def delete_persist_profile(self, name=None, folder='Common'):
         try:
@@ -527,6 +547,8 @@ class VirtualServer(object):
     def set_persist_profile(self, name=None, profile_name=None,
                                 folder='Common'):
         if self.exists(name=name, folder=folder):
+            Log.debug('VirtualServer', 'resetting persistence.')
+            self.lb_vs.remove_all_persistence_profiles([name])
             if profile_name.startswith('/Common'):
                 profile_name = strip_folder_and_prefix(profile_name)
             try:
@@ -540,6 +562,8 @@ class VirtualServer(object):
                 vsp_seq_seq = self.lb_vs.typefactory.create(
             'LocalLB.VirtualServer.VirtualServerPersistenceSequenceSequence')
                 vsp_seq_seq.values = [vsp_seq]
+                Log.debug('VirtualServer', 'adding persistence %s'
+                          % profile_name)
                 self.lb_vs.add_persistence_profile([name], vsp_seq_seq)
                 return True
             except WebFault as wf:
@@ -824,16 +848,33 @@ class VirtualServer(object):
     def _set_vitrual_address_traffic_group(self, name=None, folder='Common'):
         return self.lb_va.get_traffic_group([name])[0]
 
-    @icontrol_folder
+    @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):
-        if name in self.lb_vs.get_list():
+        request_url = self.bigip.icr_url + '/ltm/virtual/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
+            return True
+        else:
+            return False
+        #if name in self.lb_vs.get_list():
+        #    return True
+        #else:
+        #    return False
+
+    @icontrol_rest_folder
+    def virtual_address_exists(self, named_address=None, folder='Common'):
+        request_url = self.bigip.icr_url + '/ltm/virtual-address/'
+        request_url += '~' + folder + '~' + urllib.quote(named_address)
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(request_url)
+        if response.status_code < 400:
             return True
         else:
             return False
 
-    @icontrol_folder
-    def virtual_address_exists(self, named_address=None, folder='Common'):
-        if named_address in self.lb_va.get_list():
-            return True
-        else:
-            return False
+        #if named_address in self.lb_va.get_list():
+        #    return True
+        #else:
+        #    return False

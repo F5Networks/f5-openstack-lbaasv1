@@ -6,7 +6,6 @@
 # Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
 ##############################################################################
 
-import os
 import time
 import json
 
@@ -22,6 +21,7 @@ from f5.bigip.bigip_interfaces import icontrol_folder
 class Device(object):
     def __init__(self, bigip):
         self.bigip = bigip
+        self.bigip.devicename = None
 
         # add iControl interfaces if they don't exist yet
         self.bigip.icontrol.add_interfaces(
@@ -37,11 +37,36 @@ class Device(object):
         self.lock = None
 
     def get_device_name(self):
-        self.bigip.system.set_folder('/Common')
-        return os.path.basename(self.mgmt_dev.get_local_device())
+        if not self.bigip.devicename:
+            request_url = self.bigip.icr_url + '/cm/device'
+            request_filter = '/?$select=name,selfDevice'
+            request_filter += '&filter partition eq Common'
+            request_url += request_filter
+            response = self.bigip.icr_session.get(request_url, data=None)
+            if response.status_code < 400:
+                response_obj = json.loads(response.text)
+                if 'items' in response_obj:
+                    devices = response_obj['items']
+                    for device in devices:
+                        if device['selfDevice'] == 'true':
+                            self.bigip.devicename = device['name']
+        return self.bigip.devicename
 
     def get_all_device_names(self):
-        return [os.path.basename(dev) for dev in self.mgmt_dev.get_list()]
+        request_url = self.bigip.icr_url + '/cm/device'
+        request_filter = '/?$select=name&filter partition eq Common'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                devices = response_obj['items']
+                device_names = []
+                for device in devices:
+                    device_names.append(device['name'])
+                return device_names
+        else:
+            return []
 
     def get_lock(self):
         current_lock = self._get_lock()
@@ -82,7 +107,6 @@ class Device(object):
         self.bigip.system.set_folder('/Common')
         dev_name = self.mgmt_dev.get_local_device()
         current_lock = self.mgmt_dev.get_comment([dev_name])[0]
-
         if current_lock.startswith(const.DEVICE_LOCK_PREFIX):
             return int(current_lock.replace(const.DEVICE_LOCK_PREFIX, ''))
 
@@ -94,49 +118,96 @@ class Device(object):
         self.mgmt_dev.set_comment([dev_name], [lock_comment])
 
     def get_mgmt_addr(self):
-        return self.mgmt_dev.get_management_address(
-                                                [self.get_device_name()]
-                                                    )[0]
+        request_url = self.bigip.icr_url + '/cm/device/~Common'
+        request_url += '~' + self.get_device_name()
+        request_filter = '/?$select=managementIp'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            return response_obj['managementIp']
+        else:
+            return None
+        #self.bigip.system.set_folder('/Common')
+        #return self.mgmt_dev.get_management_address(
+        #                        [self.get_device_name()])[0]
 
     def get_configsync_addr(self):
-        return self.mgmt_dev.get_configsync_address(
-                                                [self.get_device_name()]
-                                                    )[0]
+        request_url = self.bigip.icr_url + '/cm/device/~Common'
+        request_url += '~' + self.get_device_name()
+        request_filter = '/?$select=configsyncIp'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            return response_obj['configsyncIp']
+        else:
+            return None
+        #self.bigip.system.set_folder('/Common')
+        #return self.mgmt_dev.get_configsync_address(
+        #                        [self.get_device_name()])[0]
 
     @domain_address
-    def set_configsync_addr(self, ip_address=None, Folder='/Common'):
+    def set_configsync_addr(self, ip_address=None, folder='/Common'):
+        self.bigip.system.set_folder('/Common')
         if not ip_address:
             ip_address = 'none'
-
         self.mgmt_dev.set_configsync_address([self.get_device_name()],
                                              [ip_address])
 
     def get_primary_mirror_addr(self):
-        return self.mgmt_dev.get_primary_mirror_address(
-                                                [self.get_device_name()]
-                                                        )[0]
+        request_url = self.bigip.icr_url + '/cm/device/~Common'
+        request_url += '~' + self.get_device_name()
+        request_filter = '/?$select=mirrorIp'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            return response_obj['mirrorIp']
+        else:
+            return None
+        #self.bigip.system.set_folder('/Common')
+        #return self.mgmt_dev.get_primary_mirror_address(
+        #                                   [self.get_device_name()])[0]
 
     @domain_address
-    def set_primary_mirror_addr(self, ip_address=None, Folder='/Common'):
+    def set_primary_mirror_addr(self, ip_address=None, folder='/Common'):
+        self.bigip.system.set_folder('/Common')
         if not ip_address:
             ip_address = 'none'
         self.mgmt_dev.set_primary_mirror_address([self.get_device_name()],
                                                  [ip_address])
 
     @domain_address
-    def set_secondary_mirror_addr(self, ip_address=None, Folder='/Common'):
+    def set_secondary_mirror_addr(self, ip_address=None, folder='/Common'):
+        self.bigip.system.set_folder('/Common')
         if not ip_address:
             ip_address = 'none'
         self.mgmt_dev.set_secondary_mirror_address([self.get_device_name()],
                                                  [ip_address])
 
     def get_failover_addrs(self):
-        return self.mgmt_dev.get_unicast_addresses(
-                                                   [self.get_device_name()]
-
-                                                   )[0]
+        request_url = self.bigip.icr_url + '/cm/device/~Common'
+        request_url += '~' + self.get_device_name()
+        request_filter = '/?$select=unicastAddress'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            return_addresses = []
+            uas = response_obj['unicastAddress']
+            for ua in uas:
+                return_addresses.append(ua['ip'])
+            return return_addresses
+        else:
+            return []
+        #self.bigip.system.set_folder('/Common')
+        #return self.mgmt_dev.get_unicast_addresses(
+        #                                           [self.get_device_name()]
+        #                                           )[0]
 
     def set_failover_addrs(self, ip_address=None, folder='/Common'):
+        self.bigip.system.set_folder('/Common')
         if not ip_address:
             ip_address = ['none']
         if not isinstance(ip_address, list):
@@ -163,21 +234,38 @@ class Device(object):
         return ip_address
 
     def get_failover_state(self):
+        self.bigip.system.set_folder('/Common')
         current_dev_name = self.get_device_name()
         return self.mgmt_dev.get_failover_state([current_dev_name])[0]
 
     def get_device_group(self):
-        self.bigip.system.set_folder('/Common')
-        device_groups = self.bigip.cluster.mgmt_dg.get_list()
-        device_group_types = self.bigip.cluster.mgmt_dg.get_type(
-                                                         device_groups)
-        for i in range(len(device_group_types)):
-            if device_group_types[i] == 'DGT_FAILOVER':
-                return os.path.basename(device_groups[i])
-        return None
+        request_url = self.bigip.icr_url + '/cm/device-group'
+        request_filter = '/?$select=name,type'
+        request_url += request_filter
+        response = self.bigip.icr_session.get(request_url, data=None)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                dsgs = response_obj['items']
+                for dsg in dsgs:
+                    if dsg['type'] == 'sync-failover':
+                        return dsg['name']
+                return None
+        else:
+            return None
+
+        #self.bigip.system.set_folder('/')
+        #device_groups = self.mgmt_dg.get_list()
+        #device_group_types = self.mgmt_dg.get_type(device_groups)
+        #self.bigip.system.set_folder('/Common')
+        #for i in range(len(device_group_types)):
+        #    if device_group_types[i] == 'DGT_FAILOVER':
+        #        return os.path.basename(device_groups[i])
+        #return None
 
     @icontrol_folder
     def remove_from_device_group(self, name=None, folder='/Common'):
+        self.bigip.system.set_folder('/Common')
         if not name:
             name = self.get_device_group()
 
@@ -199,6 +287,7 @@ class Device(object):
                     raise
 
     def remove_all_peers(self):
+        self.bigip.system.set_folder('/Common')
         current_dev_name = self.get_device_name()
         devs_to_remove = []
         for dev in self.get_all_device_names():
@@ -211,11 +300,14 @@ class Device(object):
                               'root_device_mgmt_address': None})
 
     def reset_trust(self, new_name):
+        self.bigip.system.set_folder('/Common')
         self.remove_all_peers()
         self.mgmt_trust.reset_all(new_name, False, '', '')
         self.remove_metadata({
                               'root_device_name': None,
                               'root_device_mgmt_address': None})
+        self.bigip.devicename = None
+        self.get_device_name()
 
     def set_metadata(self, device_dict):
         self.bigip.system.set_folder('/Common')
