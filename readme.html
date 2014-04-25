@@ -286,9 +286,14 @@
                 </p>
            
 				<p>
-				High availablity for the f5 LBaaS agent process follows the same pattern as any OpenStack agent.  Please see the 
-				OpenStack high availability guides for instructions on how to run active and standby agents in a high availablity mode.
-				Please see the section below for the high availablity modes supported for the TMOS devices themselves.	
+				High availability for the f5 LBaaS agent process follows the same pattern as any OpenStack agent.  Please see the 
+				OpenStack high availability guides for instructions on how to run active and standby agents in a high availability mode.
+				</p>
+				<p>
+				<a href='http://docs.openstack.org/high-availability-guide/content/ha-using-active-passive.html'>OpenStack Active-Stanby Agent Guide</a>
+				</p>
+				<p>
+				Please see the section below for the high availability modes supported for the TMOS devices themselves.	
 				</p>
 				
 				<h2><span class='mw-headline' id='Installation_of_the_Type_Driver'>Installation of the Plugin Side Type Driver</span></h2>
@@ -727,7 +732,7 @@
 				can be automated using iControl. Below is a listing of all the manual CLI commands needed to complete the TMOS device onboarding. 	
 				</p>
 				
-				<h3>Standalone High Availablity Mode</h3>
+				<h3>Standalone High Availability Mode</h3>
 				<p>
 				The TMOS device must be licensed to support Local Traffic (LTM). The TMOS device should have Local Traffic (LTM) provisioned as Nominal.
 				</p>
@@ -754,7 +759,7 @@
 				
 				
 			
-				<h3>Pair High Availablity Mode</h3>
+				<h3>Pair High Availability Mode</h3>
 				<p>
 				Both TMOS devices must be licensed to support Local Traffic (LTM). The TMOS devices should have Local Traffic (LTM) provisioned as Nominal.
 				</p>
@@ -870,7 +875,7 @@
 	
 				
 	
-                <h3>ScaleN High Availablity Mode</h3>
+                <h3>ScaleN High Availability Mode</h3>
 				<p>
 				All TMOS devices in your ScaleN group must be licensed to support Local Traffic (LTM). The TMOS device should have Local Traffic (LTM) provisioned as Nominal.
 				</p>
@@ -982,7 +987,7 @@
 				To enable failover between the active devices, you must create traffic groups.  The scheme you choose to create traffic groups will depend on your failover
 				group design.  The iControl driver in ScaleN failover mode will schedule VIPs and SNAT addresses on traffic groups which are not name, 
 				traffic-group-1 or traffic-group-local-only.  It is required that you create unique named traffic groups for you failover pattern which 
-				are assoicated with an appropriate HA failover order. The iControl driver will schedule the VIP traffic group placement based on which 
+				are associated with an appropriate HA failover order. The iControl driver will schedule the VIP traffic group placement based on which 
 				unique named traffic group has least number of VIPs associated with it. 
 				</p>
 				<p>
