@@ -78,7 +78,7 @@ class SNAT(object):
             except WebFault as wf:
                 if "is still referenced by a snat pool" \
                                                            in str(wf.message):
-                    Log.info('SNAT',
+                    Log.debug('SNAT',
                              'Can not delete SNAT address %s ..still in use.'
                              % name)
                     return False
@@ -150,7 +150,7 @@ class SNAT(object):
             except WebFault as wf:
                 if "must reference at least one translation address" \
                                                            in str(wf.message):
-                    Log.error('SNAT',
+                    Log.debug('SNAT',
                     'removing SNATPool because last member is being removed')
                     self.lb_snatpool.delete_snat_pool([name])
                     return True

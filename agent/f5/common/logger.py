@@ -35,9 +35,7 @@ class Log(object):
         log = logging.getLogger(__name__)
         out_hdlr = logging.StreamHandler(sys.stdout)
         out_hdlr.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-        out_hdlr.setLevel(const.LOG_LEVEL)
         log.addHandler(out_hdlr)
-        log.setLevel(const.LOG_LEVEL)
 
         if level == 'debug':
             log.debug(log_string)

@@ -25,6 +25,8 @@ import netaddr
 import datetime
 import random
 from time import time
+import logging as std_logging
+
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
@@ -411,7 +413,7 @@ class iControlDriver(object):
             # state which means that if those messages are queued (or delayed)
             # it can result in the process of a stats request after the pool
             # and tenant are long gone. Check if the tenant exists.
-            if not hostbigip.system.folder_exists(
+            if not service['pool'] or not hostbigip.system.folder_exists(
                bigip_interfaces.OBJ_PREFIX + service['pool']['tenant_id']):
                 return None
             pool = service['pool']
@@ -820,7 +822,7 @@ class iControlDriver(object):
                    (member['protocol_port'] == existing_member['port']):
                     found_existing_member = existing_member
                     break
-            
+
             # Delete those pending delete
             if member['status'] == plugin_const.PENDING_DELETE:
                 if not network:
@@ -2807,11 +2809,9 @@ class iControlDriver(object):
                          'HA mode is %s and there are %d devices present.'
                          % (self.conf.f5_ha_type, len(self.__bigips)))
 
-                #import logging as std_logging
-                #if self.conf.debug and \
-                #   (f5const.LOG_LEVEL == std_logging.DEBUG):
-                #    sudslog = std_logging.getLogger('suds.client')
-                #    sudslog.setLevel(std_logging.DEBUG)
+                if not self.conf.debug:
+                    sudslog = std_logging.getLogger('suds.client')
+                    sudslog.setLevel(std_logging.FATAL)
 
                 bigips = self.__bigips.values()
                 for set_bigip in bigips:

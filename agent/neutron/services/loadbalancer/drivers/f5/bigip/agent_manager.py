@@ -151,7 +151,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     RPC_API_VERSION = '1.1'
 
     def __init__(self, conf):
-        LOG.debug(_('Initializing LbaasAgentManager with conf %s' % conf))
+        LOG.info(_('Initializing LbaasAgentManager with conf %s' % conf))
         self.conf = conf
 
         # create the cache of provisioned services
@@ -291,7 +291,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if self.sync_state():
                 self.needs_resync = True
 
-    @periodic_task.periodic_task(spacing=6)
+    @periodic_task.periodic_task(spacing=30)
     def collect_stats(self, context):
         if not self.plugin_rpc:
             return

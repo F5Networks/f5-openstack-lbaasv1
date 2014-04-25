@@ -14,7 +14,6 @@ from f5.bigip.bigip_interfaces import strip_folder_and_prefix
 
 from suds import WebFault
 import os
-import requests
 import urllib
 import json
 
