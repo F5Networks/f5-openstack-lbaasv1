@@ -1297,6 +1297,9 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                             global_routed_mode=self._is_global_routed(agent),
                             activate=False,
                             host=agent['host'])
+            for service_member in old_pool_service['members']:
+                if service_member['id'] == old_member['id']:
+                    service_member['status'] = 'MOVING'
             self.agent_rpc.update_member(context, old_member, member,
                                      old_pool_service, agent['host'])
 
