@@ -263,6 +263,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
             service_count = len(self.cache.services)
             self.agent_state['configurations']['services'] = service_count
+            if hasattr(self.driver, 'service_queue'):
+                self.agent_state['configurations']['request_queue_depth'] = \
+                      len(self.driver.service_queue)
             if self.driver.agent_configurations:
                 self.agent_state['configurations'].update(
                                              self.driver.agent_configurations)

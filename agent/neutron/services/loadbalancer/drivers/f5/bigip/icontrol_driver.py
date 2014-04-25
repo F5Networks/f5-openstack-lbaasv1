@@ -300,12 +300,6 @@ class iControlDriver(object):
     @serialized('update_vip')
     @is_connected
     def update_vip(self, old_vip, vip, service):
-        if not old_vip['pool_id'] == vip['pool_id']:
-            old_pool_service = self.plugin_rpc.get_service_by_pool_id(
-                                        old_vip['pool_id'],
-                                        self.conf.f5_global_routed_mode)
-            self._assure_service_networks(old_pool_service)
-            self._assure_service(old_pool_service)
         self._assure_service_networks(service)
         self._assure_service(service)
 
@@ -341,12 +335,6 @@ class iControlDriver(object):
     @serialized('update_member')
     @is_connected
     def update_member(self, old_member, member, service):
-        if not old_member['pool_id'] == member['pool_id']:
-            old_pool_service = self.plugin_rpc.get_service_by_pool_id(
-                                        old_member['pool_id'],
-                                        self.conf.f5_global_routed_mode)
-            self._assure_service_networks(old_pool_service)
-            self._assure_service(old_pool_service)
         self._assure_service_networks(service)
         self._assure_service(service)
 
@@ -818,7 +806,7 @@ class iControlDriver(object):
             found_existing_member = None
 
             for existing_member in existing_members:
-                if (member['address'] == existing_member['addr']) and \
+                if (existing_member['addr'].startswith(ip_address)) and \
                    (member['protocol_port'] == existing_member['port']):
                     found_existing_member = existing_member
                     break
@@ -987,8 +975,8 @@ class iControlDriver(object):
                 LOG.debug("        assuring member %s took %.5f secs" %
                           (member['address'], time() - member_start_time))
 
-        #LOG.debug(_("Pool: %s removing members %s"
-        #            % (pool['id'], existing_members)))
+        LOG.debug(_("Pool: %s removing members %s"
+                    % (pool['id'], existing_members)))
         # remove any members which are no longer in the service
         for need_to_delete in existing_members:
             bigip.pool.remove_member(

@@ -1287,6 +1287,19 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         self.agent_rpc.update_member(context, old_member, member,
                                      service, agent['host'])
 
+        # if they moved members between pools, we need to send
+        # a service call to update the old pool to remove
+        # the pool member
+        if not old_member['pool_id'] == member['pool_id']:
+            # the member should not be in this pool in the db anymore
+            old_pool_service = self.callbacks.get_service_by_pool_id(context,
+                            pool_id=old_member['pool_id'],
+                            global_routed_mode=self._is_global_routed(agent),
+                            activate=False,
+                            host=agent['host'])
+            self.agent_rpc.update_member(context, old_member, member,
+                                     old_pool_service, agent['host'])
+
     @log.log
     def delete_member(self, context, member):
         # which agent should handle provisioning

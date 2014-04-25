@@ -80,7 +80,7 @@ class Pool(object):
     def get_members(self, name=None, folder='Common'):
         members = []
         for member in self.lb_pool.get_member_v2([name])[0]:
-            addr = os.path.basename(member.address).split('%')[0]
+            addr = os.path.basename(member.address)
             members.append({'addr': addr, 'port': member.port})
 
         return members
