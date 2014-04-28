@@ -16,13 +16,16 @@ from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+from f5.bigip.bigip_interfaces import OBJ_PREFIX
 
 from eventlet import greenthread
-
+import os
 import uuid
 import urllib2
 import netaddr
 import datetime
+import hashlib
 import random
 from time import time
 import logging as std_logging
@@ -118,7 +121,7 @@ def is_connected(method):
                 raise ioe
         else:
             instance.non_connected()
-            LOG.error(_('Can not execute %s. Not connected.'
+            LOG.error(_('Cannot execute %s. Not connected.'
                         % method.__name__))
     return wrapper
 
@@ -579,10 +582,10 @@ class iControlDriver(object):
                                 status_description='pool updated')
             if pool['status'] == plugin_const.PENDING_CREATE:
                 if on_last_bigip:
-                        update_pool = self.plugin_rpc.update_pool_status
-                        update_pool(pool['id'],
-                                    status=plugin_const.ACTIVE,
-                                    status_description='pool created')
+                    update_pool = self.plugin_rpc.update_pool_status
+                    update_pool(pool['id'],
+                                status=plugin_const.ACTIVE,
+                                status_description='pool created')
 
     #
     # Provision Health Monitors - Create/Update
@@ -872,8 +875,8 @@ class iControlDriver(object):
                                       folder=pool['tenant_id'],
                                       no_checks=True)
                     just_added = True
-                    LOG.debug("            bigip.pool.add_member took %.5f" %
-                              (time() - start_time))
+                    LOG.debug("            bigip.pool.add_member %s took %.5f" %
+                              (ip_address, time() - start_time))
                     if result:
                         #LOG.debug(_("Pool: %s added member: %s:%d"
                         #% (pool['id'],
@@ -1050,7 +1053,7 @@ class iControlDriver(object):
                 else:
                     error_message = 'Unsupported network type %s.' \
                                 % network['provider:network_type'] + \
-                                ' Can not allocate VIP.'
+                                ' Cannot allocate VIP.'
                     LOG.error(_(error_message))
                     raise f5ex.InvalidNetworkType(error_message)
                 if network['shared']:
@@ -1115,11 +1118,6 @@ class iControlDriver(object):
                 # remove the selfip from the peer bigips.
                 self._sync_if_clustered(bigip)
 
-                if vip['id'] in self.__vips_to_traffic_group:
-                    vip_tg = self.__vips_to_traffic_group[vip['id']]
-                    self.__vips_on_traffic_groups[vip_tg] = \
-                                  self.__vips_on_traffic_groups[vip_tg] - 1
-                    del(self.__vips_to_traffic_group[vip['id']])
                 if subnet and \
                    subnet['id'] not in ctx.do_not_delete_subnets:
                     ctx.check_for_delete_subnets[subnet['id']] = \
@@ -1127,13 +1125,17 @@ class iControlDriver(object):
                                                                 subnet)
                 try:
                     if on_last_bigip:
+                        if vip['id'] in self.__vips_to_traffic_group:
+                            vip_tg = self.__vips_to_traffic_group[vip['id']]
+                            self.__vips_on_traffic_groups[vip_tg] -= 1
+                            del(self.__vips_to_traffic_group[vip['id']])
                         self.plugin_rpc.vip_destroyed(vip['id'])
                 except Exception as exc:
                     LOG.error(_("Plugin delete vip %s error: %s"
                                 % (vip['id'], exc.message)
                                 ))
             else:
-                vip_tg = self._get_least_vips_traffic_group()
+                vip_tg = self._service_to_traffic_group(service)
 
                 # This is where you could decide to use a fastl4
                 # or a standard virtual server.  The problem
@@ -1185,11 +1187,12 @@ class iControlDriver(object):
                                        use_snat=self.conf.f5_snat_mode,
                                        snat_pool=snat_pool_name,
                                        folder=pool['tenant_id']):
-                        # created update driver traffic group mapping
+                        # update driver traffic group mapping
                         vip_tg = bigip_vs.get_traffic_group(
-                                        name=vip['ip'],
+                                        name=vip['id'],
                                         folder=pool['tenant_id'])
-                        self.__vips_to_traffic_group[vip['ip']] = vip_tg
+                        self.__vips_to_traffic_group[vip['id']] = vip_tg
+                        self.__vips_on_traffic_groups[vip_tg] += 1
                         if on_last_bigip:
                             self.plugin_rpc.update_vip_status(
                                             vip['id'],
@@ -1210,9 +1213,10 @@ class iControlDriver(object):
                                     folder=pool['tenant_id']):
                         # created update driver traffic group mapping
                         vip_tg = bigip_vs.get_traffic_group(
-                                        name=vip['ip'],
+                                        name=vip['id'],
                                         folder=pool['tenant_id'])
                         self.__vips_to_traffic_group[vip['ip']] = vip_tg
+                        self.__vips_on_traffic_groups[vip_tg] += 1
                         if on_last_bigip:
                             self.plugin_rpc.update_vip_status(
                                             vip['id'],
@@ -1526,7 +1530,7 @@ class iControlDriver(object):
                         ctx.do_not_delete_subnets.append(subnet['id'])
             else:
                 LOG.error(_('Attempted to delete network and subnet when'
-                            ' the subnet has not id... skipping.'))
+                            ' the subnet has no id... skipping.'))
 
     def _assure_tenant_cleanup(self, service, bigip, ctxs):
         if self.conf.sync_mode == 'replication':
@@ -1758,7 +1762,7 @@ class iControlDriver(object):
 
         elif network['provider:network_type'] == 'vxlan':
             if not bigip.local_ip:
-                error_message = 'Can not create tunnel %s on %s' \
+                error_message = 'Cannot create tunnel %s on %s' \
                                   % (network['id'], bigip.icontrol.hostname)
                 error_message += ' no VTEP SelfIP defined.'
                 LOG.error('VXLAN:' + error_message)
@@ -1799,7 +1803,7 @@ class iControlDriver(object):
 
         elif network['provider:network_type'] == 'gre':
             if not bigip.local_ip:
-                error_message = 'Can not create tunnel %s on %s' \
+                error_message = 'Cannot create tunnel %s on %s' \
                                   % (network['id'], bigip.icontrol.hostname)
                 error_message += ' no VTEP SelfIP defined.'
                 LOG.error('L2GRE:' + error_message)
@@ -1840,7 +1844,7 @@ class iControlDriver(object):
         else:
             error_message = 'Unsupported network type %s.' \
                             % network['provider:network_type'] + \
-                            ' Can not setup network.'
+                            ' Cannot setup network.'
             LOG.error(_(error_message))
             raise f5ex.InvalidNetworkType(error_message)
 
@@ -1888,7 +1892,7 @@ class iControlDriver(object):
         else:
             error_message = 'Unsupported network type %s.' \
                             % network['provider:network_type'] + \
-                            ' Can not setup selfip or snat.'
+                            ' Cannot setup selfip or snat.'
             LOG.error(_(error_message))
             raise f5ex.InvalidNetworkType(error_message)
 
@@ -1916,7 +1920,8 @@ class iControlDriver(object):
                                      network_folder,
                                      pool['tenant_id'])
             elif self.conf.f5_ha_type == 'scalen':
-                self._assure_snats_scalen(bigip, subnetinfo,
+                self._assure_snats_scalen(bigip, service,
+                                     subnetinfo,
                                      snat_pool_name,
                                      network_folder,
                                      pool['tenant_id'])
@@ -2061,12 +2066,13 @@ class iControlDriver(object):
                 continue
             set_bigip.assured_snat_subnets.append(subnet['id'])
 
-    def _assure_snats_scalen(self, bigip, subnetinfo,
+    def _assure_snats_scalen(self, bigip, service, subnetinfo,
                             snat_pool_name,
                             snat_folder,
                             snat_pool_folder):
         network = subnetinfo.network
         subnet = subnetinfo.subnet
+
         all_assured = True
         for set_bigip in bigip.group_bigips:
             if subnet['id'] not in set_bigip.assured_snat_subnets:
@@ -2074,52 +2080,47 @@ class iControlDriver(object):
                 break
         if all_assured:
             return
-        # create SNATs on all provider defined traffic groups
-        for traffic_group in self.__traffic_groups:
-            for i in range(self.conf.f5_snat_addresses_per_subnet):
-                snat_name = "snat-" + traffic_group + \
-                            "-" + subnet['id']
-                ip_address = None
-                index_snat_name = snat_name + "_" + str(i)
 
-                ports = self.plugin_rpc.get_port_by_name(
-                                    port_name=index_snat_name)
-                if len(ports) > 0:
-                    ip_address = ports[0]['fixed_ips'][0]['ip_address']
-                else:
-                    new_port = self.plugin_rpc.create_port_on_subnet(
-                                             subnet_id=subnet['id'],
-                                             mac_address=None,
-                                             name=index_snat_name,
-                                             fixed_address_count=1)
-                    ip_address = new_port['fixed_ips'][0]['ip_address']
-                if network['shared']:
-                    ip_address = ip_address + '%0'
-                    index_snat_name = '/Common/' + index_snat_name
-                elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                    ip_address = ip_address + '%0'
-                    index_snat_name = '/Common/' + index_snat_name
+        traffic_group = self._service_to_traffic_group(service)
+        base_traffic_group = os.path.basename(traffic_group)
+        snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
+        for i in range(self.conf.f5_snat_addresses_per_subnet):
+            ip_address = None
+            index_snat_name = snat_name + "_" + str(i)
 
-                if self.conf.sync_mode == 'replication':
-                    bigips = bigip.group_bigips
-                else:
-                    # this is a synced object,
-                    # so only do it once in sync modes
-                    bigips = [bigip]
-                for set_bigip in bigips:
-                    if subnet['id'] in set_bigip.assured_snat_subnets:
-                        continue
-                    set_bigip.snat.create(
-                               name=index_snat_name,
-                               ip_address=ip_address,
-                               traffic_group=traffic_group,
-                               snat_pool_name=None,
-                               folder=snat_folder)
-                    set_bigip.snat.create_pool(name=snat_pool_name,
-                                   member_name=index_snat_name,
-                                   folder=snat_pool_folder)
+            ports = self.plugin_rpc.get_port_by_name(
+                                port_name=index_snat_name)
+            if len(ports) > 0:
+                ip_address = ports[0]['fixed_ips'][0]['ip_address']
+            else:
+                new_port = self.plugin_rpc.create_port_on_subnet(
+                                         subnet_id=subnet['id'],
+                                         mac_address=None,
+                                         name=index_snat_name,
+                                         fixed_address_count=1)
+                ip_address = new_port['fixed_ips'][0]['ip_address']
+            if network['shared']:
+                ip_address = ip_address + '%0'
+            if network['shared']:
+                index_snat_name = '/Common/' + index_snat_name
+            if self.conf.sync_mode == 'replication':
+                bigips = bigip.group_bigips
+            else:
+                # this is a synced object,
+                # so only do it once in sync modes
+                bigips = [bigip]
+            for set_bigip in bigips:
+                if subnet['id'] in set_bigip.assured_snat_subnets:
+                    continue
+                set_bigip.snat.create(
+                           name=index_snat_name,
+                           ip_address=ip_address,
+                           traffic_group=traffic_group,
+                           snat_pool_name=None,
+                           folder=snat_folder)
+                set_bigip.snat.create_pool(name=snat_pool_name,
+                               member_name=index_snat_name,
+                               folder=snat_pool_folder)
 
         for set_bigip in bigip.group_bigips:
             if subnet['id'] in set_bigip.assured_snat_subnets:
@@ -2168,7 +2169,7 @@ class iControlDriver(object):
                             mac_address=None,
                             name=gw_name,
                             ip_address=subnet['gateway_ip'])
-                LOG.info(_('gateway IP for subnet %s will be port %'
+                LOG.info(_('gateway IP for subnet %s will be port %s'
                             % (subnet['id'], new_port['id'])))
             except Exception as exc:
                 ermsg = 'Invalid default gateway for subnet %s:%s - %s.' \
@@ -2193,7 +2194,7 @@ class iControlDriver(object):
         elif network['provider:network_type'] == 'gre':
             network_name = self._get_tunnel_name(network)
         else:
-            LOG.error(_('Unsupported network type %s. Can not setup gateway'
+            LOG.error(_('Unsupported network type %s. Cannot setup gateway'
                         % network['provider:network_type']))
             return
 
@@ -2378,7 +2379,7 @@ class iControlDriver(object):
         if self.conf.f5_snat_addresses_per_subnet > 0:
             # failover mode dictates SNAT placement on traffic-groups
             if self.conf.f5_ha_type == 'standalone':
-                # Create SNATs on traffic-group-local-only
+                # Delete SNATs on traffic-group-local-only
                 snat_name = 'snat-traffic-group-local-only-' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
@@ -2402,7 +2403,7 @@ class iControlDriver(object):
                             self.plugin_rpc.delete_port_by_name(
                                             port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'pair':
-                # Create SNATs on traffic-group-1
+                # Delete SNATs on traffic-group-1
                 snat_name = 'snat-traffic-group-1' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
@@ -2426,32 +2427,27 @@ class iControlDriver(object):
                             self.plugin_rpc.delete_port_by_name(
                                             port_name=index_snat_name)
             elif self.conf.f5_ha_type == 'scalen':
-                # create SNATs on all provider defined traffic groups
-                for traffic_group in self.__traffic_groups:
-                    for i in range(self.conf.f5_snat_addresses_per_subnet):
-                        snat_name = "snat-" + traffic_group + \
-                                    "-" + subnet['id']
-                        index_snat_name = snat_name + "_" + str(i)
-                        if network['shared']:
-                            tmos_snat_name = '/Common/' + index_snat_name
-                        elif 'router:external' in network and \
-                         network['router:external'] and \
-                         self.conf.f5_common_external_networks:
-                            tmos_snat_name = '/Common/' + index_snat_name
-                        else:
-                            tmos_snat_name = index_snat_name
-
-                        bigip.snat.remove_from_pool(name=snat_pool_name,
-                                        member_name=tmos_snat_name,
-                                        folder=service['pool']['tenant_id'])
-                        if bigip.snat.delete(name=tmos_snat_name,
-                                                 folder=network_folder):
-                            # Only if it still exists and can be
-                            # deleted because it is not in use can
-                            # we safely delete the neutron port
-                            if on_last_bigip:
-                                self.plugin_rpc.delete_port_by_name(
-                                                port_name=index_snat_name)
+                # Delete SNATs on all provider defined traffic groups
+                traffic_group = self._service_to_traffic_group(service)
+                base_traffic_group = os.path.basename(traffic_group)
+                snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
+                for i in range(self.conf.f5_snat_addresses_per_subnet):
+                    index_snat_name = snat_name + "_" + str(i)
+                    if network['shared']:
+                        tmos_snat_name = "/Common/" + index_snat_name
+                    else:
+                        tmos_snat_name = index_snat_name
+                    bigip.snat.remove_from_pool(name=snat_pool_name,
+                                    member_name=tmos_snat_name,
+                                    folder=service['pool']['tenant_id'])
+                    if bigip.snat.delete(name=tmos_snat_name,
+                                         folder=network_folder):
+                        # Only if it still exists and can be
+                        # deleted because it is not in use can
+                        # we safely delete the neutron port
+                        if on_last_bigip:
+                            self.plugin_rpc.delete_port_by_name(
+                                            port_name=index_snat_name)
 
         # delete_selfip_and_snats called for every bigip only
         # in replication mode. otherwise called once
@@ -2525,13 +2521,24 @@ class iControlDriver(object):
         if subnet['id'] in bigip.assured_gateway_subnets:
             bigip.assured_gateway_subnets.remove(subnet['id'])
 
-    def _get_least_vips_traffic_group(self):
-        ret_traffic_group = '/Common/traffic-group-1'
-        lowest_count = 0
+    def _service_to_traffic_group(self, service):
+        hexhash = hashlib.md5(service['pool']['tenant_id']).hexdigest()
+        tg_index = int(hexhash, 16) % len(self.__traffic_groups)
+        return self.__traffic_groups[tg_index]
+
+    # deprecated, use _service_to_traffic_group
+    def _service_to_traffic_group_least_vips(self, vip_id):
+        if vip_id in self.__vips_to_traffic_group:
+            return self.__vips_to_traffic_group[vip_id]
+
         vips_on_tgs = self.__vips_on_traffic_groups
+
+        ret_traffic_group = self.__traffic_groups[0]
+        lowest_count = vips_on_tgs[ret_traffic_group]
         for traffic_group in vips_on_tgs:
-            if vips_on_tgs[traffic_group] <= lowest_count:
-                ret_traffic_group = vips_on_tgs[traffic_group]
+            if vips_on_tgs[traffic_group] < lowest_count:
+                ret_traffic_group = traffic_group
+                lowest_count = vips_on_tgs[ret_traffic_group]
         return ret_traffic_group
 
     def _get_least_gw_traffic_group(self):
@@ -2547,7 +2554,6 @@ class iControlDriver(object):
         for i in range(len(hostnames)):
             try:
                 bigip = self.__bigips[hostnames[i]]
-                bigip.system.set_folder('/Common')
                 return bigip
             except urllib2.URLError:
                 pass
@@ -2576,24 +2582,24 @@ class iControlDriver(object):
         return 'tunnel-' + str(tunnel_type) + '-' + str(tunnel_id)
 
     def _get_tunnel_fake_mac(self, network, local_ip):
-            network_id = str(network['provider:segmentation_id']).rjust(4, '0')
-            mac_prefix = '02:' + network_id[:2] + ':' + network_id[2:4] + ':'
-            ip_parts = local_ip.split('.')
+        network_id = str(network['provider:segmentation_id']).rjust(4, '0')
+        mac_prefix = '02:' + network_id[:2] + ':' + network_id[2:4] + ':'
+        ip_parts = local_ip.split('.')
+        if len(ip_parts) > 3:
+            mac = [int(ip_parts[-3]),
+                   int(ip_parts[-2]),
+                   int(ip_parts[-1])]
+        else:
+            ip_parts = local_ip.split(':')
             if len(ip_parts) > 3:
-                mac = [int(ip_parts[-3]),
-                       int(ip_parts[-2]),
-                       int(ip_parts[-1])]
+                mac = [int('0x' + ip_parts[-3], 16),
+                       int('0x' + ip_parts[-2], 16),
+                       int('0x' + ip_parts[-1], 16)]
             else:
-                ip_parts = local_ip.split(':')
-                if len(ip_parts) > 3:
-                    mac = [int('0x' + ip_parts[-3], 16),
-                           int('0x' + ip_parts[-2], 16),
-                           int('0x' + ip_parts[-1], 16)]
-                else:
-                    mac = [random.randint(0x00, 0x7f),
-                           random.randint(0x00, 0xff),
-                           random.randint(0x00, 0xff)]
-            return mac_prefix + ':'.join(map(lambda x: "%02x" % x, mac))
+                mac = [random.randint(0x00, 0x7f),
+                       random.randint(0x00, 0xff),
+                       random.randint(0x00, 0xff)]
+        return mac_prefix + ':'.join(map(lambda x: "%02x" % x, mac))
 
     def _create_app_cookie_persist_rule(self, cookiename):
         rule_text = "when HTTP_REQUEST {\n"
@@ -2701,8 +2707,8 @@ class iControlDriver(object):
                 extramb = first_bigip.system.get_provision_extramb()
                 if int(extramb) < f5const.MIN_EXTRA_MB:
                     raise f5ex.ProvisioningExtraMBValidateFailed(
-                       'device %s BIG-IP not provisioned for management LARGE.'
-                       % self.host)
+                       'device %s BIG-IP not provisioned for management LARGE. extramb=%d'
+                       % (self.hostnames[0], int(extramb)))
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
@@ -2731,17 +2737,8 @@ class iControlDriver(object):
                      'HA mode is %s and no sync failover device group found.'
                      % self.conf.f5_ha_type)
 
-                # populate traffic groups
-                first_bigip.system.set_folder(folder='/Common')
-                self.__traffic_groups = first_bigip.cluster.mgmt_tg.get_list()
-                if '/Common/traffic-group-local-only' in self.__traffic_groups:
-                    self.__traffic_groups.remove(
-                                    '/Common/traffic-group-local-only')
-                if '/Common/traffic-group-1' in self.__traffic_groups:
-                    self.__traffic_groups.remove('/Common/traffic-group-1')
-                for traffic_group in self.__traffic_groups:
-                    self.__gw_on_traffic_groups[traffic_group] = 0
-                    self.__vips_on_traffic_groups[traffic_group] = 0
+                # populate traffic groups and count vips per tg
+                self.init_traffic_groups(first_bigip)
 
                 self.__bigips[self.hostnames[0]] = first_bigip
                 # connect to the rest of the devices
@@ -2895,6 +2892,30 @@ class iControlDriver(object):
                 LOG.error(_('Could not communicate with all ' +
                             'iControl devices: %s' % exc.message))
 
+    def init_traffic_groups(self, bigip):
+        bigip.system.set_folder(folder='/Common')
+        self.__traffic_groups = bigip.cluster.mgmt_tg.get_list()
+        if '/Common/traffic-group-local-only' in self.__traffic_groups:
+            self.__traffic_groups.remove(
+                            '/Common/traffic-group-local-only')
+        self.__traffic_groups.sort()
+        for traffic_group in self.__traffic_groups:
+            self.__gw_on_traffic_groups[traffic_group] = 0
+            self.__vips_on_traffic_groups[traffic_group] = 0
+
+        bigip_vs = bigip.virtual_server
+        for folder in bigip.system.get_folders():
+            if not folder.startswith(OBJ_PREFIX):
+                continue
+            bigip.system.set_folder(folder)
+            for virtserv in bigip_vs.lb_vs.get_list():
+                virtserv = strip_folder_and_prefix(virtserv)
+                vip_tg = bigip_vs.get_traffic_group(name=virtserv,
+                                                    folder=folder)
+                self.__vips_on_traffic_groups[vip_tg] += 1
+        LOG.debug("init_traffic_groups: starting tg counts: %s"
+                  % str(self.__vips_on_traffic_groups))
+
     # should be moved to cluster abstraction
     def _sync_if_clustered(self, bigip):
         if self.conf.sync_mode == 'replication':
@@ -2902,7 +2923,23 @@ class iControlDriver(object):
         if len(bigip.group_bigips) > 1:
             if not hasattr(bigip, 'device_group'):
                 bigip.device_group = bigip.device.get_device_group()
-            bigip.cluster.sync(bigip.device_group)
+            self._sync_with_retries(bigip)
+
+    def _sync_with_retries(self, bigip, force_now=False, attempts=4, retry_delay=130):
+        for attempt in range(1, attempts+1):
+            LOG.debug('Syncing Cluster... attempt %d of %d' % (attempt, attempts))
+            try:
+                if attempt != 1:
+                    force_now = False
+                bigip.cluster.sync(bigip.device_group, force_now=force_now)
+                LOG.debug('Cluster synced.')
+                return
+            except:
+                LOG.error('ERROR: Cluster sync failed.')
+                if attempt == attempts:
+                    raise
+                LOG.error('Wait another %d seconds for devices to recover from failed sync.' % retry_delay)
+                greenthread.sleep(retry_delay)
 
     @serialized('backup_configuration')
     @is_connected

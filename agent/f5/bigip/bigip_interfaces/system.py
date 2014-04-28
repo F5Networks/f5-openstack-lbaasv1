@@ -58,7 +58,11 @@ class System(object):
         self.set_folder('/')
         if not folder.startswith('/'):
             folder = '/' + folder
-        self.mgmt_folder.create([folder])
+        try:
+            self.mgmt_folder.create([folder])
+        except BadStatusLine as bsl:
+            Log.error('System',
+                      "Irregular iControl response creating folder %s" % folder)
         if change_to:
             self.sys_session.set_active_folder(folder)
             self.current_folder = folder

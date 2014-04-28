@@ -105,7 +105,15 @@ class SNAT(object):
                                          'Common.StringSequenceSequence')
             string_seq.values = [member_name]
             string_seq_seq.values = [string_seq]
-            self.lb_snatpool.create_v2([name], string_seq_seq)
+            try:
+                self.lb_snatpool.create_v2([name], string_seq_seq)
+            except WebFault as wf:
+                if "already exists" in str(wf.message):
+                    Log.error('SNAT',
+                              'SNAT Pool exists but was not in returned list.')
+                    self.lb_snatpool.add_member_v2([name], string_seq_seq)
+                else:
+                    raise
         else:
             existing_members = self.lb_snatpool.get_member_v2([name])[0]
             if not member_name in existing_members:

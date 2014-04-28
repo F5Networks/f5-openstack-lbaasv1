@@ -245,7 +245,7 @@ class Pool(object):
             self.lb_pool.remove_member_v2([name], [addr_port_seq])
 
             # node address might have multiple pool members
-            # associated with its, so it might now delete
+            # associated with it, so it might not delete
             try:
                 if ip_address[-2:] == '%0':
                     ip_address = ip_address.split('%')[0]

@@ -56,17 +56,22 @@ class Vlan(object):
                                     [fs_state],
                                     [90])
                 if description:
-                    self.net_vlan.set_description([name], [description])
+                    try:
+                        self.net_vlan.set_description([name], [description])
+                    except:
+                        Log.error('VLAN',
+                                  'Exception setting description on vlan %s' %
+                                      name)
                 if not folder == 'Common':
                     self.bigip.route.add_vlan_to_domain(name=name,
                                                         folder=folder)
                 return True
             except WebFault as wf:
                 if "already exists in partition" in str(wf.message):
-                    Log.error('VLAN',
-                        'tried to create a VLAN when exists')
+                    Log.error('VLAN', 'tried to create a VLAN when exists')
                     return False
                 else:
+                    Log.error('VLAN', 'Exception creating vlan %s' % wf.message)
                     raise wf
         else:
             return False
