@@ -799,7 +799,9 @@ class iControlDriver(object):
             if self.conf.f5_global_routed_mode:
                 ip_address = ip_address + '%0'
             else:
-                if network and network['shared']:
+                if not network:
+                    ip_address = ip_address + '%0'
+                elif network['shared']:
                     ip_address = ip_address + '%0'
                 elif 'router:external' in network and \
                      network['router:external'] and \
@@ -1059,7 +1061,8 @@ class iControlDriver(object):
                 if network['shared']:
                     network_name = '/Common/' + network_name
                     ip_address = ip_address + '%0'
-                elif 'router:external' in network and \
+                elif network and \
+                     'router:external' in network and \
                      network['router:external'] and \
                      self.conf.f5_common_external_networks:
                     network_name = '/Common/' + network_name

@@ -99,7 +99,8 @@ class LogicalServiceCache(object):
         if 'port_id' in service['vip']:
             port_id = service['vip']['port_id']
         else:
-            port_id = None
+            # No VIP... don't cache the service yet
+            return
         pool_id = service['pool']['id']
         tenant_id = service['pool']['tenant_id']
         s = self.Service(port_id, pool_id, tenant_id)
@@ -114,7 +115,8 @@ class LogicalServiceCache(object):
             if 'port_id' in service['vip']:
                 port_id = service['vip']['port_id']
             else:
-                port_id = None
+                # No VIP... shouldn't be in cache
+                return
             service = self.Service(
                 port_id, service['pool']['id'],
                 service['pool']['tenant_id']
