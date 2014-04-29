@@ -354,6 +354,13 @@ class iControlDriver(object):
     @is_connected
     def update_health_monitor(self, old_health_monitor,
                               health_monitor, pool, service):
+        # The altered health monitor does not mark its
+        # status as PENDING_UPDATE properly.  Force it.
+        for i in range(len(service['pool']['health_monitors_status'])):
+            if service['pool']['health_monitors_status'][i]['monitor_id'] == \
+                                                          health_monitor['id']:
+                    service['pool']['health_monitors_status'][i]['status'] = \
+                                                   plugin_const.PENDING_UPDATE
         self._assure_service(service)
         return True
 
@@ -912,9 +919,9 @@ class iControlDriver(object):
                               " took %.5f secs" %
                               (time() - start_time))
                     # Do we have weights for ratios?
-                    if member['weight'] > 0:
+                    if member['weight'] > 1:
                         start_time = time()
-                        if not (just_added and int(member['weight'] == 1)):
+                        if not just_added:
                             bigip.pool.set_member_ratio(
                                     name=pool['id'],
                                     ip_address=ip_address,
@@ -1001,7 +1008,14 @@ class iControlDriver(object):
                                 name=pool['id'],
                                 lb_method='RATIO',
                                 folder=pool['tenant_id'])
-
+        else:
+            # We must update the pool lb_method for the case where
+            # the pool object was not updated, but the member
+            # used to have a weight (setting ration) and now does
+            # not.
+            bigip.pool.set_lb_method(name=pool['id'],
+                                     lb_method=pool['lb_method'],
+                                     folder=pool['tenant_id'])
             # This is probably not required.
             #if on_last_bigip:
             #    self.plugin_rpc.update_pool_status(
@@ -1357,6 +1371,14 @@ class iControlDriver(object):
                                      vip['id'],
                                     rule_definition=rule_definition,
                                     folder=vip['tenant_id'])
+                            # for the rule text to update becuase
+                            # connection limit may have changed
+                            bigip.rule.update(
+                                    name=RPS_THROTTLE_RULE_PREFIX +
+                                     vip['id'],
+                                    rule_definition=rule_definition,
+                                    folder=vip['tenant_id']
+                                    )
                             # add the throttle to the vip
                             bigip_vs.add_rule(
                                         name=vip['id'],

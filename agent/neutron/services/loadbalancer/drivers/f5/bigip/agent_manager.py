@@ -395,7 +395,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             LOG.exception(_('Unable to destroy service for pool: %s'),
                           pool_id)
             self.needs_resync = True
-        self.cache.remove(service)
+        self.cache.remove_by_pool_id(pool_id)
 
     @log.log
     def remove_orphans(self):
