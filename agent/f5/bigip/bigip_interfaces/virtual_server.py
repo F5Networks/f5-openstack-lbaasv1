@@ -105,14 +105,22 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
+            count = 0
             while not self.virtual_address_exists(named_address=ip_address,
                                                   folder=folder):
                 time.sleep(2)
+                count += 1
+                if count == 5:
+                    Log.error('VirtualServer',
+                              'Address not found after create')
+                    break
+
 
             if not traffic_group:
                 traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
             self.lb_va.set_traffic_group([ip_address], [traffic_group])
+            return True
 
     @icontrol_folder
     def create_ip_forwarder(self, name=None, ip_address=None,
@@ -172,14 +180,21 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
+            count = 0
             while not self.virtual_address_exists(named_address=ip_address,
                                                   folder=folder):
                 time.sleep(2)
+                count += 1
+                if count == 5:
+                    Log.error('VirtualServer',
+                              'Address not found after create')
+                    break
 
             if not traffic_group:
                 traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
             self.lb_va.set_traffic_group([ip_address], [traffic_group])
+            return True
 
     @icontrol_folder
     def create_fastl4(self, name=None, ip_address=None, mask=None,
@@ -248,14 +263,21 @@ class VirtualServer(object):
 
                 self.lb_vs.set_vlan([name], [filter_list])
 
+            count = 0
             while not self.virtual_address_exists(named_address=ip_address,
                                                   folder=folder):
                 time.sleep(2)
+                count += 1
+                if count == 5:
+                    Log.error('VirtualServer',
+                              'Address not found after create')
+                    break
 
             if not traffic_group:
                 traffic_group = \
                       const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
             self.lb_va.set_traffic_group([ip_address], [traffic_group])
+            return True
 
     @icontrol_folder
     def add_profile(self, name=None, profile_name=None,
@@ -755,16 +777,18 @@ class VirtualServer(object):
                           folder='Common'):
         if self.exists(name=name, folder=folder):
             address_port = self.lb_vs.get_destination_v2([name])[0]
-            self._set_vitrual_address_traffic_group(name=address_port.address,
+            self._set_virtual_address_traffic_group(named_address=address_port.address,
                                                     folder=folder)
 
     @icontrol_folder
     def get_traffic_group(self, name=None, folder='Common'):
         if self.exists(name=name, folder=folder):
             address_port = self.lb_vs.get_destination_v2([name])[0]
-            return self._get_vitrual_address_traffic_group(
-                                                    name=address_port.address,
+            return self._get_virtual_address_traffic_group(
+                                                    named_address=address_port.address,
                                                     folder=folder)
+        else:
+            Log.error('vs', 'vs does not exist: %s in %s' % (name, folder))
 
     @icontrol_folder
     def set_connection_limit(self, name=None, connection_limit=0,
@@ -841,12 +865,12 @@ class VirtualServer(object):
             return protocol_type.PROTOCOL_TCP
 
     @icontrol_folder
-    def _get_vitrual_address_traffic_group(self, name=None, folder='Common'):
-        return self.lb_va.get_traffic_group([name])[0]
+    def _get_virtual_address_traffic_group(self, named_address=None, folder='Common'):
+        return self.lb_va.get_traffic_group([named_address])[0]
 
     @icontrol_folder
-    def _set_vitrual_address_traffic_group(self, name=None, folder='Common'):
-        return self.lb_va.get_traffic_group([name])[0]
+    def _set_virtual_address_traffic_group(self, named_address=None, folder='Common'):
+        return self.lb_va.get_traffic_group([named_address])[0]
 
     @icontrol_rest_folder
     def exists(self, name=None, folder='Common'):

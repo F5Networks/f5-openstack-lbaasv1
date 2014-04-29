@@ -59,7 +59,13 @@ class Route(object):
             return False
 
     def get_vlans_in_domain(self, folder='Common'):
-        return self.net_domain.get_vlan([self._get_domain_name(folder)])[0]
+        try:
+            return self.net_domain.get_vlan([self._get_domain_name(folder)])[0]
+        except WebFault as wf:
+            Log.error('Route',
+                      'Error getting vlans in rt domain %s: %s' %
+                        (self._get_domain_name(folder),str(wf.message)))
+            raise wf
 
     @icontrol_folder
     def add_vlan_to_domain(self, name=None, folder='Common'):
