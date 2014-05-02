@@ -151,28 +151,29 @@ def serialized(method_name):
             # other monkey-patched code which might cause a context switch.
             # To avoid race conditions, DO NOT add logging to this code
             # block.
-            ##num_requests = len(service_queue)
+
+            #num_requests = len(service_queue)
 
             # queue optimization
 
-            ##if num_requests > 1 and method_name == 'create_member':
-            ##    cur_pool_id = service['pool']['id']
-            ##    cur_index = num_requests - 1
+            #if num_requests > 1 and method_name == 'create_member':
+            #    cur_pool_id = service['pool']['id']
+                #cur_index = num_requests - 1
                 # do not attempt to replace the first entry (index 0)
                 # because it may already be in process.
-            ##    while cur_index > 0:
-            ##        (check_request, check_method, check_service) = \
-            ##            service_queue[cur_index]
-            ##        if check_service['pool']['id'] != cur_pool_id:
-            ##            cur_index -= 1
-            ##            continue
-            ##        if check_method != 'create_member':
-            ##            break
+                #while cur_index > 0:
+                #    (check_request, check_method, check_service) = \
+                #        service_queue[cur_index]
+                #    if check_service['pool']['id'] != cur_pool_id:
+                #        cur_index -= 1
+                #        continue
+                #    if check_method != 'create_member':
+                #        break
                     # move this request up in the queue and return
                     # so that existing thread can handle it
-            ##        service_queue[cur_index] = \
-            ##            (check_request, check_method, service)
-            ##        return
+                #    service_queue[cur_index] = \
+                #        (check_request, check_method, service)
+                #    return
 
             # End of code block which assumes no preemption.
 
@@ -193,9 +194,10 @@ def serialized(method_name):
                 greenthread.sleep(waitsecs)
                 reqs_ahead_of_us = request_index(service_queue, my_request_id)
             else:
-                LOG.debug('%s request %s is running with queue depth: %d'
-                          % (str(method_name), my_request_id,
-                             len(service_queue)))
+                LOG.debug(
+                  '%s request %s is running with queue depth: %d'
+                  % (str(method_name), my_request_id,
+                  len(service_queue)))
             try:
                 start_time = time()
                 result = method(*args, **kwargs)
@@ -884,7 +886,7 @@ class iControlDriver(object):
                                       folder=pool['tenant_id'],
                                       no_checks=True)
                     just_added = True
-                    LOG.debug("            bigip.pool.add_member %s took %.5f" %
+                    LOG.debug("           bigip.pool.add_member %s took %.5f" %
                               (ip_address, time() - start_time))
                     if result:
                         #LOG.debug(_("Pool: %s added member: %s:%d"
@@ -1803,12 +1805,23 @@ class iControlDriver(object):
 
             tunnel_name = self._get_tunnel_name(network)
 
+            # create the main tunnel entry for the fdb records
             bigip.vxlan.create_multipoint_tunnel(name=tunnel_name,
                                  profile_name='vxlan_ovs',
                                  self_ip_address=bigip.local_ip,
                                  vxlanid=network['provider:segmentation_id'],
                                  folder=network_folder)
-
+            # create the listerner filters for all VTEP addresses
+            local_ips = self.agent_configurations['tunneling_ips']
+            for i in range(len(local_ips)):
+                list_name = 'ha_' + \
+                            str(network['provider:segmentation_id']) + \
+                            '_' + str(i)
+                bigip.vxlan.create_multipoint_tunnel(name=list_name,
+                                 profile_name='vxlan_ovs',
+                                 self_ip_address=local_ips[i],
+                                 vxlanid=network['provider:segmentation_id'],
+                                 folder=network_folder)
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.conf.l2_population:
@@ -1849,7 +1862,17 @@ class iControlDriver(object):
                                  self_ip_address=bigip.local_ip,
                                  greid=network['provider:segmentation_id'],
                                  folder=network_folder)
-
+            # create the listerner filters for all VTEP addresses
+            local_ips = self.agent_configurations['tunneling_ips']
+            for i in range(len(local_ips)):
+                list_name = 'ha_' + \
+                            str(network['provider:segmentation_id']) + \
+                            '_' + str(i)
+                bigip.l2gre.create_multipoint_tunnel(name=list_name,
+                                 profile_name='gre_ovs',
+                                 self_ip_address=local_ips[i],
+                                 greid=network['provider:segmentation_id'],
+                                 folder=network_folder)
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.conf.l2_population:
@@ -2323,6 +2346,14 @@ class iControlDriver(object):
                                                    folder=network_folder)
                 bigip.vxlan.delete_tunnel(name=tunnel_name,
                                           folder=network_folder)
+                # delete the listerner filters for all VTEP addresses
+                local_ips = self.agent_configurations['tunneling_ips']
+                for i in range(len(local_ips)):
+                    list_name = 'ha_' + \
+                            str(network['provider:segmentation_id']) + \
+                            '_' + str(i)
+                    bigip.vxlan.delete_tunnel(name=list_name,
+                                          folder=network_folder)
                 # notify all the compute nodes we no longer
                 # VTEPs for this network now.
                 if self.conf.l2_population:
@@ -2356,6 +2387,15 @@ class iControlDriver(object):
                 bigip.l2gre.delete_all_fdb_entries(tunnel_name=tunnel_name,
                                                    folder=network_folder)
                 bigip.l2gre.delete_tunnel(name=tunnel_name,
+                                          folder=network_folder)
+                # delete the listerner filters for all VTEP addresses
+
+                local_ips = self.agent_configurations['tunneling_ips']
+                for i in range(len(local_ips)):
+                    list_name = 'ha_' + \
+                            str(network['provider:segmentation_id']) + \
+                            '_' + str(i)
+                    bigip.l2gre.delete_tunnel(name=list_name,
                                           folder=network_folder)
                 # notify all the compute nodes we no longer
                 # VTEPs for this network now.
@@ -2714,7 +2754,7 @@ class iControlDriver(object):
                                         5,
                                         self.conf.use_namespaces,
                                         self.conf.f5_route_domain_strictness)
-
+                first_bigip.system.set_folder('/Common')
                 major_version = first_bigip.system.get_major_version()
                 if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
                     raise f5ex.MajorVersionValidateFailed(
@@ -2732,7 +2772,7 @@ class iControlDriver(object):
                 extramb = first_bigip.system.get_provision_extramb()
                 if int(extramb) < f5const.MIN_EXTRA_MB:
                     raise f5ex.ProvisioningExtraMBValidateFailed(
-                       'device %s BIG-IP not provisioned for management LARGE. extramb=%d'
+            'device %s BIG-IP not provisioned for management LARGE. extramb=%d'
                        % (self.hostnames[0], int(extramb)))
 
                 # if there was only one address supplied and
@@ -2775,7 +2815,7 @@ class iControlDriver(object):
                                         self.conf.use_namespaces,
                                         self.conf.f5_route_domain_strictness)
                     self.__bigips[host] = hostbigip
-
+                    hostbigip.system.set_folder('/Common')
                     major_version = hostbigip.system.get_major_version()
                     if major_version < f5const.MIN_TMOS_MAJOR_VERSION:
                         raise f5ex.MajorVersionValidateFailed(
@@ -2900,6 +2940,8 @@ class iControlDriver(object):
                                                '/' + vtep_folder + '/' + \
                                                vtep_selfip_name))
 
+                    local_ip = sorted(local_ips)
+
                     self.agent_configurations['tunneling_ips'] = local_ips
                     self.agent_configurations['icontrol_endpoints'] = \
                                                             icontrol_endpoints
@@ -2950,9 +2992,11 @@ class iControlDriver(object):
                 bigip.device_group = bigip.device.get_device_group()
             self._sync_with_retries(bigip)
 
-    def _sync_with_retries(self, bigip, force_now=False, attempts=4, retry_delay=130):
-        for attempt in range(1, attempts+1):
-            LOG.debug('Syncing Cluster... attempt %d of %d' % (attempt, attempts))
+    def _sync_with_retries(self, bigip, force_now=False,
+                           attempts=4, retry_delay=130):
+        for attempt in range(1, attempts + 1):
+            LOG.debug('Syncing Cluster... attempt %d of %d'
+                      % (attempt, attempts))
             try:
                 if attempt != 1:
                     force_now = False
@@ -2963,7 +3007,9 @@ class iControlDriver(object):
                 LOG.error('ERROR: Cluster sync failed.')
                 if attempt == attempts:
                     raise
-                LOG.error('Wait another %d seconds for devices to recover from failed sync.' % retry_delay)
+                LOG.error(
+             'Wait another %d seconds for devices to recover from failed sync.'
+                    % retry_delay)
                 greenthread.sleep(retry_delay)
 
     @serialized('backup_configuration')

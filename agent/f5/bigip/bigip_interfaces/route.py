@@ -64,7 +64,7 @@ class Route(object):
         except WebFault as wf:
             Log.error('Route',
                       'Error getting vlans in rt domain %s: %s' %
-                        (self._get_domain_name(folder),str(wf.message)))
+                      (self._get_domain_name(folder), str(wf.message)))
             raise wf
 
     @icontrol_folder

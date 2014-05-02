@@ -71,7 +71,8 @@ class Vlan(object):
                     Log.error('VLAN', 'tried to create a VLAN when exists')
                     return False
                 else:
-                    Log.error('VLAN', 'Exception creating vlan %s' % wf.message)
+                    Log.error('VLAN', 'Exception creating vlan %s'
+                              % wf.message)
                     raise wf
         else:
             return False

@@ -386,6 +386,7 @@
 				    <tr><td>f5_snat_addresses_per_subnet</td><td>integer number of SNAT addresses</td><td>1</td><td>If set to 0(zero), AutoMAP SNAT will be used.  If set to a positive integer, that number of SNAT addresses will
 				    	     be created per Neutron subnet of Members, per active TMOS device in an HA mode.</td></tr>
 				    <tr><td nowrap>f5_route_domain_strictness</td><td>True or False</td><td>False</td><td>If set to True, tenant route domain isolation will be set to strict and VIPs and Members must be placed in the same route domain. This would mean that all Neutron networks with the shared attribute can not be used for VIPs or Members.</td></tr>
+				    <tr><td nowrap>f5_common_external_networks</td><td>True or False</td><td>False</td><td>If set to True, any VIP address or member address associated with a Neutron network with router:external set to True will be created in the Common parition and in the default route domain.</td></tr>  
 				    <tr><td>f5_bigip_lbaas_device_driver</td><td>python class name of the device driver to use</td><td>neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver</td><td>In EA only the neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver is allowed</td></tr>
 				    <tr><td>icontrol_hostname</td><td>either a single entry or a comma separated list iControl endpoint IP address or FQDNs </td><td>192.168.1.245</td><td>The iControl endpoint to connect to for this agent. If a comma separated list is given, you must include each device in your DSG. If only one address is given, the other device's management address will be learned from the DSG and must be reachable from the LBaaS agent.</td></tr>
 				    <tr><td>icontrol_username</d><td>valid username for the TMOS device</td><td>admin</td><td>The iControl endpoint username for this agent</td></tr>
@@ -747,7 +748,8 @@
 				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
 				</p>
 				<ul>
-				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span>
+				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span></br>
+				    <span class='command_text'>tmsh modify sys db provision.extramb value 500</span>
 				</ul>
 				
 				<p>
@@ -773,7 +775,8 @@
 				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
 				</p>
 				<ul>
-				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span>
+				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span></br>
+				    <span class='command_text'>tmsh modify sys db provision.extramb value 500</span>
 				</ul>
 				<p>
 				Both TMOS devices must have their Network Time Protocol servers set to the same NTP server.	Both TMOS devices should also have their timezone
@@ -890,7 +893,8 @@
 				To provision the Local Traffic (LTM) to nominal via the CLI, run:	
 				</p>
 				<ul>
-				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span>
+				    <span class='command_text'>tmsh modify sys provision ltm level nominal</span></br>
+				    <span class='command_text'>tmsh modify sys db provision.extramb value 500</span>
 				</ul>
 
 				<p>

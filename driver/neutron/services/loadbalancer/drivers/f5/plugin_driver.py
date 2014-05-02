@@ -1258,6 +1258,22 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                             host=agent['host'])
         LOG.debug("get_service took %.5f secs" % (time() - start_time))
 
+        this_member_count = 0
+        for service_member in service['members']:
+            if service_member['address'] == member['address'] and \
+               service_member['protocol_port'] == member['protocol_port']:
+                this_member_count += 1
+        if this_member_count > 1:
+            status_description = 'duplicate member %s:%s found in pool %s' \
+                               % (member['address'],
+                                  member['protocol_port'],
+                                  member['pool_id'])
+            self.callbacks.update_member_status(context,
+                                        member_id=member['id'],
+                                        status=constants.ERROR,
+                                        status_description=status_description,
+                                        host=agent['host'])
+
         # call the RPC proxy with the constructed message
         self.agent_rpc.create_member(context, member, service, agent['host'])
 

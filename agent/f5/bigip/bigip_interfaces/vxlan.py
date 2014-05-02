@@ -7,6 +7,7 @@
 ##############################################################################
 
 from f5.common import constants
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 import json
@@ -32,6 +33,7 @@ class VXLAN(object):
             if response.status_code < 400:
                 return True
             else:
+                Log.error('VXLAN', response.text)
                 return False
         else:
             return False
@@ -46,6 +48,8 @@ class VXLAN(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('VXLAN', response.text)
             return False
 
     @icontrol_rest_folder
@@ -72,6 +76,7 @@ class VXLAN(object):
                                     folder=folder)
                 return True
             else:
+                Log.error('VXLAN', response.text)
                 return False
         else:
             return False
@@ -86,6 +91,8 @@ class VXLAN(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('VXLAN', response.text)
             return False
 
     @icontrol_rest_folder
@@ -108,6 +115,8 @@ class VXLAN(object):
                             return record
             return []
         else:
+            if response.status_code != 404:
+                Log.error('VXLAN', response.text)
             return []
 
     @icontrol_rest_folder
@@ -140,6 +149,7 @@ class VXLAN(object):
                     return False
             return True
         else:
+            Log.error('VXLAN', response.text)
             return False
 
     @icontrol_rest_folder
@@ -170,6 +180,8 @@ class VXLAN(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('VXLAN', response.text)
             return False
 
     @icontrol_rest_folder
@@ -183,6 +195,8 @@ class VXLAN(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('VXLAN', response.text)
             return False
 
     @icontrol_rest_folder
@@ -198,6 +212,8 @@ class VXLAN(object):
             else:
                 return None
         else:
+            if response.status_code != 404:
+                Log.error('VXLAN', response.text)
             return None
 
     @icontrol_rest_folder

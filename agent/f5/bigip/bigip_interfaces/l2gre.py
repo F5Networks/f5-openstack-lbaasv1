@@ -6,7 +6,7 @@
 # Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
 ##############################################################################
 
-# from f5.common.logger import Log
+from f5.common.logger import Log
 from f5.bigip.bigip_interfaces import icontrol_rest_folder
 
 import json
@@ -32,6 +32,7 @@ class L2GRE(object):
             if response.status_code < 400:
                 return True
             else:
+                Log.error('L2GRE', response.text)
                 return False
         else:
             return False
@@ -46,6 +47,8 @@ class L2GRE(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('L2GRE', response.text)
             return False
 
     @icontrol_rest_folder
@@ -72,6 +75,7 @@ class L2GRE(object):
                                     folder=folder)
                 return True
             else:
+                Log.error('L2GRE', response.text)
                 return False
         else:
             return False
@@ -86,6 +90,8 @@ class L2GRE(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('L2GRE', response.text)
             return False
 
     @icontrol_rest_folder
@@ -107,6 +113,8 @@ class L2GRE(object):
                             return record
             return []
         else:
+            if response.status_code != 404:
+                Log.error('L2GRE', response.text)
             return []
 
     @icontrol_rest_folder
@@ -139,6 +147,7 @@ class L2GRE(object):
                     return False
             return True
         else:
+            Log.error('L2GRE', response.text)
             return False
 
     @icontrol_rest_folder
@@ -168,6 +177,8 @@ class L2GRE(object):
         if response.status_code < 400:
             return True
         else:
+            if response.status_code != 404:
+                Log.error('L2GRE', response.text)
             return False
 
     @icontrol_rest_folder
@@ -181,6 +192,7 @@ class L2GRE(object):
         if response.status_code < 400:
             return True
         else:
+            Log.error('L2GRE', response.text)
             return False
 
     @icontrol_rest_folder
@@ -196,6 +208,8 @@ class L2GRE(object):
             else:
                 return None
         else:
+            if response.status_code != 404:
+                Log.error('L2GRE', response.text)
             return None
 
     @icontrol_rest_folder

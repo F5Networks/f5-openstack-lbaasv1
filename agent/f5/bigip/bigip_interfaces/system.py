@@ -8,6 +8,7 @@
 
 from f5.common.logger import Log
 from suds import WebFault
+from httplib import BadStatusLine
 
 import requests
 import json
@@ -60,9 +61,10 @@ class System(object):
             folder = '/' + folder
         try:
             self.mgmt_folder.create([folder])
-        except BadStatusLine as bsl:
+        except BadStatusLine:
             Log.error('System',
-                      "Irregular iControl response creating folder %s" % folder)
+                      "Irregular iControl response creating folder %s"
+                      % folder)
         if change_to:
             self.sys_session.set_active_folder(folder)
             self.current_folder = folder
