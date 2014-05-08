@@ -53,17 +53,21 @@ build/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm:
 clean: clean-debs clean-rpms 
 
 clean-debs: 
+	rm build/f5-bigip-lbaas-agent_*.deb
 	(cd agent; \
 	rm -rf deb_dist; \
         )
+	rm build/f5-lbaas-driver_*.deb
 	(cd driver; \
 	rm -rf deb_dist; \
         )
 
 clean-rpms: 
+	rm build/f5-bigip-lbaas-agent-*.rpm
 	(cd agent; \
 	rm -rf dist; \
         )
+	rm -f build/f5-lbaas-driver-*.rpm
 	(cd driver; \
 	rm -rf dist; \
         )
