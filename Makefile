@@ -2,35 +2,69 @@
 # 
 # You need to install these packages on Ubunutu 12.04 to make this work:
 # 
-#     sudo apt-get install make python-stdeb fakeroot python-all
+#     sudo apt-get install make python-stdeb fakeroot python-all rpm
+# 
 # 
 
-default: driver/deb_dist/python-f5-lbaas-driver_1.0-1_all.deb \
-         agent/deb_dist/python-f5-bigip-lbaas-agent_1.0-1_all.deb
+VERSION=1.1
+
+default: debs rpms
+
+debs: build/f5-lbaas-driver_$(VERSION)-1_all.deb \
+      build/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb
+
+rpms: build/f5-lbaas-driver-$(VERSION)-1.noarch.rpm \
+      build/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm
 
 
-driver/deb_dist/python-f5-lbaas-driver_1.0-1_all.deb: driver/setup.py \
-               driver/neutron/services/loadbalancer/drivers/f5/* \
-               driver/neutron/services/loadbalancer/drivers/f5/log/*
+build/f5-lbaas-driver_$(VERSION)-1_all.deb:
 	(cd driver; \
 	rm -rf deb_dist; \
+	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
-	dpkg -c deb_dist/python-f5-lbaas-driver_1.0-1_all.deb; \
         ) 
+	mkdir -p build
+	cp driver/deb_dist/f5-lbaas-driver_$(VERSION)-1_all.deb build/
 
-agent/deb_dist/python-f5-bigip-lbaas-agent_1.0-1_all.deb: agent/setup.py agent/debian/* \
-               agent/neutron/services/loadbalancer/drivers/f5/* \
-               agent/neutron/services/loadbalancer/drivers/f5/bigip/*
+build/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb:
 	(cd agent; \
 	rm -rf deb_dist; \
+	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
-	dpkg -c deb_dist/python-f5-bigip-lbaas-agent_1.0-1_all.deb; \
         )
+	mkdir -p build
+	cp agent/deb_dist/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb build
 
-clean: 
+build/f5-lbaas-driver-$(VERSION)-1.noarch.rpm:
+	(cd driver; \
+	python setup.py bdist_rpm; \
+        ) 
+	mkdir -p build
+	cp driver/dist/f5-lbaas-driver-$(VERSION)-1.noarch.rpm build
+
+
+build/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm:
+	(cd agent; \
+	python setup.py bdist_rpm; \
+	)
+	mkdir -p build
+	cp agent/dist/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm build
+
+clean: clean-debs clean-rpms 
+
+clean-debs: 
 	(cd agent; \
 	rm -rf deb_dist; \
         )
 	(cd driver; \
 	rm -rf deb_dist; \
         )
+
+clean-rpms: 
+	(cd agent; \
+	rm -rf dist; \
+        )
+	(cd driver; \
+	rm -rf dist; \
+        )
+
