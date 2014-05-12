@@ -804,6 +804,10 @@ class iControlDriver(object):
 
             network = member['network']
             subnet = member['subnet']
+            if network['shared']:
+                net_folder = 'Common'
+            else:
+                net_folder = pool['tenant_id']
 
             if self.conf.f5_global_routed_mode:
                 ip_address = ip_address + '%0'
@@ -851,13 +855,13 @@ class iControlDriver(object):
                         bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
-                                    folder=pool['tenant_id'])
+                                    folder=net_folder)
                     if network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
                         bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
-                                    folder=pool['tenant_id'])
+                                    folder=net_folder)
                 # avoids race condition:
                 # deletion of pool member objects must sync before we
                 # remove the selfip from the peer bigips.
@@ -949,7 +953,7 @@ class iControlDriver(object):
                                     mac_address=member['port']['mac_address'],
                                     vtep_ip_address=vtep,
                                     arp_ip_address=ip_address,
-                                    folder=pool['tenant_id'])
+                                    folder=net_folder)
                     if network and network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
                         if 'gre_vteps' in member:
@@ -959,7 +963,7 @@ class iControlDriver(object):
                                     mac_address=member['port']['mac_address'],
                                     vtep_ip_address=vtep,
                                     arp_ip_address=ip_address,
-                                    folder=pool['tenant_id'])
+                                    folder=net_folder)
 
                     if on_last_bigip:
                         if member['status'] == plugin_const.PENDING_UPDATE:
@@ -1418,6 +1422,10 @@ class iControlDriver(object):
 
                     if vip['network'] and \
                        'provider:network_type' in vip['network']:
+                        if network['shared']:
+                            net_folder = 'Common'
+                        else:
+                            net_folder = vip['tenant_id']
                         if network['provider:network_type'] == 'vxlan':
                             if 'vxlan_vteps' in vip:
                                 tunnel_name = self._get_tunnel_name(network)
@@ -1429,7 +1437,7 @@ class iControlDriver(object):
                                               mac_address=mac_address,
                                               vtep_ip_address=vtep,
                                               arp_ip_address=None,
-                                              folder=vip['tenant_id'])
+                                              folder=net_folder)
                         if network['provider:network_type'] == 'gre':
                             if 'gre_vteps' in vip:
                                 tunnel_name = self._get_tunnel_name(network)
@@ -1441,7 +1449,7 @@ class iControlDriver(object):
                                               mac_address=mac_address,
                                               vtep_ip_address=vtep,
                                               arp_ip_address=None,
-                                              folder=vip['tenant_id'])
+                                              folder=net_folder)
 
                     if on_last_bigip:
                         self.plugin_rpc.update_vip_status(
