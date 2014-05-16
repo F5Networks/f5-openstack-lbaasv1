@@ -374,13 +374,15 @@ class LoadBalancerCallbacks(object):
                                 nettype = \
                                    member['network']['provider:network_type']
                                 if nettype == 'vxlan':
-                                    vteps = self._get_vxlan_endpoints(context,
-                                                            alloc['port_id'])
-                                    member['vxlan_vteps'] = vteps
+                                    if 'binding:host_id' in member['port']:
+                                        host = member['port']['binding:host_id']
+                                        member['vxlan_vteps'] = \
+                                         self._get_vxlan_endpoints(context, host)
                                 if nettype == 'gre':
-                                    vteps = self._get_gre_endpoints(context,
-                                                            alloc['port_id'])
-                                    member['gre_vteps'] = vteps
+                                    if 'binding:host_id' in member['port']:
+                                        host = member['port']['binding:host_id']
+                                        member['gre_vteps'] = \
+                                         self._get_gre_endpoints(context, host)
                             else:
                                 member['network']['provider:network_type'] = \
                                                                   'undefined'
