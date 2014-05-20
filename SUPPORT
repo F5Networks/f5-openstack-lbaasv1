@@ -1,0 +1,96 @@
+F5 LBaaS Community Edition Support Policy
+ 
+The Community Edition of the F5 LBaaS Plug-in is Free Software
+available under the Mozilla Public License version 2.0, and is 
+provided without Warranty or Support under existing support 
+contracts for F5 products. The Community Edition is distinct 
+from our Commercial Edition which will be available as part 
+of the BIG-IQ product in the near future. Support will be 
+available for our Commercial Edition.
+ 
+F5 LBaaS Community Edition Frequently Asked Questions
+  
+Q: Does Community Support mean customers are completely on our own?
+
+A: There will be developers and other members of the F5 community
+   who will be willing to help you resolve problems. However, help
+   will be provided on a best-effort basis and it is possible your
+   problem may not be resolved quickly. 
+
+   While DevCentral and Launchpad community is are world-wide, 
+   you should not rely on anyone being available at a particular time,
+   especially outside business hours.
+
+   The F5 OpenStack DevCentral site can be found at:
+
+      https://devcentral.f5.com/openstack
+
+   The F5 OpenStack Launchpad site can be found at:
+
+      https://launchpad.net/~f5openstackcommunity
+ 
+Q: If I have a problem with the LBaaS plug-in in the middle
+   of the night, who do I call?
+
+A: F5 Phone Support is not available for the Community Edition.
+   However, please consider that the function on the plug-in is
+   to help configure your BIG-IPs – a job you would have to do
+   yourself in the absence of the free plug-in. Therefore, to 
+   mitigate the risk of something going wrong with the free 
+   plug-in you will need to develop the expertise to configure
+   the BIG-IP manually in case you need to do so in a time-critical
+   situation. The F5 LBaaS plug-in ONLY uses publicly documented
+   F5 iControl APIs.
+ 
+ 
+Q: If I have a problem in the middle of the night with a 
+   Virtual Server or Monitor on BIG-IP that was configured by the
+   LBaaS plug-in, who do I call?
+
+A: Using the F5 LBaaS plug-in does not invalidate your BIG-IP Support
+   contract. If you are having trouble with the operation of your BIG-IP,
+   such as a VIP not passing traffic, those types of problems are 
+   still supported.
+ 
+ 
+Q: If I have identified a bug or developed improvement, 
+   how can I submit that for incorporation into the plug-in?
+
+A: The site on F5 Dev Central https://devcentral.f5.com/openstack is
+   available to facilitate discussions and accept suggestions. 
+   Also, a Launchpad site at https://devcentral.f5.com/openstack
+   is available for bug reporting.
+ 
+ 
+Q: Why aren't you providing phone support?
+
+A: F5 will be providing support for our Commercial Edition in 
+   conjunction with the BIG-IQ product. The Commercial Edition 
+   may have constraints on what distributions, versions, and 
+   configurations are supported in order to ensure quality of 
+   the overall solution. For the Community Edition, there are 
+   no such constraints. Given that OpenStack is a rapidly evolving 
+   technology, there are various versions, customizations, and 
+   flavors of plug-ins that can be used with OpenStack. Also, 
+   we anticipate that the Community LBaaS plug-in may be modified
+   by customers for their own purposes. Under these conditions,
+   and considering that the plug-in is free, it is not practical
+   for F5 Support to accept the burden of making the plug-in work
+   in every possible OpenStack deployment scenario.
+ 
+Q: How and When can I get access to the Commerical Edition 
+   of the plugin with BIG-IQ?
+
+A: F5 will be making the Commercial Edition of the F5 LBaaS plug-in
+   for OpenStack available in the next release of BIG-IQ, which is 
+   scheduled for general availability in the Summer of 2014. When the 
+   F5 LBaaS Plugin-In is used in conjunction with a purchased license
+   for BIG-IQ, the plug-in will have full F5 product support - within 
+   the constraints of the supported OpenStack, BIG-IP and BIG-IQ versions. 
+   For Early Access to the Commercial Edition of the F5 LBaaS plugin 
+   with BIG-IQ, please submit a request for access to the F5 Early 
+   Access Program - specifically BIG-IQ at: 
+   
+      https://devcentral.f5.com/welcome-to-the-f5-beta-program
+
+

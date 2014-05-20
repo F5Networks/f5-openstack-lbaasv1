@@ -5,12 +5,10 @@
 #     sudo apt-get install make python-stdeb fakeroot python-all rpm
 # 
 # 
+PROJECT_DIR := $(shell pwd)
 
-VERSION := $(shell cat VERSION_ID|tr -d '\n'; echo -n '.'; cat BUILD_ID|tr -d '\n'; echo -n '-1')
-RPM_VERSION := $(shell cat VERSION_ID|tr -d '\n'; echo -n '.'; cat BUILD_ID|tr -d '\n'|tr '-' '_'; echo -n '_1')
-
-PPA_DIST=precise
-GPG_KEY=E1E513EF
+VERSION := $(shell cat VERSION|tr -d '\n'; echo -n '.'; cat OS_RELEASE|tr -d '\n'; echo -n '-1')
+RPM_VERSION := $(shell cat VERSION|tr -d '\n'; echo -n '.'; cat OS_RELEASE|tr -d '\n'|tr '-' '_'; echo -n '_1')
 
 default: debs rpms
 
@@ -19,10 +17,6 @@ debs: build/f5-lbaas-driver_$(VERSION)_all.deb \
 
 rpms: build/f5-lbaas-driver-$(VERSION).noarch.rpm \
       build/f5-bigip-lbaas-agent-$(VERSION).noarch.rpm
-
-deb_source: build/f5-lbaas-driver_$(VERSION)_source.deb \
-        build/f5-bigip-lbaas-agent_$(VERSION)_source.deb
-
 
 build/f5-lbaas-driver_$(VERSION)_all.deb:
 	(cd driver; \
@@ -33,14 +27,6 @@ build/f5-lbaas-driver_$(VERSION)_all.deb:
 	mkdir -p build
 	cp driver/deb_dist/f5-lbaas-driver_$(VERSION)-1_all.deb build/
 
-build/f5-lbaas-driver_$(VERSION)_source.deb:
-	(cd driver; \
-	rm -rf deb_dist; \
-	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
-        python setup.py --command-packages=stdeb.command sdist_dsc --suite $(PPA_DIST); \
-        cd deb_dist/f5-lbaas-driver-$(VERSION); \
-        dpkg-buildpackage -rfakeroot -S -k$(GPG_KEY); \
-        )
 
 build/f5-bigip-lbaas-agent_$(VERSION)_all.deb:
 	(cd agent; \
@@ -51,14 +37,6 @@ build/f5-bigip-lbaas-agent_$(VERSION)_all.deb:
 	mkdir -p build
 	cp agent/deb_dist/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb build
 
-build/f5-bigip-lbaas-agent_$(VERSION)_source.deb:
-	(cd agent; \
-	rm -rf deb_dist; \
-	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
-        python setup.py --command-packages=stdeb.command sdist_dsc --suite $(PPA_DIST); \
-        cd deb_dist/f5-bigip-lbaas-agent-$(VERSION); \
-        dpkg-buildpackage -rfakeroot -S -k$(GPG_KEY); \
-        )
 
 build/f5-lbaas-driver-$(VERSION).noarch.rpm:
 	(cd driver; \
