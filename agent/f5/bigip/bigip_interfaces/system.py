@@ -195,3 +195,31 @@ class System(object):
             return True
         else:
             return False
+
+    def get_tunnel_sync(self):
+        request_url = self.bigip.icr_url + '/sys/db/iptunnel.configsync'
+        response = self.bigip.icr_session.get(request_url)
+
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'value' in response_obj:
+                return response_obj['value']
+            return None
+        else:
+            return None
+
+    def set_tunnel_sync(self, enabled=False):
+        request_url = self.bigip.icr_url + '/sys/db/iptunnel.configsync'
+        if enabled:
+            response = self.bigip.icr_session.put(request_url,
+                                        data=json.dumps({'value': 'enable'}))
+        else:
+            response = self.bigip.icr_session.put(request_url,
+                                        data=json.dumps({'value': 'disable'}))
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'value' in response_obj:
+                return response_obj['value']
+            return None
+        else:
+            return None

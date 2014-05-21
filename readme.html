@@ -580,6 +580,15 @@
 				</ul>
 				<h3>Tunnels</h3>
 				<p>
+				<H2>
+				<span class='mw-headline'>
+				Warning - To use GRE or VxLAN tunnels with versions less then TMOS 11.6, you must apply an engineering hotfix.
+				The minimum recommended release for use with tunnels is TMOS 11.5.1 with engineering hotfix BIGIP-11.5.1.2.38.121-HF2-ENG.
+				To obtain this hotfix, please open a support case on your TMOS device and request it. 
+				</span>
+				</H2>
+				</p>
+				<p>
 				For GRE and VxLAN tunnels, the f5 TMOS devices expect to communicate with Open vSwitch VTEPs. The VTEP addresses
 				for Open vSwitch VTEPs are learned from their registered Neutron agent configurations
 				<span class='command_text'>tunneling_ip</span> attribute. I.E.:

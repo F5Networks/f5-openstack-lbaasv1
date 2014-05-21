@@ -1822,16 +1822,16 @@ class iControlDriver(object):
                                  vxlanid=network['provider:segmentation_id'],
                                  folder=network_folder)
             # create the listerner filters for all VTEP addresses
-            local_ips = self.agent_configurations['tunneling_ips']
-            for i in range(len(local_ips)):
-                list_name = 'ha_' + \
-                            str(network['provider:segmentation_id']) + \
-                            '_' + str(i)
-                bigip.vxlan.create_multipoint_tunnel(name=list_name,
-                                 profile_name='vxlan_ovs',
-                                 self_ip_address=local_ips[i],
-                                 vxlanid=network['provider:segmentation_id'],
-                                 folder=network_folder)
+            #local_ips = self.agent_configurations['tunneling_ips']
+            #for i in range(len(local_ips)):
+            #    list_name = 'ha_' + \
+            #                str(network['provider:segmentation_id']) + \
+            #                '_' + str(i)
+            #    bigip.vxlan.create_multipoint_tunnel(name=list_name,
+            #                     profile_name='vxlan_ovs',
+            #                     self_ip_address=local_ips[i],
+            #                     vxlanid=network['provider:segmentation_id'],
+            #                     folder=network_folder)
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.conf.l2_population:
@@ -1873,16 +1873,16 @@ class iControlDriver(object):
                                  greid=network['provider:segmentation_id'],
                                  folder=network_folder)
             # create the listerner filters for all VTEP addresses
-            local_ips = self.agent_configurations['tunneling_ips']
-            for i in range(len(local_ips)):
-                list_name = 'ha_' + \
-                            str(network['provider:segmentation_id']) + \
-                            '_' + str(i)
-                bigip.l2gre.create_multipoint_tunnel(name=list_name,
-                                 profile_name='gre_ovs',
-                                 self_ip_address=local_ips[i],
-                                 greid=network['provider:segmentation_id'],
-                                 folder=network_folder)
+            #local_ips = self.agent_configurations['tunneling_ips']
+            #for i in range(len(local_ips)):
+                #list_name = 'ha_' + \
+                #            str(network['provider:segmentation_id']) + \
+                #            '_' + str(i)
+                #bigip.l2gre.create_multipoint_tunnel(name=list_name,
+                #                 profile_name='gre_ovs',
+                #                 self_ip_address=local_ips[i],
+                #                 greid=network['provider:segmentation_id'],
+                #                 folder=network_folder)
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.conf.l2_population:
@@ -2785,6 +2785,11 @@ class iControlDriver(object):
             'device %s BIG-IP not provisioned for management LARGE. extramb=%d'
                        % (self.hostnames[0], int(extramb)))
 
+                # Turn off tunnel syncing... our VTEPs are local SelfIPs
+                tunnel_sync = first_bigip.system.get_tunnel_sync()
+                if tunnel_sync and tunnel_sync == 'enable':
+                    first_bigip.system.set_tunnel_sync(enabled=False)
+
                 # Warning about early release tunnel hotfix requirements
                 if first_bigip.system.get_version().find('11.5.0') > 0 and \
                    first_bigip.system.get_version().find('11.5.1') > 0 and \
@@ -2862,6 +2867,11 @@ class iControlDriver(object):
                         raise f5ex.ProvisioningExtraMBValidateFailed(
                        'device %s BIG-IP not provisioned for management LARGE.'
                        % self.host)
+
+                    # Turn off tunnel syncing... our VTEPs are local SelfIPs
+                    tunnel_sync = hostbigip.system.get_tunnel_sync()
+                    if tunnel_sync and tunnel_sync == 'enable':
+                        hostbigip.system.set_tunnel_sync(enabled=False)
 
                     if hostbigip.device.get_device_group() != cluster_name:
                         raise f5ex.BigIPClusterInvalidHA(
