@@ -455,7 +455,7 @@ class iControlDriver(object):
         resync = False
         for host in self.__bigips:
             bigip = self.__bigips[host]
-            if bigip.local_ip:
+            if hasattr(bigip, 'local_ip') and bigip.local_ip:
                 try:
                     # send out an update to all compute agents
                     # to get the bigips associated with the br-tun
@@ -1268,7 +1268,8 @@ class iControlDriver(object):
                                     name=vip['id'],
                                     folder=pool['tenant_id'])
 
-                    if 'session_persistence' in vip:
+                    if 'session_persistence' in vip and \
+                        vip['session_persistence']:
                         # branch on persistence type
                         persistence_type = \
                                vip['session_persistence']['type']

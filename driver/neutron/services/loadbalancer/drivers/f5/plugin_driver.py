@@ -598,7 +598,8 @@ class LoadBalancerCallbacks(object):
             }
             port_data[portbindings.HOST_ID] = host
             port_data[portbindings.VIF_TYPE] = VIF_TYPE
-            port_data[portbindings.CAPABILITIES] = {'port_filter': False}
+            if 'binding:capabilities' in portbindings.EXTENDED_ATTRIBUTES_2_0['ports']:
+                port_data['binding:capabilities'] = {'port_filter': False}
             port = self.plugin._core_plugin.create_port(context,
                                                         {'port': port_data})
             # Because ML2 marks ports DOWN by default on creation
@@ -636,7 +637,8 @@ class LoadBalancerCallbacks(object):
             }
             port_data[portbindings.HOST_ID] = host
             port_data[portbindings.VIF_TYPE] = 'f5'
-            port_data[portbindings.CAPABILITIES] = {'port_filer': False}
+            if 'binding:capabilities' in portbindings.EXTENDED_ATTRIBUTES_2_0['ports']:
+                port_data['binding:capabilities'] = {'port_filter': False}
             port = self.plugin._core_plugin.create_port(context,
                                                         {'port': port_data})
             # Because ML2 marks ports DOWN by default on creation
@@ -1361,6 +1363,27 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         self.agent_rpc.create_pool_health_monitor(context, health_monitor,
                                                   pool, service,
                                                   agent['host'])
+
+    @log.log
+    def update_pool_health_monitor(self, context, old_health_monitor,
+                              health_monitor, pool_id):
+        # which agent should handle provisioning
+        agent = self.get_pool_agent(context, pool_id)
+
+        # populate a pool structure for the rpc message
+        pool = self._get_pool(context, pool_id)
+
+        # get the complete service definition from the data model
+        service = self.callbacks.get_service_by_pool_id(context,
+                            pool_id=pool_id,
+                            global_routed_mode=self._is_global_routed(agent),
+                            activate=False,
+                            host=agent['host'])
+
+        # call the RPC proxy with the constructed message
+        self.agent_rpc.update_pool_health_monitor(context, old_health_monitor,
+                                             health_monitor, pool,
+                                             service, agent['host'])
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
