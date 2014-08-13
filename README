@@ -1,4 +1,10 @@
 F5 LBaaS Plugin Type Driver and Provisioning Agent
 
-Please see readme.html for details.
+To build the Debian and RPM packages, please read the
+BUILD file included with this project.
+
+Instructions on preparing your BIG-IP devices and 
+configuring the plugin and agents for LBaaS deployment
+are found in the accompanying readme.html or readme.pdf
+document.  
 

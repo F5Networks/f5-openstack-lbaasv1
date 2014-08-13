@@ -11,7 +11,7 @@
 from distutils.core import setup
 
 setup(name='f5-lbaas-driver',
-      version='1.1',
+      version='1.0.1.havana-1',
       description='F5 LBaaS Driver for OpenStack',
       author='John Gruber',
       author_email='j.gruber@f5.com',

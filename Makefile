@@ -5,19 +5,20 @@
 #     sudo apt-get install make python-stdeb fakeroot python-all rpm
 # 
 # 
+PROJECT_DIR := $(shell pwd)
 
-VERSION=1.1
+VERSION := $(shell cat VERSION|tr -d '\n'; echo -n '.'; cat OS_RELEASE|tr -d '\n'; echo -n '-1')
+RPM_VERSION := $(shell cat VERSION|tr -d '\n'; echo -n '.'; cat OS_RELEASE|tr -d '\n'|tr '-' '_'; echo -n '_1')
 
 default: debs rpms
 
-debs: build/f5-lbaas-driver_$(VERSION)-1_all.deb \
-      build/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb
+debs: build/f5-lbaas-driver_$(VERSION)_all.deb \
+      build/f5-bigip-lbaas-agent_$(VERSION)_all.deb
 
-rpms: build/f5-lbaas-driver-$(VERSION)-1.noarch.rpm \
-      build/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm
+rpms: build/f5-lbaas-driver-$(VERSION).noarch.rpm \
+      build/f5-bigip-lbaas-agent-$(VERSION).noarch.rpm
 
-
-build/f5-lbaas-driver_$(VERSION)-1_all.deb:
+build/f5-lbaas-driver_$(VERSION)_all.deb:
 	(cd driver; \
 	rm -rf deb_dist; \
 	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
@@ -26,7 +27,8 @@ build/f5-lbaas-driver_$(VERSION)-1_all.deb:
 	mkdir -p build
 	cp driver/deb_dist/f5-lbaas-driver_$(VERSION)-1_all.deb build/
 
-build/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb:
+
+build/f5-bigip-lbaas-agent_$(VERSION)_all.deb:
 	(cd agent; \
 	rm -rf deb_dist; \
 	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
@@ -35,20 +37,20 @@ build/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb:
 	mkdir -p build
 	cp agent/deb_dist/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb build
 
-build/f5-lbaas-driver-$(VERSION)-1.noarch.rpm:
+
+build/f5-lbaas-driver-$(VERSION).noarch.rpm:
 	(cd driver; \
 	python setup.py bdist_rpm; \
         ) 
 	mkdir -p build
-	cp driver/dist/f5-lbaas-driver-$(VERSION)-1.noarch.rpm build
+	cp driver/dist/f5-lbaas-driver-$(RPM_VERSION)-1.noarch.rpm build
 
-
-build/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm:
+build/f5-bigip-lbaas-agent-$(VERSION).noarch.rpm:
 	(cd agent; \
 	python setup.py bdist_rpm; \
 	)
 	mkdir -p build
-	cp agent/dist/f5-bigip-lbaas-agent-$(VERSION)-1.noarch.rpm build
+	cp agent/dist/f5-bigip-lbaas-agent-$(RPM_VERSION)-1.noarch.rpm build
 
 clean: clean-debs clean-rpms 
 

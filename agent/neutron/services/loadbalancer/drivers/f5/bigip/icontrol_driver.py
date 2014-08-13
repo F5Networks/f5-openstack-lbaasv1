@@ -12,6 +12,8 @@ from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
+from neutron.services.loadbalancer.drivers.f5.bigip import \
+                                       constants as driver_const
 from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
@@ -1821,16 +1823,16 @@ class iControlDriver(object):
                                  vxlanid=network['provider:segmentation_id'],
                                  folder=network_folder)
             # create the listerner filters for all VTEP addresses
-            local_ips = self.agent_configurations['tunneling_ips']
-            for i in range(len(local_ips)):
-                list_name = 'ha_' + \
-                            str(network['provider:segmentation_id']) + \
-                            '_' + str(i)
-                bigip.vxlan.create_multipoint_tunnel(name=list_name,
-                                 profile_name='vxlan_ovs',
-                                 self_ip_address=local_ips[i],
-                                 vxlanid=network['provider:segmentation_id'],
-                                 folder=network_folder)
+            #local_ips = self.agent_configurations['tunneling_ips']
+            #for i in range(len(local_ips)):
+            #    list_name = 'ha_' + \
+            #                str(network['provider:segmentation_id']) + \
+            #                '_' + str(i)
+            #    bigip.vxlan.create_multipoint_tunnel(name=list_name,
+            #                     profile_name='vxlan_ovs',
+            #                     self_ip_address=local_ips[i],
+            #                     vxlanid=network['provider:segmentation_id'],
+            #                     folder=network_folder)
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.conf.l2_population:
@@ -1872,16 +1874,16 @@ class iControlDriver(object):
                                  greid=network['provider:segmentation_id'],
                                  folder=network_folder)
             # create the listerner filters for all VTEP addresses
-            local_ips = self.agent_configurations['tunneling_ips']
-            for i in range(len(local_ips)):
-                list_name = 'ha_' + \
-                            str(network['provider:segmentation_id']) + \
-                            '_' + str(i)
-                bigip.l2gre.create_multipoint_tunnel(name=list_name,
-                                 profile_name='gre_ovs',
-                                 self_ip_address=local_ips[i],
-                                 greid=network['provider:segmentation_id'],
-                                 folder=network_folder)
+            #local_ips = self.agent_configurations['tunneling_ips']
+            #for i in range(len(local_ips)):
+                #list_name = 'ha_' + \
+                #            str(network['provider:segmentation_id']) + \
+                #            '_' + str(i)
+                #bigip.l2gre.create_multipoint_tunnel(name=list_name,
+                #                 profile_name='gre_ovs',
+                #                 self_ip_address=local_ips[i],
+                #                 greid=network['provider:segmentation_id'],
+                #                 folder=network_folder)
             # notify all the compute nodes we are VTEPs
             # for this network now.
             if self.conf.l2_population:
@@ -2784,6 +2786,28 @@ class iControlDriver(object):
             'device %s BIG-IP not provisioned for management LARGE. extramb=%d'
                        % (self.hostnames[0], int(extramb)))
 
+                # Turn off tunnel syncing... our VTEPs are local SelfIPs
+                tunnel_sync = first_bigip.system.get_tunnel_sync()
+                if tunnel_sync and tunnel_sync == 'enable':
+                    first_bigip.system.set_tunnel_sync(enabled=False)
+
+                # Warning about early release tunnel hotfix requirements
+                if first_bigip.system.get_version().find('11.5.0') > 0 and \
+                   first_bigip.system.get_version().find('11.5.1') > 0 and \
+                   not first_bigip.system.hotfix:
+                    if driver_const.GRE_TUNNEL_HOTFIX_REQUIRED:
+                        LOG.error('Hotfix required for GRE tunnels, but ' +
+                              'none found. Please open a ticket with f5 ' +
+                              'support on your TMOS device and ask for ' +
+                              'GRE tunneling Hotfixes.'
+                        )
+                    if driver_const.VXLAN_TUNNEL_HOTFIX_REQUIRED:
+                        LOG.error('Hotfix required for VxLAN tunnels, but ' +
+                              'none found. Please open a ticket with f5 ' +
+                              'support on your TMOS device and ask for ' +
+                              'VxLAN tunneling Hotfixes.'
+                        )
+
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
                 # devices trusted by this device.
@@ -2845,11 +2869,32 @@ class iControlDriver(object):
                        'device %s BIG-IP not provisioned for management LARGE.'
                        % self.host)
 
+                    # Turn off tunnel syncing... our VTEPs are local SelfIPs
+                    tunnel_sync = hostbigip.system.get_tunnel_sync()
+                    if tunnel_sync and tunnel_sync == 'enable':
+                        hostbigip.system.set_tunnel_sync(enabled=False)
+
                     if hostbigip.device.get_device_group() != cluster_name:
                         raise f5ex.BigIPClusterInvalidHA(
                                        'Invalid HA. Not all devices in the' +
                                        ' same sync failover device group'
                                        )
+                    # Warning about early release tunnel hotfix requirements
+                    if first_bigip.system.get_version().find('11.5.0') > 0 and \
+                       first_bigip.system.get_version().find('11.5.1') > 0 and \
+                       not first_bigip.system.hotfix:
+                        if driver_const.GRE_TUNNEL_HOTFIX_REQUIRED:
+                            LOG.error('Hotfix required for GRE tunnels, but ' +
+                                  'none found. Please open a ticket with f5 ' +
+                                  'support on your TMOS device and ask for ' +
+                                  'GRE tunneling Hotfixes.'
+                            )
+                        if driver_const.VXLAN_TUNNEL_HOTFIX_REQUIRED:
+                            LOG.error('Hotfix required for VxLAN tunnels,' +
+                                  ' but none found. Please open a ticket' +
+                                  ' with f5 support on your TMOS device' +
+                                  ' and ask for VxLAN tunneling Hotfixes.'
+                            )
 
                 if not cluster_name and self.conf.f5_ha_type != 'standalone':
                     raise f5ex.BigIPClusterInvalidHA(
