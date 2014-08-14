@@ -1,5 +1,27 @@
 # go to https://launchpad.net/~f5openstackcommunity and create a PPA for your release
 
+# THE SHORT WAY
+Get the OpenStackDevF5 PGP key from keys/OpenStackDevF5.asc
+
+Import the key on your build maching 
+  gpg --import OpenStackDevF5.asc
+
+Change into the ppa directory and:
+
+  vi Makefile - change the PPA variable to the PPA you created above
+              - change the target Ubuntu release
+  make clean
+  make
+
+When prompted the GPG key passphrase is 'openstack'.
+
+This will create signed source packages and upload them to the ppa
+
+
+# THE DETAILED LONG DRAWN OUT WAY
+# This is the long drawn out way for documentation purposes
+
+
 # edit your OS_RELEASE and VERSION files for your release
 make clean
 make
