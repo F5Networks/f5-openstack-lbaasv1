@@ -2004,7 +2004,7 @@ class iControlDriver(object):
             network_folder = 'Common'
 
         if network['id'] in self.conf.common_network_ids:
-            network_name = self.conf.common_network_ids[network['id']]
+            network_name = '/Common/'+self.conf.common_network_ids[network['id']]
         elif network['provider:network_type'] == 'vlan':
             network_name = self._get_vlan_name(network,
                                                bigip.icontrol.hostname)
@@ -2340,7 +2340,7 @@ class iControlDriver(object):
             network_name = '/Common/' + network_name
         elif network['id'] in self.conf.common_network_ids:
             network_folder = 'Common'
-            network_name = '/Common' + network_name
+            network_name = '/Common/' + network_name
         elif 'router:external' in network and \
              network['router:external'] and \
              self.conf.f5_common_external_networks:
