@@ -52,7 +52,7 @@ OPTS = [
         default='pair',
         help=_('Are we standalone, pair(active/standby), or scalen')
     ),
-    cfg.StrOpt(
+    cfg.ListOpt(
         'f5_external_physical_mappings',
         default='default:1.1:True',
         help=_('Mapping between Neutron physical_network to interfaces')
@@ -71,6 +71,11 @@ OPTS = [
         'f5_vtep_selfip_name',
         default=None,
         help=_('Name of the VTEP SelfIP'),
+    ),
+    cfg.ListOpt(
+        'advertised_tunnel_types',
+        default='gre,vxlan',
+        help=_('tunnel types which are advertised to other VTEPs'),
     ),
     cfg.BoolOpt(
         'f5_route_domain_strictness',
@@ -101,6 +106,11 @@ OPTS = [
         'icontrol_connection_retry_interval',
         default=10,
         help=_('How many seconds to wait between retry connection attempts'),
+    ),
+    cfg.DictOpt(
+        'common_network_ids',
+        default={},
+        help=_('network uuid to existing Common networks mapping')
     )
 ]
 
@@ -265,20 +275,29 @@ class iControlDriver(object):
         else:
             self.interface_mapping = {}
             self.tagging_mapping = {}
-            self.agent_configurations['tunnel_types'] = ['vxlan', 'gre']
-            mappings = str(self.conf.f5_external_physical_mappings).split(",")
+
+            self.tunnel_types = self.conf.advertised_tunnel_types
+
+            #self.agent_configurations['tunnel_types'] = ['vxlan', 'gre']
+            self.agent_configurations['tunnel_types'] = self.tunnel_types
             # map format is   phynet:interface:tagged
 
-            for maps in mappings:
+            for maps in self.conf.f5_external_physical_mappings:
                 intmap = maps.split(':')
-                intmap[0] = str(intmap[0]).strip()
-                self.interface_mapping[intmap[0]] = str(intmap[1]).strip()
-                self.tagging_mapping[intmap[0]] = str(intmap[2]).strip()
+                net_key = str(intmap[0]).strip()
+                if len(intmap) > 3:
+                    net_key = net_key + ':' + str(intmap[3]).strip()
+                self.interface_mapping[net_key] = str(intmap[1]).strip()
+                self.tagging_mapping[net_key] = str(intmap[2]).strip()
                 LOG.debug(_('physical_network %s = interface %s, tagged %s'
-                            % (intmap[0], intmap[1], intmap[2])
+                            % (net_key, intmap[1], intmap[2])
                             ))
             self.agent_configurations['bridge_mappings'] = \
                                                     self.interface_mapping
+
+            for net_id in self.conf.common_network_ids:
+                LOG.debug(_('network %s will be mapped to /Common/%s'
+                            % (net_id, self.conf.common_network_ids[net_id])))
 
         self._init_connection()
 
@@ -462,7 +481,8 @@ class iControlDriver(object):
                     # send out an update to all compute agents
                     # to get the bigips associated with the br-tun
                     # interface.
-                    for tunnel_type in ['vxlan', 'gre']:
+                    # for tunnel_type in ['vxlan', 'gre']:
+                    for tunnel_type in self.tunnel_types:
                         self.tunnel_rpc.tunnel_sync(self.context,
                                                     bigip.local_ip,
                                                     tunnel_type)
@@ -816,6 +836,8 @@ class iControlDriver(object):
             else:
                 if not network:
                     ip_address = ip_address + '%0'
+                elif network['id'] in self.conf.common_network_ids:
+                    ip_address = ip_address + '%0'
                 elif network['shared']:
                     ip_address = ip_address + '%0'
                 elif 'router:external' in network and \
@@ -854,16 +876,32 @@ class iControlDriver(object):
                 if network and 'provider:network_type' in network:
                     if network['provider:network_type'] == 'vxlan':
                         tunnel_name = self._get_tunnel_name(network)
-                        bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
+                        if member['port']:
+                            bigip.vxlan.delete_fdb_entry(
+                                    tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
                                     folder=net_folder)
+                        else:
+                            LOG.error(_('Member on SDN has no port. Manual '
+                                        'removal on the BIG-IP will be '
+                                        'required. Was the vm instance '
+                                        'deleted before the pool member '
+                                        'was deleted?'))
                     if network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
-                        bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
+                        if member['port']:
+                            bigip.l2gre.delete_fdb_entry(
+                                    tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
                                     folder=net_folder)
+                        else:
+                            LOG.error(_('Member on SDN has no port. Manual '
+                                        'removal on the BIG-IP will be '
+                                        'required. Was the vm instance '
+                                        'deleted before the pool member '
+                                        'was deleted?'))
                 # avoids race condition:
                 # deletion of pool member objects must sync before we
                 # remove the selfip from the peer bigips.
@@ -1066,10 +1104,14 @@ class iControlDriver(object):
                 #
                 # Provision Virtual Service - Create/Update
                 #
-                if network['provider:network_type'] == 'vlan':
-                    network_name = self._get_vlan_name(network)
+                if network['id'] in self.conf.common_network_ids:
+                    network_name = self.conf.common_network_ids[network['id']]
+                elif network['provider:network_type'] == 'vlan':
+                    network_name = self._get_vlan_name(network,
+                                                       bigip.icontrol.hostname)
                 elif network['provider:network_type'] == 'flat':
-                    network_name = self._get_vlan_name(network)
+                    network_name = self._get_vlan_name(network,
+                                                       bigip.icontrol.hostname)
                 elif network['provider:network_type'] == 'vxlan':
                     network_name = self._get_tunnel_name(network)
                 elif network['provider:network_type'] == 'gre':
@@ -1081,6 +1123,9 @@ class iControlDriver(object):
                     LOG.error(_(error_message))
                     raise f5ex.InvalidNetworkType(error_message)
                 if network['shared']:
+                    network_name = '/Common/' + network_name
+                    ip_address = ip_address + '%0'
+                elif network['id'] in self.conf.common_network_ids:
                     network_name = '/Common/' + network_name
                     ip_address = ip_address + '%0'
                 elif network and \
@@ -1718,6 +1763,9 @@ class iControlDriver(object):
         if not network:
             LOG.error(_('Attempted to assure a network with no id..skipping.'))
             return
+        if network['id'] in self.conf.common_network_ids:
+            LOG.info(_('Network is a common global network... skipping.'))
+            return
         start_time = time()
         if self.conf.sync_mode == 'replication' and not on_first_bigip:
             # already did this work
@@ -1735,7 +1783,6 @@ class iControlDriver(object):
 
     # called for every bigip in every sync mode
     def _assure_device_network(self, network, bigip):
-
         # setup all needed L2 network segments
         if network['provider:network_type'] == 'vlan':
             if network['shared']:
@@ -1754,19 +1801,26 @@ class iControlDriver(object):
             tagged = self.tagging_mapping['default']
             vlanid = 0
 
-            if network['provider:physical_network'] in \
+            # Do we have host specific mappings?
+            net_key = network['provider:physical_network']
+            if net_key + ':' + bigip.icontrol.hostname in \
                                         self.interface_mapping:
                 interface = self.interface_mapping[
-                          network['provider:physical_network']]
+                       net_key + ':' + bigip.icontrol.hostname]
                 tagged = self.tagging_mapping[
-                          network['provider:physical_network']]
+                       net_key + ':' + bigip.icontrol.hostname]
+            # Do we have a mapping for this network
+            elif net_key in self.interface_mapping:
+                interface = self.interface_mapping[net_key]
+                tagged = self.tagging_mapping[net_key]
 
             if tagged:
                 vlanid = network['provider:segmentation_id']
             else:
                 vlanid = 0
 
-            vlan_name = self._get_vlan_name(network)
+            vlan_name = self._get_vlan_name(network,
+                                            bigip.icontrol.hostname)
 
             bigip.vlan.create(name=vlan_name,
                               vlanid=vlanid,
@@ -1785,12 +1839,19 @@ class iControlDriver(object):
                 network_folder = network['tenant_id']
             interface = self.interface_mapping['default']
             vlanid = 0
-            if network['provider:physical_network'] in \
+
+            # Do we have host specific mappings?
+            net_key = network['provider:physical_network']
+            if net_key + ':' + bigip.icontrol.hostname in \
                                         self.interface_mapping:
                 interface = self.interface_mapping[
-                          network['provider:physical_network']]
+                       net_key + ':' + bigip.icontrol.hostname]
+            # Do we have a mapping for this network
+            elif net_key in self.interface_mapping:
+                interface = self.interface_mapping[net_key]
 
-            vlan_name = self._get_vlan_name(network)
+            vlan_name = self._get_vlan_name(network,
+                                            bigip.icontrol.hostname)
 
             bigip.vlan.create(name=vlan_name,
                               vlanid=0,
@@ -1933,17 +1994,23 @@ class iControlDriver(object):
 
         # Where to put all these objects?
         network_folder = pool['tenant_id']
-        if network['shared']:
+        if network['id'] in self.conf.common_network_ids:
+            network_folder = 'Common'
+        elif network['shared']:
             network_folder = 'Common'
         elif 'router:external' in network and \
                  network['router:external'] and \
                  self.conf.f5_common_external_networks:
             network_folder = 'Common'
 
-        if network['provider:network_type'] == 'vlan':
-            network_name = self._get_vlan_name(network)
+        if network['id'] in self.conf.common_network_ids:
+            network_name = self.conf.common_network_ids[network['id']]
+        elif network['provider:network_type'] == 'vlan':
+            network_name = self._get_vlan_name(network,
+                                               bigip.icontrol.hostname)
         elif network['provider:network_type'] == 'flat':
-            network_name = self._get_vlan_name(network)
+            network_name = self._get_vlan_name(network,
+                                               bigip.icontrol.hostname)
         elif network['provider:network_type'] == 'vxlan':
             network_name = self._get_tunnel_name(network)
         elif network['provider:network_type'] == 'gre':
@@ -2042,6 +2109,9 @@ class iControlDriver(object):
             if network['shared']:
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
+            elif network['id'] in self.conf.common_network_ids:
+                ip_address = ip_address + '%0'
+                index_snat_name = '/Common/' + index_snat_name
             elif 'router:external' in network and \
                  network['router:external'] and \
                  self.conf.f5_common_external_networks:
@@ -2095,6 +2165,9 @@ class iControlDriver(object):
                     fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
             if network['shared']:
+                ip_address = ip_address + '%0'
+                index_snat_name = '/Common/' + index_snat_name
+            if network['id'] in self.conf.common_network_ids:
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
             elif 'router:external' in network and \
@@ -2244,10 +2317,14 @@ class iControlDriver(object):
 
         network_folder = subnet['tenant_id']
 
+        if network['id'] in self.conf.common_network_ids:
+            network_name = self.conf.common_network_ids[network['id']]
         if network['provider:network_type'] == 'vlan':
-            network_name = self._get_vlan_name(network)
+            network_name = self._get_vlan_name(network,
+                                               bigip.icontrol.hostname)
         elif network['provider:network_type'] == 'flat':
-            network_name = self._get_vlan_name(network)
+            network_name = self._get_vlan_name(network,
+                                               bigip.icontrol.hostname)
         elif network['provider:network_type'] == 'vxlan':
             network_name = self._get_tunnel_name(network)
         elif network['provider:network_type'] == 'gre':
@@ -2261,6 +2338,9 @@ class iControlDriver(object):
         if network['shared']:
             network_folder = 'Common'
             network_name = '/Common/' + network_name
+        elif network['id'] in self.conf.common_network_ids:
+            network_folder = 'Common'
+            network_name = '/Common' + network_name
         elif 'router:external' in network and \
              network['router:external'] and \
              self.conf.f5_common_external_networks:
@@ -2308,6 +2388,10 @@ class iControlDriver(object):
     # called for every bigip only in replication mode.
     # otherwise called once
     def _delete_network(self, network, bigip, on_last_bigip):
+        if network['id'] in self.conf.common_network_ids:
+            LOG.debug(_('skipping delete of common network %s'
+                        % self.conf.common[network['id']]))
+            return
         if self.conf.sync_mode == 'replication':
             bigips = [bigip]
         else:
@@ -2324,7 +2408,8 @@ class iControlDriver(object):
                     network_folder = 'Common'
                 else:
                     network_folder = network['tenant_id']
-                vlan_name = self._get_vlan_name(network)
+                vlan_name = self._get_vlan_name(network,
+                                                set_bigip.icontrol.hostanme)
                 set_bigip.vlan.delete(name=vlan_name,
                                   folder=network_folder)
 
@@ -2337,7 +2422,8 @@ class iControlDriver(object):
                     network_folder = 'Common'
                 else:
                     network_folder = network['id']
-                vlan_name = self._get_vlan_name(network)
+                vlan_name = self._get_vlan_name(network,
+                                                set_bigip.icontrol.hostname)
                 set_bigip.vlan.delete(name=vlan_name,
                                   folder=network_folder)
 
@@ -2445,6 +2531,8 @@ class iControlDriver(object):
         network_folder = service['pool']['tenant_id']
         if network['shared']:
             network_folder = 'Common'
+        elif network['id'] in self.conf.common_network_ids:
+            network_folder = 'Common'
         elif 'router:external' in network and \
               network['router:external'] and \
               self.conf.f5_common_external_networks:
@@ -2460,6 +2548,8 @@ class iControlDriver(object):
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
                     if network['shared']:
+                        tmos_snat_name = '/Common/' + index_snat_name
+                    elif network['id'] in self.conf.common_network_ids:
                         tmos_snat_name = '/Common/' + index_snat_name
                     elif 'router:external' in network and \
                          network['router:external'] and \
@@ -2484,6 +2574,8 @@ class iControlDriver(object):
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
                     if network['shared']:
+                        tmos_snat_name = '/Common/' + index_snat_name
+                    elif network['id'] in self.conf.common_network_ids:
                         tmos_snat_name = '/Common/' + index_snat_name
                     elif 'router:external' in network and \
                          network['router:external'] and \
@@ -2563,6 +2655,8 @@ class iControlDriver(object):
         network_folder = subnet['tenant_id']
         if network['shared']:
             network_folder = 'Common'
+        elif network['id'] in self.conf.common_network_ids:
+            network_folder = 'Common'
         elif 'router:external' in network and \
              network['router:external'] and \
              self.conf.f5_common_external_networks:
@@ -2636,21 +2730,29 @@ class iControlDriver(object):
         else:
             raise urllib2.URLError('cannot communicate to any bigips')
 
-    def _get_vlan_name(self, network):
-        interface = self.interface_mapping['default']
+    def _get_vlan_name(self, network, hostname):
         tagged = self.tagging_mapping['default']
-        ppn = 'provider:physical_network'
-
-        if network[ppn] in self.interface_mapping:
-            interface = self.interface_mapping[network[ppn]]
-            tagged = self.tagging_mapping[network[ppn]]
+        net_key = network['provider:physical_network']
+        # is the no host specific entry there?
+        if net_key + ':' + hostname in self.interface_mapping:
+            interface = self.interface_mapping[net_key + ':' + hostname]
+            tagged = self.tagging_mapping[net_key + ':' + hostname]
+        # is there a no default entry
+        elif net_key in self.interface_mapping:
+            interface = self.interface_mapping[net_key]
+            tagged = self.tagging_mapping[net_key]
 
         if tagged:
             vlanid = network['provider:segmentation_id']
         else:
             vlanid = 0
 
-        return "vlan-" + str(interface).replace(".", "-") + "-" + str(vlanid)
+        vlan_name = "vlan-" + \
+                    str(interface).replace(".", "-") + \
+                    "-" + str(vlanid)
+        if len(vlan_name) > 15:
+            vlan_name = 'vlan-tr-' + str(vlanid)
+        return vlan_name
 
     def _get_tunnel_name(self, network):
         tunnel_type = network['provider:network_type']
@@ -2790,23 +2892,6 @@ class iControlDriver(object):
                 tunnel_sync = first_bigip.system.get_tunnel_sync()
                 if tunnel_sync and tunnel_sync == 'enable':
                     first_bigip.system.set_tunnel_sync(enabled=False)
-
-                # Warning about early release tunnel hotfix requirements
-                if first_bigip.system.get_version().find('11.5.0') > 0 and \
-                   first_bigip.system.get_version().find('11.5.1') > 0 and \
-                   not first_bigip.system.hotfix:
-                    if driver_const.GRE_TUNNEL_HOTFIX_REQUIRED:
-                        LOG.error('Hotfix required for GRE tunnels, but ' +
-                              'none found. Please open a ticket with f5 ' +
-                              'support on your TMOS device and ask for ' +
-                              'GRE tunneling Hotfixes.'
-                        )
-                    if driver_const.VXLAN_TUNNEL_HOTFIX_REQUIRED:
-                        LOG.error('Hotfix required for VxLAN tunnels, but ' +
-                              'none found. Please open a ticket with f5 ' +
-                              'support on your TMOS device and ask for ' +
-                              'VxLAN tunneling Hotfixes.'
-                        )
 
                 # if there was only one address supplied and
                 # this is not a standalone device, get the
