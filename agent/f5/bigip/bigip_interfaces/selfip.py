@@ -31,7 +31,7 @@ class SelfIP(object):
     @domain_address
     def create(self, name=None, ip_address=None, netmask=None,
                vlan_name=None, floating=False, traffic_group=None,
-               folder='Common'):
+               folder='Common', use_prefix=True):
         if not self.exists(name=name, folder=folder):
             enabled_state = self.net_self.typefactory.create(
                                         'Common.EnabledState').STATE_ENABLED
@@ -59,7 +59,7 @@ class SelfIP(object):
             return False
 
     @icontrol_folder
-    def delete(self, name=None, folder='Common'):
+    def delete(self, name=None, folder='Common', use_prefix=True):
         if self.exists(name=name, folder=folder):
             self.net_self.delete_self_ip([name])
             return True

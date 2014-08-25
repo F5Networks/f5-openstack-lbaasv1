@@ -1247,7 +1247,22 @@ class iControlDriver(object):
 
                 just_added_vip = False
                 if virtual_type == 'standard':
-                    if bigip_vs.create(name=vip['id'],
+                    # Work around the network_name object prefix
+                    # naming on the virtual server create
+                    vs_name = vip['id']
+
+                    use_prefix = True
+                    folder = pool['tenant_id']
+                    if network_name.startswith('/Common'):
+                        folder = bigip_interfaces.prefixed(folder)
+                        vs_name = bigip_interfaces.decorate_name(vs_name,
+                                                                 folder,
+                                                                 True)
+                        use_prefix = False
+
+                    LOG.debug(_('vs create with %s %s %s' % (vs_name, folder, network_name)))
+
+                    if bigip_vs.create(name=vs_name,
                                        ip_address=ip_address,
                                        mask='255.255.255.255',
                                        port=int(vip['protocol_port']),
@@ -1256,7 +1271,8 @@ class iControlDriver(object):
                                        traffic_group=vip_tg,
                                        use_snat=self.conf.f5_snat_mode,
                                        snat_pool=snat_pool_name,
-                                       folder=pool['tenant_id']):
+                                       folder=folder,
+                                       use_prefix=use_prefix):
                         # update driver traffic group mapping
                         vip_tg = bigip_vs.get_traffic_group(
                                         name=vip['id'],
@@ -1270,8 +1286,22 @@ class iControlDriver(object):
                                             status_description='vip created')
                         just_added_vip = True
                 else:
+
+                    # Work around the network_name object prefix
+                    # naming on the virtual server create
+                    vs_name = vip['id']
+
+                    use_prefix = True
+                    folder = pool['tenant_id']
+                    if network_name.startswith('/Common'):
+                        folder = bigip_interfaces.prefixed(folder)
+                        vs_name = bigip_interfaces.decorate_name(vs_name,
+                                                                 folder,
+                                                                 True)
+                        use_prefix = False
+
                     if bigip_vs.create_fastl4(
-                                    name=vip['id'],
+                                    name=vs_name,
                                     ip_address=ip_address,
                                     mask='255.255.255.255',
                                     port=int(vip['protocol_port']),
@@ -1280,7 +1310,8 @@ class iControlDriver(object):
                                     traffic_group=vip_tg,
                                     use_snat=self.conf.f5_snat_mode,
                                     snat_pool=snat_pool_name,
-                                    folder=pool['tenant_id']):
+                                    folder=folder,
+                                    use_prefix=use_prefix):
                         # created update driver traffic group mapping
                         vip_tg = bigip_vs.get_traffic_group(
                                         name=vip['id'],
@@ -2004,7 +2035,7 @@ class iControlDriver(object):
             network_folder = 'Common'
 
         if network['id'] in self.conf.common_network_ids:
-            network_name = '/Common/'+self.conf.common_network_ids[network['id']]
+            network_name = self.conf.common_network_ids[network['id']]
         elif network['provider:network_type'] == 'vlan':
             network_name = self._get_vlan_name(network,
                                                bigip.icontrol.hostname)
@@ -2074,12 +2105,16 @@ class iControlDriver(object):
             ip_address = new_port['fixed_ips'][0]['ip_address']
         netmask = netaddr.IPNetwork(
                            subnet['cidr']).netmask
+        use_prefix = True
+        if network_folder == 'Common':
+            use_prefix = False
         bigip.selfip.create(name=local_selfip_name,
                             ip_address=ip_address,
                             netmask=netmask,
                             vlan_name=network_name,
                             floating=False,
-                            folder=network_folder)
+                            folder=network_folder,
+                            use_prefix=use_prefix)
 
     def _assure_snats_standalone(self, bigip, subnetinfo,
                                 snat_pool_name,
@@ -2358,6 +2393,11 @@ class iControlDriver(object):
         for bigip in bigips:
             if subnet['id'] in bigip.assured_gateway_subnets:
                 continue
+
+            use_prefix = True
+            if network_folder == 'Common':
+                use_prefix = False
+
             bigip.selfip.create(
                             name=floating_selfip_name,
                             ip_address=subnet['gateway_ip'],
@@ -2365,24 +2405,28 @@ class iControlDriver(object):
                             vlan_name=network_name,
                             floating=True,
                             traffic_group=vip_tg,
-                            folder=network_folder)
+                            folder=network_folder,
+                            use_prefix=use_prefix)
 
             # Get the actual traffic group if the Self IP already existed
             vip_tg = bigip.self.get_traffic_group(name=floating_selfip_name,
                                     folder=subnet['tenant_id'])
 
             # Setup a wild card ip forwarding virtual service for this subnet
+
             bigip.virtual_server.create_ip_forwarder(
                             name=gw_name, ip_address='0.0.0.0',
                             mask='0.0.0.0',
                             vlan_name=network_name,
                             traffic_group=vip_tg,
-                            folder=network_folder)
+                            folder=network_folder,
+                            use_prefix=use_prefix)
 
             # Setup the IP forwarding virtual server to use the Self IPs
             # as the forwarding SNAT addresses
             bigip.virtual_server.set_snat_automap(name=gw_name,
-                                folder=network_folder)
+                                folder=network_folder,
+                                use_prefix=use_prefix)
             bigip.assured_gateway_subnets.append(subnet['id'])
 
     # called for every bigip only in replication mode.
@@ -2626,8 +2670,13 @@ class iControlDriver(object):
         for bigip in bigips:
             local_selfip_name = "local-" + bigip.device_name + \
                                 "-" + subnet['id']
+            use_prefix = True
+            if network_folder == 'Common':
+                use_prefix = False
+
             bigip.selfip.delete(name=local_selfip_name,
-                                folder=network_folder)
+                                folder=network_folder,
+                                use_prefix=use_prefix)
             self.plugin_rpc.delete_port_by_name(port_name=local_selfip_name)
 
         for bigip in bigip.group_bigips:
@@ -2662,12 +2711,18 @@ class iControlDriver(object):
              self.conf.f5_common_external_networks:
             network_folder = 'Common'
 
+        use_prefix = True
+        if network_folder == 'Common':
+            use_prefix = False
+
         bigip.selfip.delete(name=floating_selfip_name,
-                            folder=network_folder)
+                            folder=network_folder,
+                            use_prefix=use_prefix)
 
         # Setup a wild card ip forwarding virtual service for this subnet
         bigip.virtual_server.delete(name=gw_name,
-                                    folder=network_folder)
+                                    folder=network_folder,
+                                    use_prefix=use_prefix)
 
         if on_last_bigip:
             ports = self.plugin_rpc.get_port_by_name(port_name=gw_name)

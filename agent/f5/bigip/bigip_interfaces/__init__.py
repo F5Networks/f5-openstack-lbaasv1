@@ -36,24 +36,29 @@ def icontrol_folder(method):
     """
     def wrapper(*args, **kwargs):
         instance = args[0]
+        use_prefix = True
+        if 'use_prefix' in kwargs:
+            use_prefix = kwargs['use_prefix']
         if 'folder' in kwargs:
             if kwargs['folder'].find('~') > -1:
                 kwargs['folder'] = kwargs['folder'].replace('~', '/')
             kwargs['folder'] = os.path.basename(kwargs['folder'])
             if not kwargs['folder'] == 'Common':
-                kwargs['folder'] = prefixed(kwargs['folder'])
-
+                if use_prefix:
+                    kwargs['folder'] = prefixed(kwargs['folder'])
             if 'name' in kwargs and kwargs['name']:
                 if kwargs['name'].find('~') > -1:
                     kwargs['name'] = kwargs['name'].replace('~', '/')
                 if kwargs['name'].startswith('/Common/'):
                     kwargs['name'] = os.path.basename(kwargs['name'])
-                    kwargs['name'] = prefixed(kwargs['name'])
+                    if use_prefix:
+                        kwargs['name'] = prefixed(kwargs['name'])
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                                'Common')
                 else:
                     kwargs['name'] = os.path.basename(kwargs['name'])
-                    kwargs['name'] = prefixed(kwargs['name'])
+                    if use_prefix:
+                        kwargs['name'] = prefixed(kwargs['name'])
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
 
@@ -80,7 +85,8 @@ def icontrol_folder(method):
                         kwargs[name] = kwargs[name].replace('~', '/')
                     if kwargs[name].startswith('/Common/'):
                         kwargs[name] = os.path.basename(kwargs[name])
-                        kwargs[name] = prefixed(kwargs[name])
+                        if use_prefix:
+                            kwargs[name] = prefixed(kwargs[name])
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                                  'Common')
                     else:
@@ -90,7 +96,8 @@ def icontrol_folder(method):
                         if specific_folder_name in kwargs:
                             folder = kwargs[specific_folder_name]
                         kwargs[name] = os.path.basename(kwargs[name])
-                        kwargs[name] = prefixed(kwargs[name])
+                        if use_prefix:
+                            kwargs[name] = prefixed(kwargs[name])
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                              folder)
 
@@ -109,6 +116,9 @@ def icontrol_rest_folder(method):
     prefix OBJ_PREFIX.
     """
     def wrapper(*args, **kwargs):
+        use_prefix = True
+        if 'use_prefix' in kwargs:
+            use_prefix = kwargs['use_prefix']
         if 'folder' in kwargs:
             if kwargs['folder'].find('Common') < 0:
                 if kwargs['folder'].find('~') > -1:
@@ -116,14 +126,16 @@ def icontrol_rest_folder(method):
                     kwargs['folder'] = os.path.basename(kwargs['folder'])
                 if kwargs['folder'].find('/') > -1:
                     kwargs['folder'] = os.path.basename(kwargs['folder'])
-                kwargs['folder'] = prefixed(kwargs['folder'])
+                if use_prefix:
+                    kwargs['folder'] = prefixed(kwargs['folder'])
         if 'name' in kwargs and kwargs['name']:
             if kwargs['name'].find('~') > -1:
                 kwargs['name'] = kwargs['name'].replace('~', '/')
                 kwargs['name'] = os.path.basename(kwargs['name'])
             if kwargs['name'].find('/') > -1:
                 kwargs['name'] = os.path.basename(kwargs['name'])
-            kwargs['name'] = prefixed(kwargs['name'])
+            if use_prefix:
+                kwargs['name'] = prefixed(kwargs['name'])
         for name in kwargs:
             if name.find('_name') > 0 and kwargs[name]:
                 if kwargs[name].find('~') > -1:
@@ -131,7 +143,8 @@ def icontrol_rest_folder(method):
                     kwargs[name] = os.path.basename(kwargs[name])
                 if kwargs[name].find('/') > -1:
                     kwargs[name] = os.path.basename(kwargs[name])
-                kwargs[name] = prefixed(kwargs[name])
+                if use_prefix:
+                    kwargs[name] = prefixed(kwargs[name])
         return method(*args, **kwargs)
     return wrapper
 
@@ -248,17 +261,19 @@ def domain_address(method):
     return wrapper
 
 
-def decorate_name(name=None, folder='Common'):
+def decorate_name(name=None, folder='Common', use_prefix=True):
     folder = os.path.basename(folder)
     if not folder == 'Common':
         folder = prefixed(folder)
     if name.startswith('/Common/'):
         name = os.path.basename(name)
-        name = prefixed(name)
+        if use_prefix:
+            name = prefixed(name)
         name = '/Common/' + name
     else:
         name = os.path.basename(name)
-        name = prefixed(name)
+        if use_prefix:
+            name = prefixed(name)
         name = '/' + folder + '/' + name
     return name
 
