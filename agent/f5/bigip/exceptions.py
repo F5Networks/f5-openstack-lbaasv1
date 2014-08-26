@@ -43,5 +43,9 @@ class MissingVTEPAddress(Exception):
     pass
 
 
+class MissingNetwork(Exception):
+    pass
+
+
 class InvalidNetworkType(Exception):
     pass

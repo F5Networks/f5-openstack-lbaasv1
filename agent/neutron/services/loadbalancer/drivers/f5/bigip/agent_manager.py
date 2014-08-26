@@ -170,8 +170,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                 LOG.debug('setting agent host to %s' % self.agent_host)
             else:
                 self.agent_host = None
-                LOG.error(_('Agent host attribute is not configured '
-                            'by the driver. Fix the driver config '
+                LOG.error(_('Driver did not initialize. Fix the driver config '
                             'and restart the agent.'))
                 return
         except ImportError:

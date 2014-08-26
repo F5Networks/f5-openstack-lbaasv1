@@ -3033,22 +3033,14 @@ class iControlDriver(object):
                                        'Invalid HA. Not all devices in the' +
                                        ' same sync failover device group'
                                        )
-                    # Warning about early release tunnel hotfix requirements
-                    if first_bigip.system.get_version().find('11.5.0') > 0 and \
-                       first_bigip.system.get_version().find('11.5.1') > 0 and \
-                       not first_bigip.system.hotfix:
-                        if driver_const.GRE_TUNNEL_HOTFIX_REQUIRED:
-                            LOG.error('Hotfix required for GRE tunnels, but ' +
-                                  'none found. Please open a ticket with f5 ' +
-                                  'support on your TMOS device and ask for ' +
-                                  'GRE tunneling Hotfixes.'
-                            )
-                        if driver_const.VXLAN_TUNNEL_HOTFIX_REQUIRED:
-                            LOG.error('Hotfix required for VxLAN tunnels,' +
-                                  ' but none found. Please open a ticket' +
-                                  ' with f5 support on your TMOS device' +
-                                  ' and ask for VxLAN tunneling Hotfixes.'
-                            )
+
+                    for network in self.conf.common_network_ids.values():
+                        if not hostbigip.vlan.exists(network,
+                                                     folder='Common'):
+                            raise f5ex.MissingNetwork(_(
+                                  'common network %s on %s does not exist'
+                                  % (network, hostbigip.icontrol.hostname)
+                                  ))
 
                 if not cluster_name and self.conf.f5_ha_type != 'standalone':
                     raise f5ex.BigIPClusterInvalidHA(
