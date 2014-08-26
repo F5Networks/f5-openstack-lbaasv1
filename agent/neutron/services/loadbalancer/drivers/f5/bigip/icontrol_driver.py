@@ -19,7 +19,6 @@ from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
 from f5.bigip.bigip_interfaces import strip_folder_and_prefix
-from f5.bigip.bigip_interfaces import OBJ_PREFIX
 
 from eventlet import greenthread
 import os
@@ -111,7 +110,12 @@ OPTS = [
         'common_network_ids',
         default={},
         help=_('network uuid to existing Common networks mapping')
-    )
+    ),
+    cfg.StrOpt(
+        'environment_prefix',
+        default='uuid',
+        help=_('The object name prefix for this environment'),
+    ),
 ]
 
 
@@ -298,6 +302,16 @@ class iControlDriver(object):
             for net_id in self.conf.common_network_ids:
                 LOG.debug(_('network %s will be mapped to /Common/%s'
                             % (net_id, self.conf.common_network_ids[net_id])))
+
+            self.agent_configurations['common_networks'] = \
+                                                  self.conf.common_network_ids
+
+            LOG.debug(_('BIG-IP naming prefix for this environment is: %s' %
+                         self.conf.environment_prefix))
+
+            bigip_interfaces.OBJ_PREFIX = self.conf.environment_prefix + '_'
+            self.agent_configurations['environment_prefix'] = \
+                                                  self.conf.environment_prefix
 
         self._init_connection()
 
@@ -3147,7 +3161,8 @@ class iControlDriver(object):
                 self.connected = True
 
                 self.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS,
-                                               self.hostnames[0]))
+                                               self.conf.environment_prefix + \
+                                               '.' + self.hostnames[0]))
 
             except Exception as exc:
                 LOG.error(_('Could not communicate with all ' +
@@ -3166,7 +3181,7 @@ class iControlDriver(object):
 
         bigip_vs = bigip.virtual_server
         for folder in bigip.system.get_folders():
-            if not folder.startswith(OBJ_PREFIX):
+            if not folder.startswith(bigip_interfaces.OBJ_PREFIX):
                 continue
             bigip.system.set_folder(folder)
             for virtserv in bigip_vs.lb_vs.get_list():
