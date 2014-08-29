@@ -892,50 +892,50 @@ class iControlDriver(object):
                     if network['provider:network_type'] == 'vxlan':
                         tunnel_name = self._get_tunnel_name(network)
                         if member['port']:
-                        # In autosync mode, assure_device_members
-                        # is only called for one big-ip, because it is
-                        # assumed everything will sync to the other
-                        # big-ips.
-                        # However, we add fdb entries for tunnels here
-                        # and those do not sync. So, we have to loop
-                        # through the big-ips for fdb entries and add
-                        # them to each big-ip.
-                        if self.conf.sync_mode == 'autosync':
-                            bigips = bigip.group_bigips
-                        else:
-                            bigips = [bigip]
-                        for fdb_bigip in bigips:
-                            fdb_bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
-                                    tunnel_name=tunnel_name,
-                                    mac_address=member['port']['mac_address'],
-                                    arp_ip_address=ip_address,
-                                    folder=net_folder)
-                        else:
-                            LOG.error(_('Member on SDN has no port. Manual '
-                                        'removal on the BIG-IP will be '
-                                        'required. Was the vm instance '
-                                        'deleted before the pool member '
-                                        'was deleted?'))
+                            # In autosync mode, assure_device_members
+                            # is only called for one big-ip, because it is
+                            # assumed everything will sync to the other
+                            # big-ips.
+                            # However, we add fdb entries for tunnels here
+                            # and those do not sync. So, we have to loop
+                            # through the big-ips for fdb entries and add
+                            # them to each big-ip.
+                            if self.conf.sync_mode == 'autosync':
+                                bigips = bigip.group_bigips
+                            else:
+                                bigips = [bigip]
+                            for fdb_bigip in bigips:
+                                fdb_bigip.vxlan.delete_fdb_entry(
+                                        tunnel_name=tunnel_name,
+                                        mac_address=member['port']['mac_address'],
+                                        arp_ip_address=ip_address,
+                                        folder=net_folder)
+                            else:
+                                LOG.error(_('Member on SDN has no port. Manual '
+                                            'removal on the BIG-IP will be '
+                                            'required. Was the vm instance '
+                                            'deleted before the pool member '
+                                            'was deleted?'))
                     if network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
                         if member['port']:
-                        # See comment above about this loop.
-                        if self.conf.sync_mode == 'autosync':
-                            bigips = bigip.group_bigips
-                        else:
-                            bigips = [bigip]
-                        for fdb_bigip in bigips:
-                            fdb_bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
-                                    tunnel_name=tunnel_name,
-                                    mac_address=member['port']['mac_address'],
-                                    arp_ip_address=ip_address,
-                                    folder=net_folder)
-                        else:
-                            LOG.error(_('Member on SDN has no port. Manual '
-                                        'removal on the BIG-IP will be '
-                                        'required. Was the vm instance '
-                                        'deleted before the pool member '
-                                        'was deleted?'))
+                            # See comment above about this loop.
+                            if self.conf.sync_mode == 'autosync':
+                                bigips = bigip.group_bigips
+                            else:
+                                bigips = [bigip]
+                            for fdb_bigip in bigips:
+                                fdb_bigip.l2gre.delete_fdb_entry(
+                                        tunnel_name=tunnel_name,
+                                        mac_address=member['port']['mac_address'],
+                                        arp_ip_address=ip_address,
+                                        folder=net_folder)
+                            else:
+                                LOG.error(_('Member on SDN has no port. Manual '
+                                            'removal on the BIG-IP will be '
+                                            'required. Was the vm instance '
+                                            'deleted before the pool member '
+                                            'was deleted?'))
                 # avoids race condition:
                 # deletion of pool member objects must sync before we
                 # remove the selfip from the peer bigips.

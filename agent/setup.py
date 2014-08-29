@@ -19,7 +19,7 @@ if dist == 'centos' or dist == 'redhat':
     data_files.append(('/etc/init.d', ['etc/init.d/f5-bigip-lbaas-agent'] ))
 
 setup(name='f5-bigip-lbaas-agent',
-      version='1.0.1.havana-1',
+      version='1.0.3.icehouse-1',
       description='F5 LBaaS Agent for OpenStack',
       author='F5 DevCentral',
       author_email='devcentral@f5.com',
