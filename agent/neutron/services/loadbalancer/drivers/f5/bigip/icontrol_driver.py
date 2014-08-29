@@ -497,9 +497,10 @@ class iControlDriver(object):
                     # interface.
                     # for tunnel_type in ['vxlan', 'gre']:
                     for tunnel_type in self.tunnel_types:
-                        self.tunnel_rpc.tunnel_sync(self.context,
-                                                    bigip.local_ip,
-                                                    tunnel_type)
+                       if hasattr(self, 'tunnel_rpc'):
+                           self.tunnel_rpc.tunnel_sync(self.context,
+                                                   bigip.local_ip,
+                                                   tunnel_type)
                 except Exception as e:
                     LOG.debug(
                         _("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
@@ -891,7 +892,20 @@ class iControlDriver(object):
                     if network['provider:network_type'] == 'vxlan':
                         tunnel_name = self._get_tunnel_name(network)
                         if member['port']:
-                            bigip.vxlan.delete_fdb_entry(
+                        # In autosync mode, assure_device_members
+                        # is only called for one big-ip, because it is
+                        # assumed everything will sync to the other
+                        # big-ips.
+                        # However, we add fdb entries for tunnels here
+                        # and those do not sync. So, we have to loop
+                        # through the big-ips for fdb entries and add
+                        # them to each big-ip.
+                        if self.conf.sync_mode == 'autosync':
+                            bigips = bigip.group_bigips
+                        else:
+                            bigips = [bigip]
+                        for fdb_bigip in bigips:
+                            fdb_bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
                                     tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
@@ -905,7 +919,13 @@ class iControlDriver(object):
                     if network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
                         if member['port']:
-                            bigip.l2gre.delete_fdb_entry(
+                        # See comment above about this loop.
+                        if self.conf.sync_mode == 'autosync':
+                            bigips = bigip.group_bigips
+                        else:
+                            bigips = [bigip]
+                        for fdb_bigip in bigips:
+                            fdb_bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
                                     tunnel_name=tunnel_name,
                                     mac_address=member['port']['mac_address'],
                                     arp_ip_address=ip_address,
@@ -1002,22 +1022,41 @@ class iControlDriver(object):
                         tunnel_name = self._get_tunnel_name(network)
                         if 'vxlan_vteps' in member:
                             for vtep in member['vxlan_vteps']:
-                                bigip.vxlan.add_fdb_entry(
-                                    tunnel_name=tunnel_name,
-                                    mac_address=member['port']['mac_address'],
-                                    vtep_ip_address=vtep,
-                                    arp_ip_address=ip_address,
-                                    folder=net_folder)
+                                # In autosync mode, assure_device_members
+                                # is only called for one big-ip, because it is
+                                # assumed everything will sync to the other
+                                # big-ips.
+                                # However, we add fdb entries for tunnels here
+                                # and those do not sync. So, we have to loop
+                                # through the big-ips for fdb entries and add
+                                # them to each big-ip.
+                                if self.conf.sync_mode == 'autosync':
+                                    bigips = bigip.group_bigips
+                                else:
+                                    bigips = [bigip]
+                                for fdb_bigip in bigips:
+                                    fdb_bigip.vxlan.add_fdb_entry(
+                                        tunnel_name=tunnel_name,
+                                        mac_address=member['port']['mac_address'],
+                                        vtep_ip_address=vtep,
+                                        arp_ip_address=ip_address,
+                                        folder=net_folder)
                     if network and network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
                         if 'gre_vteps' in member:
                             for vtep in member['gre_vteps']:
-                                bigip.l2gre.add_fdb_entry(
-                                    tunnel_name=tunnel_name,
-                                    mac_address=member['port']['mac_address'],
-                                    vtep_ip_address=vtep,
-                                    arp_ip_address=ip_address,
-                                    folder=net_folder)
+                                # See comment above about this loop.
+                                if self.conf.sync_mode == 'autosync':
+                                    bigips = bigip.group_bigips
+                                else:
+                                    bigips = [bigip]
+                                for fdb_bigip in bigips:
+                                    fdb_bigip.l2gre.add_fdb_entry(
+                                        tunnel_name=tunnel_name,
+                                        mac_address=member['port']['mac_address'],
+                                        vtep_ip_address=vtep,
+                                        arp_ip_address=ip_address,
+                                        folder=net_folder)
 
                     if on_last_bigip:
                         if member['status'] == plugin_const.PENDING_UPDATE:
@@ -1181,22 +1220,41 @@ class iControlDriver(object):
                         if 'vxlan_vteps' in vip:
                             tunnel_name = self._get_tunnel_name(network)
                             for vtep in vip['vxlan_vteps']:
-                                bigip.vxlan.delete_fdb_entry(
-                                    tunnel_name=tunnel_name,
-                                    mac_address=self._get_tunnel_fake_mac(
-                                                            network, vtep),
-                                    arp_ip_address=None,
-                                    folder=vip['tenant_id'])
+                                # In autosync mode, assure_device_vip
+                                # is only called for one big-ip, because it is
+                                # assumed everything will sync to the other
+                                # big-ips.
+                                # However, we add fdb entries for tunnels here
+                                # and those do not sync. So, we have to loop
+                                # through the big-ips for fdb entries and add
+                                # them to each big-ip.
+                                if self.conf.sync_mode == 'autosync':
+                                    bigips = bigip.group_bigips
+                                else:
+                                    bigips = [bigip]
+                                for fdb_bigip in bigips:
+                                    fdb_bigip.vxlan.delete_fdb_entry(
+                                        tunnel_name=tunnel_name,
+                                        mac_address=self._get_tunnel_fake_mac(
+                                                                network, vtep),
+                                        arp_ip_address=None,
+                                        folder=vip['tenant_id'])
                     if network['provider:network_type'] == 'gre':
                         if 'gre_vteps' in vip:
                             tunnel_name = self._get_tunnel_name(network)
                             for vtep in vip['gre_vteps']:
-                                bigip.l2gre.delete_fdb_entry(
-                                    tunnel_name=tunnel_name,
-                                    mac_address=self._get_tunnel_fake_mac(
-                                                            network, vtep),
-                                    arp_ip_address=None,
-                                    folder=vip['tenant_id'])
+                                # See comment above about this loop.
+                                if self.conf.sync_mode == 'autosync':
+                                    bigips = bigip.group_bigips
+                                else:
+                                    bigips = [bigip]
+                                for fdb_bigip in bigips:
+                                    fdb_bigip.l2gre.delete_fdb_entry(
+                                        tunnel_name=tunnel_name,
+                                        mac_address=self._get_tunnel_fake_mac(
+                                                                network, vtep),
+                                        arp_ip_address=None,
+                                        folder=vip['tenant_id'])
                 # avoids race condition:
                 # deletion of vip address must sync before we
                 # remove the selfip from the peer bigips.
@@ -1525,19 +1583,38 @@ class iControlDriver(object):
                                 for vtep in vip['vxlan_vteps']:
                                     mac_address = self._get_tunnel_fake_mac(
                                                                 network, vtep)
-                                    bigip.vxlan.add_fdb_entry(
-                                              tunnel_name=tunnel_name,
-                                              mac_address=mac_address,
-                                              vtep_ip_address=vtep,
-                                              arp_ip_address=None,
-                                              folder=net_folder)
+                                    # In autosync mode, assure_device_vip
+                                    # is only called for one big-ip, because it is
+                                    # assumed everything will sync to the other
+                                    # big-ips.
+                                    # However, we add fdb entries for tunnels here
+                                    # and those do not sync. So, we have to loop
+                                    # through the big-ips for fdb entries and add
+                                    # them to each big-ip.
+                                    if self.conf.sync_mode == 'autosync':
+                                        bigips = bigip.group_bigips
+                                    else:
+                                        bigips = [bigip]
+                                    for fdb_bigip in bigips:
+                                        fdb_bigip.vxlan.add_fdb_entry(
+                                                  tunnel_name=tunnel_name,
+                                                  mac_address=mac_address,
+                                                  vtep_ip_address=vtep,
+                                                  arp_ip_address=None,
+                                                  folder=net_folder)
                         if network['provider:network_type'] == 'gre':
                             if 'gre_vteps' in vip:
                                 tunnel_name = self._get_tunnel_name(network)
                                 for vtep in vip['gre_vteps']:
                                     mac_address = self._get_tunnel_fake_mac(
                                                                 network, vtep)
-                                    bigip.l2gre.add_fdb_entry(
+                                    # See comment above about this loop.
+                                    if self.conf.sync_mode == 'autosync':
+                                        bigips = bigip.group_bigips
+                                    else:
+                                        bigips = [bigip]
+                                    for fdb_bigip in bigips:
+                                        fdb_bigip.l2gre.add_fdb_entry(
                                               tunnel_name=tunnel_name,
                                               mac_address=mac_address,
                                               vtep_ip_address=vtep,
@@ -2497,25 +2574,25 @@ class iControlDriver(object):
 
                 tunnel_name = self._get_tunnel_name(network)
 
-                bigip.vxlan.delete_all_fdb_entries(tunnel_name=tunnel_name,
+                set_bigip.vxlan.delete_all_fdb_entries(tunnel_name=tunnel_name,
                                                    folder=network_folder)
-                bigip.vxlan.delete_tunnel(name=tunnel_name,
+                set_bigip.vxlan.delete_tunnel(name=tunnel_name,
                                           folder=network_folder)
-                # delete the listerner filters for all VTEP addresses
+                # delete the listener filters for all VTEP addresses
                 local_ips = self.agent_configurations['tunneling_ips']
                 for i in range(len(local_ips)):
                     list_name = 'ha_' + \
                             str(network['provider:segmentation_id']) + \
                             '_' + str(i)
-                    bigip.vxlan.delete_tunnel(name=list_name,
+                    set_bigip.vxlan.delete_tunnel(name=list_name,
                                           folder=network_folder)
-                # notify all the compute nodes we no longer
+                # notify all the compute nodes we no longer have
                 # VTEPs for this network now.
                 if self.conf.l2_population:
                     fdb_entries = {network['id']:
                                {
                                 'ports': {
-                                  bigip.local_ip:
+                                  set_bigip.local_ip:
                                     [q_const.FLOODING_ENTRY]
                                 },
                                 'network_type':
@@ -2539,18 +2616,17 @@ class iControlDriver(object):
                 tunnel_name = self._get_tunnel_name(network)
 
                 # for each known vtep_endpoints to this tunnel
-                bigip.l2gre.delete_all_fdb_entries(tunnel_name=tunnel_name,
+                set_bigip.l2gre.delete_all_fdb_entries(tunnel_name=tunnel_name,
                                                    folder=network_folder)
-                bigip.l2gre.delete_tunnel(name=tunnel_name,
+                set_bigip.l2gre.delete_tunnel(name=tunnel_name,
                                           folder=network_folder)
-                # delete the listerner filters for all VTEP addresses
-
+                # delete the listener filters for all VTEP addresses
                 local_ips = self.agent_configurations['tunneling_ips']
                 for i in range(len(local_ips)):
                     list_name = 'ha_' + \
                             str(network['provider:segmentation_id']) + \
                             '_' + str(i)
-                    bigip.l2gre.delete_tunnel(name=list_name,
+                    set_bigip.l2gre.delete_tunnel(name=list_name,
                                           folder=network_folder)
                 # notify all the compute nodes we no longer
                 # VTEPs for this network now.
@@ -2558,7 +2634,7 @@ class iControlDriver(object):
                     fdb_entries = {network['id']:
                                {
                                 'ports': {
-                                  bigip.local_ip:
+                                  set_bigip.local_ip:
                                     [q_const.FLOODING_ENTRY]
                                 },
                                 'network_type':

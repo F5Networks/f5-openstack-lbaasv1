@@ -37,6 +37,10 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
             if not candidates:
                 LOG.warn(_('No active lbaas agents for pool %s'), pool['id'])
                 return
+            candidates = [a for a in candidates if 'f5' in a['binary']]
+            if not candidates:
+                LOG.warn(_('No f5 lbaas agents for pool %s'), pool['id'])
+                return
 
             chosen_agent = None
             for candidate in candidates:

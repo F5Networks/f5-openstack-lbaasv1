@@ -34,14 +34,6 @@ class System(object):
         self.mgmt_license = \
             self.bigip.icontrol.Management.LicenseAdministration
 
-        request_url = self.bigip.icr_url + '/sys/version'
-        response = self.bigip.icr_session.get(request_url)
-        self.hotfix = False
-        if response.status_code < 400:
-            response_obj = json.loads(response.text)
-            if response_obj['apiRawValues']['apiAnonymous'].find('Hotfix') > 0:
-                self.hotfix = True
-
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
         self.current_folder = None
