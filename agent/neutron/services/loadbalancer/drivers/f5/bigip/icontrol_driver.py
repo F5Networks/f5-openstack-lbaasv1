@@ -2876,16 +2876,19 @@ class iControlDriver(object):
             raise urllib2.URLError('cannot communicate to any bigips')
 
     def _get_vlan_name(self, network, hostname):
-        tagged = self.tagging_mapping['default']
         net_key = network['provider:physical_network']
-        # is the no host specific entry there?
+        # look for host specific interface mapping
         if net_key + ':' + hostname in self.interface_mapping:
             interface = self.interface_mapping[net_key + ':' + hostname]
             tagged = self.tagging_mapping[net_key + ':' + hostname]
-        # is there a no default entry
+        # look for specific interface mapping
         elif net_key in self.interface_mapping:
             interface = self.interface_mapping[net_key]
             tagged = self.tagging_mapping[net_key]
+        # use default mapping
+        else:
+            interface = self.interface_mapping['default']
+            tagged = self.tagging_mapping['default']
 
         if tagged:
             vlanid = network['provider:segmentation_id']
