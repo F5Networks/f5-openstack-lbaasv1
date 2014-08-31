@@ -209,12 +209,10 @@ def serialized(method_name):
                              waitsecs, len(service_queue)))
                 greenthread.sleep(waitsecs)
                 reqs_ahead_of_us = request_index(service_queue, my_request_id)
-            else:
-                LOG.debug(
-                  '%s request %s is running with queue depth: %d'
-                  % (str(method_name), my_request_id,
-                  len(service_queue)))
             try:
+                LOG.debug('%s request %s is running with queue depth: %d'
+                          % (str(method_name), my_request_id,
+                          len(service_queue)))
                 start_time = time()
                 result = method(*args, **kwargs)
                 LOG.debug('%s request %s took %.5f secs'
@@ -399,7 +397,7 @@ class iControlDriver(object):
         for i in range(len(service['pool']['health_monitors_status'])):
             if service['pool']['health_monitors_status'][i]['monitor_id'] == \
                                                           health_monitor['id']:
-                    service['pool']['health_monitors_status'][i]['status'] = \
+                service['pool']['health_monitors_status'][i]['status'] = \
                                                    plugin_const.PENDING_UPDATE
         self._assure_service(service)
         return True
@@ -497,14 +495,14 @@ class iControlDriver(object):
                     # interface.
                     # for tunnel_type in ['vxlan', 'gre']:
                     for tunnel_type in self.tunnel_types:
-                       if hasattr(self, 'tunnel_rpc'):
-                           self.tunnel_rpc.tunnel_sync(self.context,
-                                                   bigip.local_ip,
-                                                   tunnel_type)
-                except Exception as e:
+                        if hasattr(self, 'tunnel_rpc'):
+                            self.tunnel_rpc.tunnel_sync(self.context,
+                                                        bigip.local_ip,
+                                                        tunnel_type)
+                except Exception as exp:
                     LOG.debug(
                         _("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
-                          {'local_ip': bigip.local_ip, 'e': e})
+                          {'local_ip': bigip.local_ip, 'e': exp})
                     resync = True
         return resync
 
@@ -841,7 +839,7 @@ class iControlDriver(object):
 
             network = member['network']
             subnet = member['subnet']
-            if network['shared']:
+            if not network or self._is_common_network(network):
                 net_folder = 'Common'
             else:
                 net_folder = pool['tenant_id']
@@ -849,15 +847,7 @@ class iControlDriver(object):
             if self.conf.f5_global_routed_mode:
                 ip_address = ip_address + '%0'
             else:
-                if not network:
-                    ip_address = ip_address + '%0'
-                elif network['id'] in self.conf.common_network_ids:
-                    ip_address = ip_address + '%0'
-                elif network['shared']:
-                    ip_address = ip_address + '%0'
-                elif 'router:external' in network and \
-                     network['router:external'] and \
-                     self.conf.f5_common_external_networks:
+                if not network or self._is_common_network(network):
                     ip_address = ip_address + '%0'
 
             found_existing_member = None
@@ -910,12 +900,12 @@ class iControlDriver(object):
                                         mac_address=member['port']['mac_address'],
                                         arp_ip_address=ip_address,
                                         folder=net_folder)
-                            else:
-                                LOG.error(_('Member on SDN has no port. Manual '
-                                            'removal on the BIG-IP will be '
-                                            'required. Was the vm instance '
-                                            'deleted before the pool member '
-                                            'was deleted?'))
+                        else:
+                            LOG.error(_('Member on SDN has no port. Manual '
+                                        'removal on the BIG-IP will be '
+                                        'required. Was the vm instance '
+                                        'deleted before the pool member '
+                                        'was deleted?'))
                     if network['provider:network_type'] == 'gre':
                         tunnel_name = self._get_tunnel_name(network)
                         if member['port']:
@@ -930,12 +920,12 @@ class iControlDriver(object):
                                         mac_address=member['port']['mac_address'],
                                         arp_ip_address=ip_address,
                                         folder=net_folder)
-                            else:
-                                LOG.error(_('Member on SDN has no port. Manual '
-                                            'removal on the BIG-IP will be '
-                                            'required. Was the vm instance '
-                                            'deleted before the pool member '
-                                            'was deleted?'))
+                        else:
+                            LOG.error(_('Member on SDN has no port. Manual '
+                                        'removal on the BIG-IP will be '
+                                        'required. Was the vm instance '
+                                        'deleted before the pool member '
+                                        'was deleted?'))
                 # avoids race condition:
                 # deletion of pool member objects must sync before we
                 # remove the selfip from the peer bigips.
@@ -1070,7 +1060,7 @@ class iControlDriver(object):
                                       (time() - start_time))
                 if subnet and \
                    subnet['id'] in ctx.check_for_delete_subnets:
-                    del(ctx.check_for_delete_subnets[subnet['id']])
+                    del ctx.check_for_delete_subnets[subnet['id']]
                 if subnet and \
                    subnet['id'] not in ctx.do_not_delete_subnets:
                     ctx.do_not_delete_subnets.append(subnet['id'])
@@ -1150,6 +1140,7 @@ class iControlDriver(object):
             network = vip['network']
             subnet = vip['subnet']
 
+            preserve_network_name = False
             if self.conf.f5_global_routed_mode:
                 network_name = None
                 ip_address = ip_address + '%0'
@@ -1159,6 +1150,7 @@ class iControlDriver(object):
                 #
                 if network['id'] in self.conf.common_network_ids:
                     network_name = self.conf.common_network_ids[network['id']]
+                    preserve_network_name = True
                 elif network['provider:network_type'] == 'vlan':
                     network_name = self._get_vlan_name(network,
                                                        bigip.icontrol.hostname)
@@ -1175,16 +1167,7 @@ class iControlDriver(object):
                                 ' Cannot allocate VIP.'
                     LOG.error(_(error_message))
                     raise f5ex.InvalidNetworkType(error_message)
-                if network['shared']:
-                    network_name = '/Common/' + network_name
-                    ip_address = ip_address + '%0'
-                elif network['id'] in self.conf.common_network_ids:
-                    network_name = '/Common/' + network_name
-                    ip_address = ip_address + '%0'
-                elif network and \
-                     'router:external' in network and \
-                     network['router:external'] and \
-                     self.conf.f5_common_external_networks:
+                if self._is_common_network(network):
                     network_name = '/Common/' + network_name
                     ip_address = ip_address + '%0'
 
@@ -1270,7 +1253,7 @@ class iControlDriver(object):
                         if vip['id'] in self.__vips_to_traffic_group:
                             vip_tg = self.__vips_to_traffic_group[vip['id']]
                             self.__vips_on_traffic_groups[vip_tg] -= 1
-                            del(self.__vips_to_traffic_group[vip['id']])
+                            del self.__vips_to_traffic_group[vip['id']]
                         self.plugin_rpc.vip_destroyed(vip['id'])
                 except Exception as exc:
                     LOG.error(_("Plugin delete vip %s error: %s"
@@ -1319,18 +1302,8 @@ class iControlDriver(object):
 
                 just_added_vip = False
                 if virtual_type == 'standard':
-                    # Work around the network_name object prefix
-                    # naming on the virtual server create
                     vs_name = vip['id']
-
-                    use_prefix = True
-                    folder = pool['tenant_id']
-                    if network_name.startswith('/Common'):
-                        folder = bigip_interfaces.prefixed(folder)
-                        vs_name = bigip_interfaces.decorate_name(vs_name,
-                                                                 folder,
-                                                                 True)
-                        use_prefix = False
+                    folder = vip['tenant_id']
 
                     LOG.debug(_('vs create with %s %s %s' % (vs_name, folder, network_name)))
 
@@ -1344,7 +1317,7 @@ class iControlDriver(object):
                                        use_snat=self.conf.f5_snat_mode,
                                        snat_pool=snat_pool_name,
                                        folder=folder,
-                                       use_prefix=use_prefix):
+                                       preserve_vlan_name=preserve_network_name):
                         # update driver traffic group mapping
                         vip_tg = bigip_vs.get_traffic_group(
                                         name=vip['id'],
@@ -1358,19 +1331,8 @@ class iControlDriver(object):
                                             status_description='vip created')
                         just_added_vip = True
                 else:
-
-                    # Work around the network_name object prefix
-                    # naming on the virtual server create
                     vs_name = vip['id']
-
-                    use_prefix = True
-                    folder = pool['tenant_id']
-                    if network_name.startswith('/Common'):
-                        folder = bigip_interfaces.prefixed(folder)
-                        vs_name = bigip_interfaces.decorate_name(vs_name,
-                                                                 folder,
-                                                                 True)
-                        use_prefix = False
+                    folder = vip['tenant_id']
 
                     if bigip_vs.create_fastl4(
                                     name=vs_name,
@@ -1383,7 +1345,7 @@ class iControlDriver(object):
                                     use_snat=self.conf.f5_snat_mode,
                                     snat_pool=snat_pool_name,
                                     folder=folder,
-                                    use_prefix=use_prefix):
+                                    preserve_vlan_name=preserve_network_name):
                         # created update driver traffic group mapping
                         vip_tg = bigip_vs.get_traffic_group(
                                         name=vip['id'],
@@ -1573,7 +1535,7 @@ class iControlDriver(object):
 
                     if vip['network'] and \
                        'provider:network_type' in vip['network']:
-                        if network['shared']:
+                        if self._is_common_network(network):
                             net_folder = 'Common'
                         else:
                             net_folder = vip['tenant_id']
@@ -1629,7 +1591,7 @@ class iControlDriver(object):
 
                 if subnet and \
                    subnet['id'] in ctx.check_for_delete_subnets:
-                    del(ctx.check_for_delete_subnets[subnet['id']])
+                    del ctx.check_for_delete_subnets[subnet['id']]
                 if subnet and \
                    subnet['id'] not in ctx.do_not_delete_subnets:
                     ctx.do_not_delete_subnets.append(subnet['id'])
@@ -1694,7 +1656,7 @@ class iControlDriver(object):
                                         folder=service['pool']['tenant_id'])
                 for virt_serv in virtual_services:
                     (vs_name, dest) = virt_serv.items()[0]
-                    del(vs_name)
+                    del vs_name
                     if netaddr.IPAddress(dest['address']) in ipsubnet:
                         delete_subnet_objects = False
                         break
@@ -1903,19 +1865,22 @@ class iControlDriver(object):
             LOG.debug("        assure network took %.5f secs" %
                            (time() - start_time))
 
+    def _is_common_network(self, network):
+        return network['shared'] or \
+            (network['id'] in self.conf.common_network_ids) or \
+            ('router:external' in network and \
+             network['router:external'] and \
+             self.conf.f5_common_external_networks)
+
     # called for every bigip in every sync mode
     def _assure_device_network(self, network, bigip):
+        if self._is_common_network(network):
+            network_folder = 'Common'
+        else:
+            network_folder = network['tenant_id']
+
         # setup all needed L2 network segments
         if network['provider:network_type'] == 'vlan':
-            if network['shared']:
-                network_folder = 'Common'
-            elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                network_folder = 'Common'
-            else:
-                network_folder = network['tenant_id']
-
             # VLAN names are limited to 64 characters including
             # the folder name, so we name them foolish things.
 
@@ -1951,14 +1916,6 @@ class iControlDriver(object):
                               description=network['id'])
 
         elif network['provider:network_type'] == 'flat':
-            if network['shared']:
-                network_folder = 'Common'
-            elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                network_folder = 'Common'
-            else:
-                network_folder = network['tenant_id']
             interface = self.interface_mapping['default']
             vlanid = 0
 
@@ -1988,17 +1945,8 @@ class iControlDriver(object):
                 error_message += ' no VTEP SelfIP defined.'
                 LOG.error('VXLAN:' + error_message)
                 raise f5ex.MissingVTEPAddress('VXLAN:' + error_message)
-            if network['shared']:
-                network_folder = 'Common'
-            elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                network_folder = 'Common'
-            else:
-                network_folder = network['tenant_id']
 
             tunnel_name = self._get_tunnel_name(network)
-
             # create the main tunnel entry for the fdb records
             bigip.vxlan.create_multipoint_tunnel(name=tunnel_name,
                                  profile_name='vxlan_ovs',
@@ -2040,14 +1988,6 @@ class iControlDriver(object):
                 error_message += ' no VTEP SelfIP defined.'
                 LOG.error('L2GRE:' + error_message)
                 raise f5ex.MissingVTEPAddress('L2GRE:' + error_message)
-            if network['shared']:
-                network_folder = 'Common'
-            elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                network_folder = 'Common'
-            else:
-                network_folder = network['tenant_id']
 
             tunnel_name = self._get_tunnel_name(network)
 
@@ -2114,19 +2054,15 @@ class iControlDriver(object):
             # we already did this work
             return
 
-        # Where to put all these objects?
-        network_folder = pool['tenant_id']
-        if network['id'] in self.conf.common_network_ids:
+        preserve_network_name = False
+        if self._is_common_network(network):
             network_folder = 'Common'
-        elif network['shared']:
-            network_folder = 'Common'
-        elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-            network_folder = 'Common'
+        else:
+            network_folder = pool['tenant_id']
 
         if network['id'] in self.conf.common_network_ids:
             network_name = self.conf.common_network_ids[network['id']]
+            preserve_network_name = True
         elif network['provider:network_type'] == 'vlan':
             network_name = self._get_vlan_name(network,
                                                bigip.icontrol.hostname)
@@ -2149,7 +2085,8 @@ class iControlDriver(object):
             if subnet['id'] in set_bigip.assured_snat_subnets:
                 continue
             self._create_local_selfip(set_bigip, subnet,
-                                     network_folder, network_name)
+                                      network_folder, network_name,
+                                      preserve_network_name)
 
         # Setup required SNAT addresses on this subnet
         # based on the HA requirements
@@ -2179,7 +2116,8 @@ class iControlDriver(object):
                              bigip,
                              subnet,
                              network_folder,
-                             network_name):
+                             network_name,
+                             preserve_network_name):
         local_selfip_name = "local-" + bigip.device_name + "-" + subnet['id']
 
         ports = self.plugin_rpc.get_port_by_name(
@@ -2196,16 +2134,13 @@ class iControlDriver(object):
             ip_address = new_port['fixed_ips'][0]['ip_address']
         netmask = netaddr.IPNetwork(
                            subnet['cidr']).netmask
-        use_prefix = True
-        if network_folder == 'Common':
-            use_prefix = False
         bigip.selfip.create(name=local_selfip_name,
                             ip_address=ip_address,
                             netmask=netmask,
                             vlan_name=network_name,
                             floating=False,
                             folder=network_folder,
-                            use_prefix=use_prefix)
+                            preserve_vlan_name=preserve_network_name)
 
     def _assure_snats_standalone(self, bigip, subnetinfo,
                                 snat_pool_name,
@@ -2232,15 +2167,7 @@ class iControlDriver(object):
                     name=index_snat_name,
                     fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
-            if network['shared']:
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-            elif network['id'] in self.conf.common_network_ids:
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-            elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
+            if self._is_common_network(network):
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
@@ -2290,15 +2217,7 @@ class iControlDriver(object):
                     name=index_snat_name,
                     fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
-            if network['shared']:
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-            if network['id'] in self.conf.common_network_ids:
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-            elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
+            if self._is_common_network(network):
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
@@ -2357,9 +2276,8 @@ class iControlDriver(object):
                                          name=index_snat_name,
                                          fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
-            if network['shared']:
+            if self._is_common_network(network):
                 ip_address = ip_address + '%0'
-            if network['shared']:
                 index_snat_name = '/Common/' + index_snat_name
             if self.conf.sync_mode == 'replication':
                 bigips = bigip.group_bigips
@@ -2438,13 +2356,13 @@ class iControlDriver(object):
                 ermsg += " support will likely fail. Enable f5_snat_mode."
                 LOG.error(_(ermsg))
 
-        # Go ahead and setup a floating SelfIP with the subnet's
+        # Setup a floating SelfIP with the subnet's
         # gateway_ip address on this agent's device service group
 
-        network_folder = subnet['tenant_id']
-
+        preserve_network_name = False
         if network['id'] in self.conf.common_network_ids:
             network_name = self.conf.common_network_ids[network['id']]
+            preserve_network_name = True
         if network['provider:network_type'] == 'vlan':
             network_name = self._get_vlan_name(network,
                                                bigip.icontrol.hostname)
@@ -2460,18 +2378,12 @@ class iControlDriver(object):
                         % network['provider:network_type']))
             return
 
-        # Where to put all these objects?
-        if network['shared']:
+        if self._is_common_network(network):
             network_folder = 'Common'
             network_name = '/Common/' + network_name
-        elif network['id'] in self.conf.common_network_ids:
-            network_folder = 'Common'
-            network_name = '/Common/' + network_name
-        elif 'router:external' in network and \
-             network['router:external'] and \
-             self.conf.f5_common_external_networks:
-            network_folder = 'Common'
-            network_name = '/Common/' + network_name
+        else:
+            network_folder = subnet['tenant_id']
+
 
         # Select a traffic group for the floating SelfIP
         vip_tg = self._get_least_gw_traffic_group()
@@ -2485,10 +2397,6 @@ class iControlDriver(object):
             if subnet['id'] in bigip.assured_gateway_subnets:
                 continue
 
-            use_prefix = True
-            if network_folder == 'Common':
-                use_prefix = False
-
             bigip.selfip.create(
                             name=floating_selfip_name,
                             ip_address=subnet['gateway_ip'],
@@ -2497,7 +2405,7 @@ class iControlDriver(object):
                             floating=True,
                             traffic_group=vip_tg,
                             folder=network_folder,
-                            use_prefix=use_prefix)
+                            preserve_vlan_name=preserve_network_name)
 
             # Get the actual traffic group if the Self IP already existed
             vip_tg = bigip.self.get_traffic_group(name=floating_selfip_name,
@@ -2511,13 +2419,12 @@ class iControlDriver(object):
                             vlan_name=network_name,
                             traffic_group=vip_tg,
                             folder=network_folder,
-                            use_prefix=use_prefix)
+                            preserve_vlan_name=preserve_network_name)
 
             # Setup the IP forwarding virtual server to use the Self IPs
             # as the forwarding SNAT addresses
             bigip.virtual_server.set_snat_automap(name=gw_name,
-                                folder=network_folder,
-                                use_prefix=use_prefix)
+                                folder=network_folder)
             bigip.assured_gateway_subnets.append(subnet['id'])
 
     # called for every bigip only in replication mode.
@@ -2527,57 +2434,35 @@ class iControlDriver(object):
             LOG.debug(_('skipping delete of common network %s'
                         % self.conf.common[network['id']]))
             return
+        if self._is_common_network(network):
+            network_folder = 'Common'
+        else:
+            network_folder = network['tenant_id']
+
         if self.conf.sync_mode == 'replication':
             bigips = [bigip]
         else:
             bigips = bigip.group_bigips
-
-        # setup all needed L2 network segments on all BigIPs
         for set_bigip in bigips:
             if network['provider:network_type'] == 'vlan':
-                if network['shared']:
-                    network_folder = 'Common'
-                elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                    network_folder = 'Common'
-                else:
-                    network_folder = network['tenant_id']
-                vlan_name = self._get_vlan_name(network,
-                                                set_bigip.icontrol.hostanme)
-                set_bigip.vlan.delete(name=vlan_name,
-                                  folder=network_folder)
-
-            elif network['provider:network_type'] == 'flat':
-                if network['shared']:
-                    network_folder = 'Common'
-                elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                    network_folder = 'Common'
-                else:
-                    network_folder = network['id']
                 vlan_name = self._get_vlan_name(network,
                                                 set_bigip.icontrol.hostname)
                 set_bigip.vlan.delete(name=vlan_name,
-                                  folder=network_folder)
+                                      folder=network_folder)
+
+            elif network['provider:network_type'] == 'flat':
+                vlan_name = self._get_vlan_name(network,
+                                                set_bigip.icontrol.hostname)
+                set_bigip.vlan.delete(name=vlan_name,
+                                      folder=network_folder)
 
             elif network['provider:network_type'] == 'vxlan':
-                if network['shared']:
-                    network_folder = 'Common'
-                elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                    network_folder = 'Common'
-                else:
-                    network_folder = network['tenant_id']
-
                 tunnel_name = self._get_tunnel_name(network)
 
                 set_bigip.vxlan.delete_all_fdb_entries(tunnel_name=tunnel_name,
-                                                   folder=network_folder)
+                                                       folder=network_folder)
                 set_bigip.vxlan.delete_tunnel(name=tunnel_name,
-                                          folder=network_folder)
+                                              folder=network_folder)
                 # delete the listener filters for all VTEP addresses
                 local_ips = self.agent_configurations['tunneling_ips']
                 for i in range(len(local_ips)):
@@ -2585,7 +2470,7 @@ class iControlDriver(object):
                             str(network['provider:segmentation_id']) + \
                             '_' + str(i)
                     set_bigip.vxlan.delete_tunnel(name=list_name,
-                                          folder=network_folder)
+                                                  folder=network_folder)
                 # notify all the compute nodes we no longer have
                 # VTEPs for this network now.
                 if self.conf.l2_population:
@@ -2604,22 +2489,14 @@ class iControlDriver(object):
                     self.l2pop_rpc.remove_fdb_entries(self.context,
                                                       fdb_entries)
             elif network['provider:network_type'] == 'gre':
-                if network['shared']:
-                    network_folder = 'Common'
-                elif 'router:external' in network and \
-                 network['router:external'] and \
-                 self.conf.f5_common_external_networks:
-                    network_folder = 'Common'
-                else:
-                    network_folder = network['tenant_id']
 
                 tunnel_name = self._get_tunnel_name(network)
 
                 # for each known vtep_endpoints to this tunnel
                 set_bigip.l2gre.delete_all_fdb_entries(tunnel_name=tunnel_name,
-                                                   folder=network_folder)
+                                                       folder=network_folder)
                 set_bigip.l2gre.delete_tunnel(name=tunnel_name,
-                                          folder=network_folder)
+                                              folder=network_folder)
                 # delete the listener filters for all VTEP addresses
                 local_ips = self.agent_configurations['tunneling_ips']
                 for i in range(len(local_ips)):
@@ -2627,7 +2504,7 @@ class iControlDriver(object):
                             str(network['provider:segmentation_id']) + \
                             '_' + str(i)
                     set_bigip.l2gre.delete_tunnel(name=list_name,
-                                          folder=network_folder)
+                                                  folder=network_folder)
                 # notify all the compute nodes we no longer
                 # VTEPs for this network now.
                 if self.conf.l2_population:
@@ -2662,15 +2539,10 @@ class iControlDriver(object):
             ' for network with no id... skipping.'))
             return
         subnet = subnetinfo.subnet
-        network_folder = service['pool']['tenant_id']
-        if network['shared']:
+        if self._is_common_network(network):
             network_folder = 'Common'
-        elif network['id'] in self.conf.common_network_ids:
-            network_folder = 'Common'
-        elif 'router:external' in network and \
-              network['router:external'] and \
-              self.conf.f5_common_external_networks:
-            network_folder = 'Common'
+        else:
+            network_folder = service['pool']['tenant_id']
         snat_pool_name = service['pool']['tenant_id']
         # Setup required SNAT addresses on this subnet
         # based on the HA requirements
@@ -2681,13 +2553,7 @@ class iControlDriver(object):
                 snat_name = 'snat-traffic-group-local-only-' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
-                    if network['shared']:
-                        tmos_snat_name = '/Common/' + index_snat_name
-                    elif network['id'] in self.conf.common_network_ids:
-                        tmos_snat_name = '/Common/' + index_snat_name
-                    elif 'router:external' in network and \
-                         network['router:external'] and \
-                         self.conf.f5_common_external_networks:
+                    if self._is_common_network(network):
                         tmos_snat_name = '/Common/' + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
@@ -2707,13 +2573,7 @@ class iControlDriver(object):
                 snat_name = 'snat-traffic-group-1' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
-                    if network['shared']:
-                        tmos_snat_name = '/Common/' + index_snat_name
-                    elif network['id'] in self.conf.common_network_ids:
-                        tmos_snat_name = '/Common/' + index_snat_name
-                    elif 'router:external' in network and \
-                         network['router:external'] and \
-                         self.conf.f5_common_external_networks:
+                    if self._is_common_network(network):
                         tmos_snat_name = '/Common/' + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
@@ -2735,7 +2595,7 @@ class iControlDriver(object):
                 snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
-                    if network['shared']:
+                    if self._is_common_network(network):
                         tmos_snat_name = "/Common/" + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
@@ -2760,13 +2620,8 @@ class iControlDriver(object):
         for bigip in bigips:
             local_selfip_name = "local-" + bigip.device_name + \
                                 "-" + subnet['id']
-            use_prefix = True
-            if network_folder == 'Common':
-                use_prefix = False
-
             bigip.selfip.delete(name=local_selfip_name,
-                                folder=network_folder,
-                                use_prefix=use_prefix)
+                                folder=network_folder)
             self.plugin_rpc.delete_port_by_name(port_name=local_selfip_name)
 
         for bigip in bigip.group_bigips:
@@ -2776,43 +2631,24 @@ class iControlDriver(object):
     # called for every bigip only in replication mode.
     # otherwise called once
     def _delete_gateway_on_subnet(self, subnetinfo, bigip, on_last_bigip):
-
         network = subnetinfo.network
         if not network:
             LOG.error(_('Attempted to delete default gateway'
             ' for network with no id... skipping.'))
             return
         subnet = subnetinfo.subnet
-        # Create a name for the port and for the IP Forwarding Virtual Server
-        # as well as the floating Self IP which will answer ARP for the members
-        gw_name = "gw-" + subnet['id']
+        if self._is_common_network(network):
+            network_folder = 'Common'
+        else:
+            network_folder = subnet['tenant_id']
+
         floating_selfip_name = "gw-" + subnet['id']
-
-        # Go ahead and setup a floating SelfIP with the subnet's
-        # gateway_ip address on this agent's device service group
-
-        network_folder = subnet['tenant_id']
-        if network['shared']:
-            network_folder = 'Common'
-        elif network['id'] in self.conf.common_network_ids:
-            network_folder = 'Common'
-        elif 'router:external' in network and \
-             network['router:external'] and \
-             self.conf.f5_common_external_networks:
-            network_folder = 'Common'
-
-        use_prefix = True
-        if network_folder == 'Common':
-            use_prefix = False
-
         bigip.selfip.delete(name=floating_selfip_name,
-                            folder=network_folder,
-                            use_prefix=use_prefix)
+                            folder=network_folder)
 
-        # Setup a wild card ip forwarding virtual service for this subnet
+        gw_name = "gw-" + subnet['id']
         bigip.virtual_server.delete(name=gw_name,
-                                    folder=network_folder,
-                                    use_prefix=use_prefix)
+                                    folder=network_folder)
 
         if on_last_bigip:
             ports = self.plugin_rpc.get_port_by_name(port_name=gw_name)
@@ -2872,8 +2708,7 @@ class iControlDriver(object):
                 return bigip
             except urllib2.URLError:
                 pass
-        else:
-            raise urllib2.URLError('cannot communicate to any bigips')
+        raise urllib2.URLError('cannot communicate to any bigips')
 
     def _get_vlan_name(self, network, hostname):
         net_key = network['provider:physical_network']

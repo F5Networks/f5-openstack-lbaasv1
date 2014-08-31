@@ -42,7 +42,7 @@ class VirtualServer(object):
     def create(self, name=None, ip_address=None, mask=None,
                port=None, protocol=None, vlan_name=None,
                traffic_group=None, use_snat=True,
-               snat_pool=None, folder='Common', use_prefix=True):
+               snat_pool=None, folder='Common', preserve_vlan_name=False):
 
         if not self.exists(name=name, folder=folder):
 
@@ -126,7 +126,8 @@ class VirtualServer(object):
     def create_ip_forwarder(self, name=None, ip_address=None,
                             mask=None, vlan_name=None,
                             traffic_group=None, use_snat=True,
-                            snat_pool=None, folder='Common', use_prefix=True):
+                            snat_pool=None, folder='Common',
+                            preserve_vlan_name=False):
         if not self.exists(name=name, folder=folder):
             # virtual server definition
             vs_def = self.lb_vs.typefactory.create(
@@ -200,7 +201,8 @@ class VirtualServer(object):
     def create_fastl4(self, name=None, ip_address=None, mask=None,
                port=None, protocol=None, vlan_name=None,
                traffic_group=None, use_snat=True,
-               snat_pool=None, folder='Common', use_prefix=True):
+               snat_pool=None, folder='Common',
+               preserve_vlan_name=False):
 
         if not self.exists(name=name, folder=folder):
 

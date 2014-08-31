@@ -24,7 +24,9 @@ def icontrol_folder(method):
     a kwarg name is 'name' or else ends in '_name'.
 
     The folder and the name will be prefixed with the global
-    prefix OBJ_PREFIX.
+    prefix OBJ_PREFIX. If preserve_vlan_name=True is an argument,
+    then the 'vlan_name' argument will not be prefixed but the
+    other matching arguments will.
 
     It also sets the iControl active folder to folder kwarg
     assuring get_list returns just the appopriate objects
@@ -36,29 +38,26 @@ def icontrol_folder(method):
     """
     def wrapper(*args, **kwargs):
         instance = args[0]
-        use_prefix = True
-        if 'use_prefix' in kwargs:
-            use_prefix = kwargs['use_prefix']
+        preserve_vlan_name = False
+        if 'preserve_vlan_name' in kwargs:
+            preserve_vlan_name = kwargs['preserve_vlan_name']
         if 'folder' in kwargs:
             if kwargs['folder'].find('~') > -1:
                 kwargs['folder'] = kwargs['folder'].replace('~', '/')
             kwargs['folder'] = os.path.basename(kwargs['folder'])
             if not kwargs['folder'] == 'Common':
-                if use_prefix:
-                    kwargs['folder'] = prefixed(kwargs['folder'])
+                kwargs['folder'] = prefixed(kwargs['folder'])
             if 'name' in kwargs and kwargs['name']:
                 if kwargs['name'].find('~') > -1:
                     kwargs['name'] = kwargs['name'].replace('~', '/')
                 if kwargs['name'].startswith('/Common/'):
                     kwargs['name'] = os.path.basename(kwargs['name'])
-                    if use_prefix:
-                        kwargs['name'] = prefixed(kwargs['name'])
+                    kwargs['name'] = prefixed(kwargs['name'])
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                                'Common')
                 else:
                     kwargs['name'] = os.path.basename(kwargs['name'])
-                    if use_prefix:
-                        kwargs['name'] = prefixed(kwargs['name'])
+                    kwargs['name'] = prefixed(kwargs['name'])
                     kwargs['name'] = instance.bigip.set_folder(kwargs['name'],
                                                            kwargs['folder'])
 
@@ -85,7 +84,7 @@ def icontrol_folder(method):
                         kwargs[name] = kwargs[name].replace('~', '/')
                     if kwargs[name].startswith('/Common/'):
                         kwargs[name] = os.path.basename(kwargs[name])
-                        if use_prefix:
+                        if name != 'vlan_name' or not preserve_vlan_name:
                             kwargs[name] = prefixed(kwargs[name])
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                                  'Common')
@@ -96,7 +95,7 @@ def icontrol_folder(method):
                         if specific_folder_name in kwargs:
                             folder = kwargs[specific_folder_name]
                         kwargs[name] = os.path.basename(kwargs[name])
-                        if use_prefix:
+                        if name != 'vlan_name' or not preserve_vlan_name:
                             kwargs[name] = prefixed(kwargs[name])
                         kwargs[name] = instance.bigip.set_folder(kwargs[name],
                                                              folder)
@@ -116,9 +115,9 @@ def icontrol_rest_folder(method):
     prefix OBJ_PREFIX.
     """
     def wrapper(*args, **kwargs):
-        use_prefix = True
-        if 'use_prefix' in kwargs:
-            use_prefix = kwargs['use_prefix']
+        preserve_vlan_name = False
+        if 'preserve_vlan_name' in kwargs:
+            preserve_vlan_name = kwargs['preserve_vlan_name']
         if 'folder' in kwargs:
             if kwargs['folder'].find('Common') < 0:
                 if kwargs['folder'].find('~') > -1:
@@ -126,16 +125,14 @@ def icontrol_rest_folder(method):
                     kwargs['folder'] = os.path.basename(kwargs['folder'])
                 if kwargs['folder'].find('/') > -1:
                     kwargs['folder'] = os.path.basename(kwargs['folder'])
-                if use_prefix:
-                    kwargs['folder'] = prefixed(kwargs['folder'])
+                kwargs['folder'] = prefixed(kwargs['folder'])
         if 'name' in kwargs and kwargs['name']:
             if kwargs['name'].find('~') > -1:
                 kwargs['name'] = kwargs['name'].replace('~', '/')
                 kwargs['name'] = os.path.basename(kwargs['name'])
             if kwargs['name'].find('/') > -1:
                 kwargs['name'] = os.path.basename(kwargs['name'])
-            if use_prefix:
-                kwargs['name'] = prefixed(kwargs['name'])
+            kwargs['name'] = prefixed(kwargs['name'])
         for name in kwargs:
             if name.find('_name') > 0 and kwargs[name]:
                 if kwargs[name].find('~') > -1:
@@ -143,7 +140,7 @@ def icontrol_rest_folder(method):
                     kwargs[name] = os.path.basename(kwargs[name])
                 if kwargs[name].find('/') > -1:
                     kwargs[name] = os.path.basename(kwargs[name])
-                if use_prefix:
+                if name != 'vlan_name' or not preserve_vlan_name:
                     kwargs[name] = prefixed(kwargs[name])
         return method(*args, **kwargs)
     return wrapper
