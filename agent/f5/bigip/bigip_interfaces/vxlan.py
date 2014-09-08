@@ -57,6 +57,7 @@ class VXLAN(object):
                                  profile_name=None,
                                  self_ip_address=None,
                                  vxlanid=0,
+                                 description=None,
                                  folder='Common'):
         if not self.tunnel_exists(name=name, folder=folder):
             payload = dict()
@@ -66,6 +67,8 @@ class VXLAN(object):
             payload['key'] = vxlanid
             payload['localAddress'] = self_ip_address
             payload['remoteAddress'] = '0.0.0.0'
+            if description:
+                payload['description'] = description
             request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
             response = self.bigip.icr_session.post(request_url,
                                   data=json.dumps(payload))
@@ -214,7 +217,7 @@ class VXLAN(object):
         else:
             if response.status_code != 404:
                 Log.error('VXLAN', response.text)
-            return None
+            return None 
 
     @icontrol_rest_folder
     def profile_exists(self, name=None, folder='Common'):
@@ -237,6 +240,25 @@ class VXLAN(object):
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 return return_obj['items']
+            else:
+                return None
+        else:
+            return None
+
+    @icontrol_rest_folder
+    def get_tunnel_with_description(self, description=None, folder='Common'):
+        if description:
+            request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
+            request_filter = 'partition eq ' + folder
+            request_url += '?$filter=' + request_filter
+            response = self.bigip.icr_session.get(request_url)
+            if response.status_code < 400:
+                return_obj = json.loads(response.text)
+                if 'items' in return_obj:
+                    for tunnel in return_obj['items']:
+                        if tunnel['description'] == description:
+                            return tunnel
+                return None
             else:
                 return None
         else:

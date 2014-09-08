@@ -280,10 +280,9 @@ class iControlDriver(object):
 
             self.tunnel_types = self.conf.advertised_tunnel_types
 
-            #self.agent_configurations['tunnel_types'] = ['vxlan', 'gre']
             self.agent_configurations['tunnel_types'] = self.tunnel_types
+            
             # map format is   phynet:interface:tagged
-
             for maps in self.conf.f5_external_physical_mappings:
                 intmap = maps.split(':')
                 net_key = str(intmap[0]).strip()
@@ -493,7 +492,6 @@ class iControlDriver(object):
                     # send out an update to all compute agents
                     # to get the bigips associated with the br-tun
                     # interface.
-                    # for tunnel_type in ['vxlan', 'gre']:
                     for tunnel_type in self.tunnel_types:
                         if hasattr(self, 'tunnel_rpc'):
                             self.tunnel_rpc.tunnel_sync(self.context,
@@ -1952,6 +1950,7 @@ class iControlDriver(object):
                                  profile_name='vxlan_ovs',
                                  self_ip_address=bigip.local_ip,
                                  vxlanid=network['provider:segmentation_id'],
+                                 description=network['id'],
                                  folder=network_folder)
             # create the listerner filters for all VTEP addresses
             #local_ips = self.agent_configurations['tunneling_ips']
@@ -1995,6 +1994,7 @@ class iControlDriver(object):
                                  profile_name='gre_ovs',
                                  self_ip_address=bigip.local_ip,
                                  greid=network['provider:segmentation_id'],
+                                 description=network['id'],
                                  folder=network_folder)
             # create the listerner filters for all VTEP addresses
             #local_ips = self.agent_configurations['tunneling_ips']
