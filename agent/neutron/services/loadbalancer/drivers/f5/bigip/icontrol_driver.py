@@ -113,7 +113,7 @@ OPTS = [
     ),
     cfg.StrOpt(
         'environment_prefix',
-        default='uuid',
+        default='',
         help=_('The object name prefix for this environment'),
     ),
 ]
@@ -281,7 +281,7 @@ class iControlDriver(object):
             self.tunnel_types = self.conf.advertised_tunnel_types
 
             self.agent_configurations['tunnel_types'] = self.tunnel_types
-            
+
             # map format is   phynet:interface:tagged
             for maps in self.conf.f5_external_physical_mappings:
                 intmap = maps.split(':')
@@ -303,12 +303,13 @@ class iControlDriver(object):
             self.agent_configurations['common_networks'] = \
                                                   self.conf.common_network_ids
 
-            LOG.debug(_('BIG-IP naming prefix for this environment is: %s' %
+            if self.conf.environment_prefix:
+                LOG.debug(_('BIG-IP name prefix for this environment: %s' %
                          self.conf.environment_prefix))
-
-            bigip_interfaces.OBJ_PREFIX = self.conf.environment_prefix + '_'
-            self.agent_configurations['environment_prefix'] = \
-                                                  self.conf.environment_prefix
+                bigip_interfaces.OBJ_PREFIX = \
+                                          self.conf.environment_prefix + '_'
+                self.agent_configurations['environment_prefix'] = \
+                                          self.conf.environment_prefix
 
         self._init_connection()
 
@@ -3066,9 +3067,13 @@ class iControlDriver(object):
 
                 self.connected = True
 
-                self.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS,
+                if self.conf.environment_prefix:
+                    self.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS,
                                                self.conf.environment_prefix + \
                                                '.' + self.hostnames[0]))
+                else:
+                    self.agent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS,
+                                               self.hostnames[0]))
 
             except Exception as exc:
                 LOG.error(_('Could not communicate with all ' +
