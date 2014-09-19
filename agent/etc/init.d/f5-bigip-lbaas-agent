@@ -23,6 +23,7 @@ start() {
     for config in ${configs[@]}; do
         [ -f $config ] || exit 6
     done
+    [ ! -d /var/run/$proj ] && (mkdir -p /var/run/$proj;chmod ugo+wx /var/run/$proj)
     echo -n $"Starting $prog: "
     daemon --user neutron --pidfile $pidfile "$exec --log-file /var/log/$proj/$plugin.log ${configs[@]/#/--config-file } &>/dev/null & echo \$! > $pidfile"
     retval=$?

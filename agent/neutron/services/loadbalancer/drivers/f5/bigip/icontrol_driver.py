@@ -73,7 +73,7 @@ OPTS = [
     ),
     cfg.ListOpt(
         'advertised_tunnel_types',
-        default='gre,vxlan',
+        default=['gre','vxlan'],
         help=_('tunnel types which are advertised to other VTEPs'),
     ),
     cfg.BoolOpt(
