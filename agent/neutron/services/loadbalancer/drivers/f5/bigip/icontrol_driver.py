@@ -19,6 +19,8 @@ from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
 from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+from f5.bigip.bigip_interfaces import prefixed
+
 
 from eventlet import greenthread
 import os
@@ -29,6 +31,7 @@ import datetime
 import hashlib
 import random
 from time import time
+from time import sleep
 import logging as std_logging
 
 
@@ -85,6 +88,11 @@ OPTS = [
         'f5_common_external_networks',
         default=True,
         help=_('Treat external networks as common')
+    ),
+    cfg.StrOpt(
+        'icontrol_vcmp_hostname',
+        help=_('The hostname (name or IP address) to use for vCMP Host ' \
+               'iControl access'),
     ),
     cfg.StrOpt(
         'icontrol_hostname',
@@ -262,6 +270,7 @@ class iControlDriver(object):
         self.connected = False
         self.service_queue = []
         self.agent_configurations = {}
+        self.__vcmp_hosts = []
 
         if self.conf.f5_global_routed_mode:
             LOG.info(_('WARNING - f5_global_routed_mode enabled.'
@@ -311,6 +320,7 @@ class iControlDriver(object):
                                                   self.conf.environment_prefix
 
         self._init_connection()
+        self._init_vcmp_hosts()
 
         LOG.info(_('iControlDriver initialized to %d hosts with username:%s'
                     % (len(self.__bigips), self.username)))
@@ -1907,6 +1917,16 @@ class iControlDriver(object):
             vlan_name = self._get_vlan_name(network,
                                             bigip.icontrol.hostname)
 
+            self._assure_vcmp_device_network(bigip,
+                                             vlan={'name': vlan_name,
+                                                   'folder': network_folder,
+                                                   'id': vlanid,
+                                                   'interface': interface,
+                                                   'network': network})
+
+            if self.get_vcmp_host(bigip):
+                interface = None
+
             bigip.vlan.create(name=vlan_name,
                               vlanid=vlanid,
                               interface=interface,
@@ -1929,6 +1949,16 @@ class iControlDriver(object):
 
             vlan_name = self._get_vlan_name(network,
                                             bigip.icontrol.hostname)
+
+            self._assure_vcmp_device_network(bigip,
+                                             vlan={'name': vlan_name,
+                                                   'folder': network_folder,
+                                                   'id': vlanid,
+                                                   'interface': interface,
+                                                   'network': network})
+
+            if self.get_vcmp_host(bigip):
+                interface = None
 
             bigip.vlan.create(name=vlan_name,
                               vlanid=0,
@@ -2029,6 +2059,80 @@ class iControlDriver(object):
                             ' Cannot setup network.'
             LOG.error(_(error_message))
             raise f5ex.InvalidNetworkType(error_message)
+
+
+    def _assure_vcmp_device_network(self, bigip, vlan):
+        """For vCMP Guests, add VLAN to vCMP Host, associate VLAN with
+           vCMP Guest, and remove VLAN from /Common on vCMP Guest."""
+        vcmp_host = self.get_vcmp_host(bigip)
+        if not vcmp_host:
+            return
+
+        # Create the VLAN on the vCMP Host
+        try:
+            vcmp_host['bigip'].vlan.create(name=vlan['name'],
+                                           vlanid=vlan['id'],
+                                           interface=vlan['interface'],
+                                           folder='/Common',
+                                           description=vlan['network']['id'])
+            LOG.debug(('Created VLAN %s on vCMP Host %s' % \
+                       (vlan['name'], vcmp_host['bigip'].icontrol.hostname)))
+        except Exception as exc:
+            LOG.error(('Exception creating VLAN %s on vCMP Host %s:%s' % \
+                      (vlan['name'], vcmp_host['bigip'].icontrol.hostname, \
+                       exc)))
+
+        # Associate the VLAN with the vCMP Guest
+        vcmp_guest = get_vcmp_guest(vcmp_host, bigip)
+        try:
+            vlan_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
+                                                 create('Common.StringSequence')
+            vlan_seq.values = prefixed(vlan['name'])
+            vlan_seq_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
+                                         create('Common.StringSequenceSequence')
+            vlan_seq_seq.values = [vlan_seq]
+            vcmp_host['bigip'].system.sys_vcmp.add_vlan([vcmp_guest['name']],
+                                                    vlan_seq_seq)
+            LOG.debug(('Associated VLAN %s with vCMP Guest %s' % \
+                       (vlan['name'], vcmp_guest['mgmt_addr'])))
+        except Exception as exc:
+            LOG.error(('Exception associating VLAN %s to vCMP Guest %s: %s ' % \
+                      (vlan['name'], vcmp_guest['mgmt_addr'], exc)))
+
+        # Wait for the VLAN to propagate to /Common on vCMP Guest
+        full_path_vlan_name = '/Common/' + prefixed(vlan['name'])
+        try:
+            vlan_created = False
+            for _ in range(0, 30):
+                if full_path_vlan_name in bigip.vlan.get_all(folder='/Common'):
+                    vlan_created = True
+                    break
+                LOG.debug(('Wait for VLAN %s to be created on vCMP Guest %s.' \
+                          % (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
+                sleep(1)
+
+            if vlan_created:
+                LOG.debug(('VLAN %s exists on vCMP Guest %s.' % \
+                          (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
+            else:
+                LOG.error(('VLAN %s does not exist on vCMP Guest %s.' % \
+                          (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
+        except Exception as exc:
+            LOG.error(('Exception waiting for vCMP Host VLAN %s to ' \
+                       'be created on vCMP Guest %s: %s' % \
+                      (vlan['name'], vcmp_guest['mgmt_addr'], exc)))
+
+        # Delete the VLAN from the /Common folder on the vCMP Guest
+        try:
+            bigip.vlan.delete(name=vlan['name'],
+                              folder='/Common')
+            LOG.debug(('Deleted VLAN %s from vCMP Guest %s' % \
+                      (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
+        except Exception as exc:
+            LOG.error(('Exception deleting VLAN %s from vCMP Guest %s: %s' % \
+                      (full_path_vlan_name, vcmp_guest['mgmt_addr'], exc)))
+
+
 
     # called for every bigip only in replication mode.
     # otherwise called once
@@ -2449,12 +2553,14 @@ class iControlDriver(object):
                                                 set_bigip.icontrol.hostname)
                 set_bigip.vlan.delete(name=vlan_name,
                                       folder=network_folder)
+                self._delete_vcmp_device_network(bigip, vlan_name)
 
             elif network['provider:network_type'] == 'flat':
                 vlan_name = self._get_vlan_name(network,
                                                 set_bigip.icontrol.hostname)
                 set_bigip.vlan.delete(name=vlan_name,
                                       folder=network_folder)
+                self._delete_vcmp_device_network(bigip, vlan_name)
 
             elif network['provider:network_type'] == 'vxlan':
                 tunnel_name = self._get_tunnel_name(network)
@@ -2528,6 +2634,42 @@ class iControlDriver(object):
 
             if network['id'] in set_bigip.assured_networks:
                 set_bigip.assured_networks.remove(network['id'])
+
+    def _delete_vcmp_device_network(self, bigip, vlan_name):
+        """For vCMP Guests, disassociate VLAN from vCMP Guest and
+           delete VLAN from vCMP Host."""
+        vcmp_host = self.get_vcmp_host(bigip)
+        if not vcmp_host:
+            return
+
+        # Remove VLAN association from the vCMP Guest
+        vcmp_guest = get_vcmp_guest(vcmp_host, bigip)
+        try:
+            vlan_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
+                                                 create('Common.StringSequence')
+            vlan_seq.values = prefixed(vlan_name)
+            vlan_seq_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
+                                         create('Common.StringSequenceSequence')
+            vlan_seq_seq.values = [vlan_seq]
+            vcmp_host['bigip'].system.sys_vcmp.remove_vlan([vcmp_guest['name']],
+                                                       vlan_seq_seq)
+            LOG.debug(('Removed VLAN %s association from vCMP Guest %s' % \
+                      (vlan_name, vcmp_guest['mgmt_addr'])))
+        except Exception as exc:
+            LOG.error(('Exception removing VLAN %s association from vCMP ' \
+                       'Guest %s:%s' % \
+                       (vlan_name, vcmp_guest['mgmt_addr'], exc)))
+
+        # Delete VLAN from vCMP Host.  This will fail if any other vCMP Guest
+        # is using this VLAN
+        try:
+            vcmp_host['bigip'].vlan.delete(name=vlan_name,
+                                           folder='/Common')
+            LOG.debug(('Deleted VLAN %s from vCMP Host %s' % \
+                      (vlan_name, vcmp_host['bigip'].icontrol.hostname)))
+        except Exception as exc:
+            LOG.error(('Exception deleting VLAN %s from vCMP Host %s:%s' % \
+                      (vlan_name, vcmp_host['bigip'].icontrol.hostname, exc)))
 
     # called for every bigip only in replication mode.
     # otherwise called once
@@ -3074,6 +3216,77 @@ class iControlDriver(object):
                 LOG.error(_('Could not communicate with all ' +
                             'iControl devices: %s' % exc.message))
 
+    def get_vcmp_host(self, bigip):
+        """Get vCMP Host associated with bigip (if any)"""
+        for vcmp_host in self.__vcmp_hosts:
+            for vcmp_guest in vcmp_host['guests']:
+                if vcmp_guest['mgmt_addr'] == bigip.icontrol.hostname:
+                    return vcmp_host
+        return None
+
+
+    def _init_vcmp_hosts(self):
+        """Initialize vCMP Hosts.  Includes establishing a bigip connection
+           to the vCMP host and determining associated vCMP Guests."""
+        if not self.conf.icontrol_vcmp_hostname:
+            # No vCMP Hosts. Check if any vCMP Guests exist.  Flag issue in log.
+            self.check_vcmp_host_assignments()
+            return
+
+        vcmp_hostnames = self.conf.icontrol_vcmp_hostname.split(',')
+        for vcmp_hostname in vcmp_hostnames:
+            # vCMP Host Attributes
+            vcmp_host = {}
+            vcmp_host['bigip'] = f5_bigip.BigIP(vcmp_hostname,
+                                                self.conf.icontrol_username,
+                                                self.conf.icontrol_password,
+                                                5)
+            vcmp_host['guests'] = []
+
+            # vCMP Guest Attributes
+            guest_names = vcmp_host['bigip'].system.sys_vcmp.get_list()
+            guest_mgmts = vcmp_host['bigip'].\
+                             system.sys_vcmp.get_management_address(guest_names)
+
+            for guest_name, guest_mgmt in zip(guest_names, guest_mgmts):
+                # Only add vCMP Guests with BIG-IP that has been registered
+                if guest_mgmt.address in self.__bigips:
+                    vcmp_guest = {}
+                    vcmp_guest['name'] = guest_name
+                    vcmp_guest['mgmt_addr'] = guest_mgmt.address
+                    vcmp_host['guests'].append(vcmp_guest)
+
+            self.__vcmp_hosts.append(vcmp_host)
+
+        self.check_vcmp_host_assignments()
+
+        # Output vCMP Hosts/Guests in log
+        for vcmp_host in self.__vcmp_hosts:
+            for vcmp_guest in vcmp_host['guests']:
+                LOG.debug(('vCMPHost[%s] vCMPGuest[%s] - mgmt: %s' % \
+                          (vcmp_host['bigip'].icontrol.hostname, \
+                           vcmp_guest['name'], vcmp_guest['mgmt_addr'])))
+
+
+    def check_vcmp_host_assignments(self):
+        """Check that all vCMP Guest bigips have a host assignment"""
+        LOG.debug(('Check registered bigips to ensure vCMP Guests ' \
+                    'have a vCMP host assignment'))
+
+        for bigip in self.__bigips.values():
+            system_info = bigip.system.sys_info.get_system_information()
+            if system_info.platform == 'Z101':
+                if self.get_vcmp_host(bigip):
+                    LOG.debug(('vCMP host found for vCMP Guest %s' % \
+                               bigip.icontrol.hostname))
+                else:
+                    LOG.error(('vCMP host not found for vCMP Guest %s' % \
+                               bigip.icontrol.hostname))
+            else:
+                LOG.debug(('BIG-IP %s is not a vCMP Guest' % \
+                             bigip.icontrol.hostname))
+
+
     def init_traffic_groups(self, bigip):
         bigip.system.set_folder(folder='/Common')
         self.__traffic_groups = bigip.cluster.mgmt_tg.get_list()
@@ -3136,3 +3349,11 @@ class iControlDriver(object):
             bigip.system.set_folder('/Common')
             bigip.cluster.save_base_config()
             bigip.cluster.save_service_config()
+
+def get_vcmp_guest(vcmp_host, bigip):
+    """Get vCMP Guest associated with bigip (if any)"""
+    for vcmp_guest in vcmp_host['guests']:
+        if vcmp_guest['mgmt_addr'] == bigip.icontrol.hostname:
+            return vcmp_guest
+    return None
+

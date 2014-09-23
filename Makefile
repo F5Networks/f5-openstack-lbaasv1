@@ -40,6 +40,7 @@ build/f5-bigip-lbaas-agent_$(VERSION)_all.deb:
 
 build/f5-lbaas-driver-$(VERSION).noarch.rpm:
 	(cd driver; \
+	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
 	python setup.py bdist_rpm; \
         ) 
 	mkdir -p build
@@ -47,6 +48,7 @@ build/f5-lbaas-driver-$(VERSION).noarch.rpm:
 
 build/f5-bigip-lbaas-agent-$(VERSION).noarch.rpm:
 	(cd agent; \
+	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
 	python setup.py bdist_rpm; \
 	)
 	mkdir -p build

@@ -22,6 +22,7 @@ class System(object):
         self.bigip.icontrol.add_interfaces(['System.Session',
                                             'System.Inet',
                                             'System.SystemInfo',
+                                            'System.VCMP',
                                             'Management.Folder',
                                             'Management.LicenseAdministration']
                                            )
@@ -30,6 +31,7 @@ class System(object):
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_inet = self.bigip.icontrol.System.Inet
         self.sys_info = self.bigip.icontrol.System.SystemInfo
+        self.sys_vcmp = self.bigip.icontrol.System.VCMP
         self.mgmt_folder = self.bigip.icontrol.Management.Folder
         self.mgmt_license = \
             self.bigip.icontrol.Management.LicenseAdministration
