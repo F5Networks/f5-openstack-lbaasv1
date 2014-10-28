@@ -1,14 +1,22 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 import os
 import logging
 import requests
+import socket
 
 from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
@@ -40,12 +48,7 @@ class BigIP(object):
                  strict_route_isolation=False):
         # get icontrol connection stub
         self.icontrol = self._get_icontrol(hostname, username, password)
-
-        self.icr_session = requests.session()
-        self.icr_session.auth = (username, password)
-        self.icr_session.verify = False
-        self.icr_session.headers.update(
-                                 {'Content-Type': 'application/json'})
+        self.icr_session = self._get_icr_session(hostname, username, password)
         self.icr_url = 'https://%s/mgmt/tm' % hostname
 
         if address_isolation:
@@ -68,6 +71,7 @@ class BigIP(object):
         else:
             system = System(self)
             self.interfaces['system'] = system
+            system.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return system
 
     @property
@@ -77,7 +81,19 @@ class BigIP(object):
         else:
             device = Device(self)
             self.interfaces['device'] = device
+            device.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return device
+
+    @property
+    def devicename(self):
+        if not self.devicename:
+            if 'device' in self.interfaces:
+                self.devicename = self.interfaces['device'].get_device_name()
+            else:
+                device = Device(self)
+                self.interfaces['device'] = device
+                self.devicename = device.get_device_name()
+        return self.devicename
 
     @property
     def cluster(self):
@@ -86,6 +102,7 @@ class BigIP(object):
         else:
             cluster = Cluster(self)
             self.interfaces['cluster'] = cluster
+            cluster.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return cluster
 
     @property
@@ -95,6 +112,7 @@ class BigIP(object):
         else:
             stat = Stat(self)
             self.interfaces['stat'] = stat
+            stat.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return stat
 
     @property
@@ -104,6 +122,7 @@ class BigIP(object):
         else:
             vlan = Vlan(self)
             self.interfaces['vlan'] = vlan
+            vlan.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return vlan
 
     @property
@@ -113,6 +132,7 @@ class BigIP(object):
         else:
             vxlan = VXLAN(self)
             self.interfaces['vxlan'] = vxlan
+            vxlan.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return vxlan
 
     @property
@@ -122,6 +142,7 @@ class BigIP(object):
         else:
             l2gre = L2GRE(self)
             self.interfaces['l2gre'] = l2gre
+            l2gre.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return l2gre
 
     @property
@@ -131,6 +152,7 @@ class BigIP(object):
         else:
             arp = ARP(self)
             self.interfaces['arp'] = arp
+            arp.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return arp
 
     @property
@@ -140,6 +162,7 @@ class BigIP(object):
         else:
             selfip = SelfIP(self)
             self.interfaces['selfip'] = selfip
+            selfip.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return selfip
 
     @property
@@ -149,6 +172,7 @@ class BigIP(object):
         else:
             snat = SNAT(self)
             self.interfaces['snat'] = snat
+            snat.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return snat
 
     @property
@@ -158,6 +182,7 @@ class BigIP(object):
         else:
             nat = NAT(self)
             self.interfaces['nat'] = nat
+            nat.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return nat
 
     @property
@@ -167,6 +192,7 @@ class BigIP(object):
         else:
             route = Route(self)
             self.interfaces['route'] = route
+            route.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return route
 
     @property
@@ -176,6 +202,7 @@ class BigIP(object):
         else:
             rule = Rule(self)
             self.interfaces['rule'] = rule
+            rule.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return rule
 
     @property
@@ -185,6 +212,7 @@ class BigIP(object):
         else:
             virtual_server = VirtualServer(self)
             self.interfaces['virtual_server'] = virtual_server
+            virtual_server.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return virtual_server
 
     @property
@@ -194,6 +222,7 @@ class BigIP(object):
         else:
             monitor = Monitor(self)
             self.interfaces['monitor'] = monitor
+            monitor.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return monitor
 
     @property
@@ -203,6 +232,7 @@ class BigIP(object):
         else:
             pool = Pool(self)
             self.interfaces['pool'] = pool
+            pool.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return pool
 
     def set_timeout(self, timeout):
@@ -239,6 +269,11 @@ class BigIP(object):
         else:
             return None
 
+    def icr_link(self, selfLink):
+        return selfLink.replace(
+                          'https://localhost/mgmt/tm',
+                          self.icr_url)
+
     def decorate_folder(self, folder='Common'):
         folder = str(folder).replace('/', '')
         return bigip_interfaces.prefixed(folder)
@@ -274,6 +309,19 @@ class BigIP(object):
             icontrol.set_timeout(const.CONNECTION_TIMEOUT)
 
         return icontrol
+
+    @staticmethod
+    def _get_icr_session(hostname, username, password, timeout=None):
+        icr_session = requests.session()
+        icr_session.auth = (username, password)
+        icr_session.verify = False
+        icr_session.headers.update(
+                                 {'Content-Type': 'application/json'})
+        if timeout:
+            socket.setdefaulttimeout(timeout)
+        else:
+            socket.setdefaulttimeout(const.CONNECTION_TIMEOUT)
+        return icr_session
 
     @staticmethod
     def ulong_to_int(ulong_64):

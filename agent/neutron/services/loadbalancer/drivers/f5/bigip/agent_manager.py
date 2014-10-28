@@ -1,10 +1,17 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 import weakref
 import datetime
@@ -64,10 +71,15 @@ OPTS = [
         help=_('Interface and VLAN for the VTEP overlay network')
     ),
     cfg.StrOpt(
-        'f5_static_agent_configuration_data',
+        'static_agent_configuration_data',
         default=None,
         help=_(
     'static name:value entries to add to the agent configurations dictionary')
+    ),
+    cfg.IntOpt(
+        'service_resync_interval',
+        default=300,
+        help=_('Number of seconds between service refresh check')
     )
 ]
 
@@ -162,11 +174,18 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         self.needs_resync = False
         self.plugin_rpc = None
 
+        if conf.service_resync_interval:
+            self.service_resync_interval = conf.service_resync_interval
+        else:
+            self.service_resync_interval = constants.RESYNC_INTERVAL
+        LOG.debug('setting service resync interval to %d seconds'
+                                      % self.service_resync_interval)
+
         try:
-            self.driver = importutils.import_object(
+            self.lbdriver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
-            if self.driver.agent_id:
-                self.agent_host = conf.host + ":" + self.driver.agent_id
+            if self.lbdriver.agent_id:
+                self.agent_host = conf.host + ":" + self.lbdriver.agent_id
                 LOG.debug('setting agent host to %s' % self.agent_host)
             else:
                 self.agent_host = None
@@ -180,9 +199,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         agent_configurations = \
                {'global_routed_mode': self.conf.f5_global_routed_mode}
 
-        if self.conf.f5_static_agent_configuration_data:
+        if self.conf.static_agent_configuration_data:
             entries = \
-              str(self.conf.f5_static_agent_configuration_data).split(',')
+              str(self.conf.static_agent_configuration_data).split(',')
             for entry in entries:
                 nv = entry.strip().split(':')
                 if len(nv) > 1:
@@ -201,7 +220,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
         self.context = context.get_admin_context_without_session()
         # pass context to driver
-        self.driver.context = self.context
+        self.lbdriver.context = self.context
 
         # setup all rpc and callback objects
         self._setup_rpc()
@@ -218,7 +237,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             self.context,
             self.agent_host
         )
-        self.driver.plugin_rpc = self.plugin_rpc
+        self.lbdriver.plugin_rpc = self.plugin_rpc
 
         # Agent state Callbacks API
         self.state_rpc = agent_rpc.PluginReportStateAPI(
@@ -231,11 +250,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
         if not self.conf.f5_global_routed_mode:
             # Core plugin Callbacks API
-            self.driver.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
+            self.lbdriver.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
 
             # L2 Populate plugin Callbacks API
             if self.conf.l2_population:
-                self.driver.l2pop_rpc = agent_api.L2PopulationApi()
+                self.lbdriver.l2pop_rpc = agent_api.L2PopulationApi()
 
             # Besides LBaaS Plugin calls... what else to consume
 
@@ -250,26 +269,31 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             # learn about port updates.
             if self.conf.l2_population:
                 consumers.append([topics.L2POPULATION,
-                                  topics.UPDATE, cfg.CONF.host])
+                                  topics.UPDATE,
+                                  self.agent_host])
 
-            agent_rpc.create_consumers(dispatcher.RpcDispatcher([self]),
-                           plugin_driver.TOPIC_LOADBALANCER_AGENT,
-                           consumers)
+            self.dispatcher = dispatcher.RpcDispatcher([self])
+
+            LOG.debug(_('registering to %s consumer on RPC topic: %s'
+                        % (consumers, topics.AGENT)))
+            self.connection = agent_rpc.create_consumers(self.dispatcher,
+                                                         topics.AGENT,
+                                                         consumers)
 
     def _report_state(self):
         try:
             # assure agent is connected:
-            if not self.driver.connected:
-                self.driver._init_connection()
+            if not self.lbdriver.connected:
+                self.lbdriver._init_connection()
 
             service_count = len(self.cache.services)
             self.agent_state['configurations']['services'] = service_count
-            if hasattr(self.driver, 'service_queue'):
+            if hasattr(self.lbdriver, 'service_queue'):
                 self.agent_state['configurations']['request_queue_depth'] = \
-                      len(self.driver.service_queue)
-            if self.driver.agent_configurations:
+                      len(self.lbdriver.service_queue)
+            if self.lbdriver.agent_configurations:
                 self.agent_state['configurations'].update(
-                                             self.driver.agent_configurations)
+                                    self.lbdriver.agent_configurations)
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)
@@ -283,10 +307,14 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def periodic_resync(self, context):
         now = datetime.datetime.now()
         if (now - self.last_resync).seconds > \
-                            constants.RESYNC_INTERVAL:
-            LOG.debug('forcing resync of services on timer.')
+                            self.service_resync_interval:
+            LOG.debug(
+                'Forcing resync of services on resync timer (%d seconds).'
+                % self.service_resync_interval)
+            self.cache = LogicalServiceCache()
             self.needs_resync = True
             self.last_resync = now
+            self.lbdriver.flush_cache()
         # resync if we need to
         if self.needs_resync:
             self.needs_resync = False
@@ -303,7 +331,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         LOG.debug('collecting stats on pools: %s' % pool_ids)
         for pool_id in pool_ids:
             try:
-                stats = self.driver.get_stats(
+                stats = self.lbdriver.get_stats(
                         self.plugin_rpc.get_service_by_pool_id(pool_id,
                                         self.conf.f5_global_routed_mode))
                 if stats:
@@ -314,10 +342,10 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
 
     @periodic_task.periodic_task(spacing=600)
     def backup_configuration(self, context):
-        self.driver.backup_configuration()
+        self.lbdriver.backup_configuration()
 
     def tunnel_sync(self):
-        return self.driver.tunnel_sync()
+        return self.lbdriver.tunnel_sync()
 
     def sync_state(self):
         if not self.plugin_rpc:
@@ -343,8 +371,8 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         except Exception:
             LOG.exception(_('Unable to retrieve ready services'))
             resync = True
-        return resync
         self.remove_orphans()
+        return resync
 
     @log.log
     def validate_service(self, pool_id):
@@ -353,11 +381,11 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                         self.conf.f5_global_routed_mode)
-            if not self.driver.exists(service):
+            if not self.lbdriver.exists(service):
                 LOG.error(_('active pool %s is not on BIG-IP.. syncing'
                             % pool_id))
                 # update is create or update
-                self.driver.sync(service)
+                self.lbdriver.sync(service)
             self.cache.put(service)
         except Exception:
             LOG.exception(_('Unable to validate service for pool: %s'),
@@ -371,7 +399,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                          self.conf.f5_global_routed_mode)
             # update is create or update
-            self.driver.sync(service)
+            self.lbdriver.sync(service)
             self.cache.put(service)
         except Exception:
             LOG.exception(_('Unable to refresh service for pool: %s'),
@@ -387,8 +415,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         if not service:
             return
         try:
-            self.driver.delete_pool(pool_id,
-                                    service)
+            self.lbdriver.delete_pool(pool_id, service)
             self.plugin_rpc.pool_destroyed(pool_id)
         except Exception:
             LOG.exception(_('Unable to destroy service for pool: %s'),
@@ -399,7 +426,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     @log.log
     def remove_orphans(self):
         try:
-            self.driver.remove_orphans(self.cache.get_pool_ids())
+            self.lbdriver.remove_orphans(set(self.cache.services))
         except NotImplementedError:
             pass  # Not all drivers will support this
 
@@ -415,7 +442,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         if not self.plugin_rpc:
             return
         try:
-            stats = self.driver.get_stats(pool, service)
+            stats = self.lbdriver.get_stats(pool, service)
             if stats:
                     self.plugin_rpc.update_pool_stats(pool['id'], stats)
         except Exception as e:
@@ -428,7 +455,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def create_vip(self, context, vip, service):
         """Handle RPC cast from plugin to create_vip"""
         try:
-            self.driver.create_vip(vip, service)
+            self.lbdriver.create_vip(vip, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not create VIP:' + e.message
@@ -440,7 +467,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def update_vip(self, context, old_vip, vip, service):
         """Handle RPC cast from plugin to update_vip"""
         try:
-            self.driver.update_vip(old_vip, vip, service)
+            self.lbdriver.update_vip(old_vip, vip, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not update VIP: ' + e.message
@@ -452,7 +479,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def delete_vip(self, context, vip, service):
         """Handle RPC cast from plugin to delete_vip"""
         try:
-            self.driver.delete_vip(vip, service)
+            self.lbdriver.delete_vip(vip, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not delete VIP:' + e.message
@@ -464,7 +491,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def create_pool(self, context, pool, service):
         """Handle RPC cast from plugin to create_pool"""
         try:
-            self.driver.create_pool(pool, service)
+            self.lbdriver.create_pool(pool, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not create pool:' + e.message
@@ -476,7 +503,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def update_pool(self, context, old_pool, pool, service):
         """Handle RPC cast from plugin to update_pool"""
         try:
-            self.driver.update_pool(old_pool, pool, service)
+            self.lbdriver.update_pool(old_pool, pool, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not update pool:' + e.message
@@ -488,7 +515,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def delete_pool(self, context, pool, service):
         """Handle RPC cast from plugin to delete_pool"""
         try:
-            self.driver.delete_pool(pool, service)
+            self.lbdriver.delete_pool(pool, service)
             self.cache.remove_by_pool_id(pool['id'])
         except Exception as e:
             message = 'could not delete pool:' + e.message
@@ -500,7 +527,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def create_member(self, context, member, service):
         """Handle RPC cast from plugin to create_member"""
         try:
-            self.driver.create_member(member, service)
+            self.lbdriver.create_member(member, service)
             self.cache.put(service)
         except IOError as e:
             message = 'could not create member:' + e.message
@@ -512,7 +539,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def update_member(self, context, old_member, member, service):
         """Handle RPC cast from plugin to update_member"""
         try:
-            self.driver.update_member(old_member, member, service)
+            self.lbdriver.update_member(old_member, member, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not update member:' + e.message
@@ -524,7 +551,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     def delete_member(self, context, member, service):
         """Handle RPC cast from plugin to delete_member"""
         try:
-            self.driver.delete_member(member, service)
+            self.lbdriver.delete_member(member, service)
             self.cache.put(service)
         except Exception as e:
             message = 'could not delete member:' + e.message
@@ -537,7 +564,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                    pool, service):
         """Handle RPC cast from plugin to create_pool_health_monitor"""
         try:
-            self.driver.create_pool_health_monitor(health_monitor,
+            self.lbdriver.create_pool_health_monitor(health_monitor,
                                                    pool, service)
             self.cache.put(service)
         except Exception as e:
@@ -553,7 +580,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                               health_monitor, pool, service):
         """Handle RPC cast from plugin to update_health_monitor"""
         try:
-            self.driver.update_health_monitor(old_health_monitor,
+            self.lbdriver.update_health_monitor(old_health_monitor,
                                                  health_monitor,
                                                  pool, service)
             self.cache.put(service)
@@ -570,7 +597,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                    pool, service):
         """Handle RPC cast from plugin to delete_pool_health_monitor"""
         try:
-            self.driver.delete_pool_health_monitor(health_monitor,
+            self.lbdriver.delete_pool_health_monitor(health_monitor,
                                                       pool, service)
         except Exception as e:
             message = 'could not delete health monitor:' + e.message
@@ -592,17 +619,39 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             LOG.info(_("agent_updated by server side %s!"), payload)
 
     @log.log
-    def tunnel_update(self, context, tunnel_ip, tunnel_id, tunnel_type):
-        pass
+    def tunnel_update(self, context, **kwargs):
+        """Handle RPC cast from core to update tunnel definitions"""
+        try:
+            LOG.debug(_('received tunnel_update: %s' % kwargs))
+        except Exception as e:
+            LOG.error(_('could not update tunnel:' + e.message))
 
     @log.log
-    def fdb_add(self, context, fdb_entries):
-        pass
+    def add_fdb_entries(self, context, fdb_entries, host=None):
+        """Handle RPC cast from core to update tunnel definitions"""
+        try:
+            LOG.debug(_('received add_fdb_entries: %s host: %s'
+                        % (fdb_entries, host)))
+            self.lbdriver.fdb_add(fdb_entries)
+        except Exception as e:
+            LOG.error(_('could not add fdb entries:' + e.message))
 
     @log.log
-    def fdb_remove(self, context, fdb_entries):
-        pass
+    def remove_fdb_entries(self, context, fdb_entries, host=None):
+        """Handle RPC cast from core to update tunnel definitions"""
+        try:
+            LOG.debug(_('received remove_fdb_entries: %s host: %s'
+                        % (fdb_entries, host)))
+            self.lbdriver.fdb_remove(fdb_entries)
+        except Exception as e:
+            LOG.error(_('could not remove fdb entries:' + e.message))
 
     @log.log
-    def fdb_update(self, context, fdb_entries):
-        pass
+    def update_fdb_entries(self, context, fdb_entries, host=None):
+        """Handle RPC cast from core to update tunnel definitions"""
+        try:
+            LOG.debug(_('received update_fdb_entries: %s host: %s'
+                        % (fdb_entries, host)))
+            self.lbdriver.fdb_update(fdb_entries)
+        except Exception as e:
+            LOG.error(_('could not update tunnel:' + e.message))

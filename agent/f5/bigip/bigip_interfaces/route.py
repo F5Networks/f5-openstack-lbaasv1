@@ -1,168 +1,299 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 from f5.common.logger import Log
+from f5.common import constants as const
 from f5.bigip.bigip_interfaces import domain_address
-from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.bigip.bigip_interfaces import icontrol_rest_folder
+from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+from f5.bigip import exceptions
+from f5.bigip.bigip_interfaces import log
 
-from suds import WebFault
-import netaddr
+import json
 
 
 class Route(object):
     def __init__(self, bigip):
         self.bigip = bigip
-        # add iControl interfaces if they don't exist yet
-        self.bigip.icontrol.add_interfaces(['Networking.RouteTableV2',
-                                            'Networking.RouteDomainV2'])
-
-        # iControl helper objects
-        self.net_route = self.bigip.icontrol.Networking.RouteTableV2
-        self.net_domain = self.bigip.icontrol.Networking.RouteDomainV2
+        self.domain_index = {'Common': 0}
 
     @domain_address
+    @icontrol_rest_folder
+    @log
     def create(self, name=None, dest_ip_address=None, dest_mask=None,
                gw_ip_address=None, folder='Common'):
-        if not self.exists(name=None, folder=folder) and \
-           netaddr.IPAddress(dest_ip_address) and \
-           netaddr.IPAddress(gw_ip_address):
-            dest = self.net_route.typefactory.create(
-                    'Networking.RouteTableV2.RouteDestination')
-            dest.address = dest_ip_address
-            dest.netmask = dest_mask
-            attr = self.net_route.typefactory.create(
-                    'Networking.RouteTableV2.RouteAttribute')
-            attr.gateway = gw_ip_address
-            try:
-                self.net_route2.create_static_route([name], [dest], [attr])
+        if dest_ip_address and dest_mask and gw_ip_address:
+            folder = str(folder).replace('/', '')
+            self.bigip.system.set_rest_folder(folder)
+            payload = dict()
+            payload['name'] = name
+            payload['partition'] = folder
+            payload['gw'] = gw_ip_address
+            payload['network'] = dest_ip_address + "/" + dest_mask
+            request_url = self.bigip.icr_url + '/net/route/'
+            response = self.bigip.icr_session.post(request_url,
+                            data=json.dumps(payload),
+                            timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
                 return True
-            except WebFault as wf:
-                if "already exists in partition" in str(wf.message):
-                    Log.error('Route',
-                              'tried to create a Route when exists')
-                    return False
-                else:
-                    raise wf
-        else:
-            return False
+            elif response.status_code == 409:
+                return True
+            else:
+                Log.error('route', response.text)
+                raise exceptions.RouteCreationException(response.text)
+        return False
 
+    @icontrol_rest_folder
+    @log
     def delete(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
-            self.net_route2.delete_static_route([name])
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/net/route/'
+        request_url += '~' + folder + '~' + name
+
+        response = self.bigip.icr_session.delete(request_url,
+                               timeout=const.CONNECTION_TIMEOUT)
+
+        if response.status_code < 400:
+            return True
+        elif response.status_code == 404:
             return True
         else:
-            return False
+            Log.error('route', response.text)
+            raise exceptions.RouteDeleteException(response.text)
+        return False
 
-    def get_vlans_in_domain(self, folder='Common'):
-        try:
-            return self.net_domain.get_vlan([self._get_domain_name(folder)])[0]
-        except WebFault as wf:
-            Log.error('Route',
-                      'Error getting vlans in rt domain %s: %s' %
-                      (self._get_domain_name(folder), str(wf.message)))
-            raise wf
+    @icontrol_rest_folder
+    @log
+    def delete_all(self, folder='Common'):
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/net/route/'
+        request_url += '?$select=name,selfLink'
+        request_filter = 'partition eq ' + folder
+        request_url += '&$filter=' + request_filter
+        response = self.bigip.icr_session.get(request_url,
+                             timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                for item in response_obj['items']:
+                    if item['name'].startswith(self.OBJ_PREFIX):
+                        response = self.bigip.icr_session.delete(
+                                       self.bigip.icr_link(item['selfLink']),
+                                       timeout=const.CONNECTION_TIMEOUT)
+                        if response.status_code > 400 and \
+                           response.status_code != 404:
+                            Log.error('route', response.text)
+                            raise exceptions.RouteDeleteException(
+                                                                response.text)
+            return True
+        else:
+            Log.error('route', response.text)
+            raise exceptions.RouteQueryException(response.text)
+        return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
+    def _get_vlans_in_domain(self, folder='Common'):
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + \
+                      '/net/route-domain?$select=name,partition,vlans'
+        if folder:
+            request_filter = 'partition eq ' + folder
+            request_url += '&$filter=' + request_filter
+        response = self.bigip.icr_session.get(request_url,
+                                    timeout=const.CONNECTION_TIMEOUT)
+
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                vlans = []
+                folder = str(folder).replace('/', '')
+                for route_domain in response_obj['items']:
+                    if route_domain['name'] == folder:
+                        if 'vlans' in route_domain:
+                            for vlan in route_domain['vlans']:
+                                vlans.append(vlan)
+                return vlans
+            return []
+        else:
+            if response.status_code != 404:
+                Log.error('route-domain', response.text)
+                raise exceptions.RouteQueryException(response.text)
+        return []
+
+    @icontrol_rest_folder
+    @log
     def add_vlan_to_domain(self, name=None, folder='Common'):
-        if not name in self.get_vlans_in_domain(folder):
-            rd_entry_seq = self.net_domain.typefactory.create(
-                                            'Common.StringSequence')
-            rd_entry_seq.values = [name]
-            rd_entry_seq_seq = self.net_domain.typefactory.create(
-                                            'Common.StringSequenceSequence')
-            rd_entry_seq_seq.values = [rd_entry_seq]
-            self.net_domain.add_vlan([self._get_domain_name(folder)],
-                                     rd_entry_seq_seq)
-            return True
+        folder = str(folder).replace('/', '')
+        existing_vlans = self._get_vlans_in_domain(folder)
+        if not name in existing_vlans:
+            existing_vlans.append(name)
+            vlans = dict()
+            vlans['vlans'] = existing_vlans
+            request_url = self.bigip.icr_url + '/net/route-domain/'
+            request_url += '~' + folder + '~' + folder
+            response = self.bigip.icr_session.put(request_url,
+                                   data=json.dumps(vlans),
+                                   timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            else:
+                Log.error('route-domain', response.text)
+                raise exceptions.RouteUpdateException(response.text)
+        return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
+    def remove_vlan_from_domain(self, name=None, folder='Common'):
+        folder = str(folder).replace('/', '')
+        existing_vlans = self._get_vlans_in_domain(folder)
+        if name in existing_vlans:
+            existing_vlans.remove(name)
+            vlans = dict()
+            vlans['vlans'] = existing_vlans
+            request_url = self.bigip.icr_url + '/net/route-domain/'
+            request_url += '~' + folder + '~' + folder
+            response = self.bigip.icr_session.put(request_url,
+                                   data=json.dumps(vlans),
+                                   timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            else:
+                Log.error('route-domain', response.text)
+                raise exceptions.RouteUpdateException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
     def create_domain(self, folder='Common'):
-        return self._create_domain(folder)
+        folder = str(folder).replace('/', '')
+        if not folder == 'Common':
+            payload = dict()
+            payload['name'] = folder
+            payload['partition'] = '/' + folder
+            payload['id'] = self._get_next_domain_id()
+            if self.bigip.strict_route_isolation:
+                payload['strict'] = 'enabled'
+            else:
+                payload['strict'] = 'disabled'
+                payload['parent'] = '/Common/0'
+            request_url = self.bigip.icr_url + '/net/route-domain/'
+            response = self.bigip.icr_session.post(request_url,
+                                    data=json.dumps(payload),
+                                    timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            elif response.status_code == 409:
+                return True
+            else:
+                Log.error('route-domain', response.text)
+                raise exceptions.RouteCreationException(response.text)
+            return False
+        return False
 
-    def _create_domain(self, folder='Common'):
-        ids = [self._get_next_domain_id()]
-        domains = [self._get_domain_name(folder)]
-        self.net_domain.create(domains, ids, [[]])
-        if self.bigip.strict_route_isolation:
-            strict_state = self.net_domain.typefactory.create(
-                                    'Common.EnabledState').STATE_ENABLED
-            self.net_domain.set_strict_state(domains, [strict_state])
-        else:
-            strict_state = self.net_domain.typefactory.create(
-                                    'Common.EnabledState').STATE_DISABLED
-            self.net_domain.set_strict_state(domains, [strict_state])
-            self.net_domain.set_parent(domains, ['/Common/0'])
-        return ids[0]
-
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def delete_domain(self, folder='Common'):
-        if self.domain_exists(folder=folder):
-            try:
-                domains = [self._get_domain_name(folder)]
-                self.net_domain.delete_route_domain(domains)
-            except WebFault as wf:
-                if "is referenced" in str(wf.message):
-                    Log.error('Route', 'delete route domain %s failed %s'
-                              % (folder, wf.message))
-                    return False
-                elif "All objects must be removed" in str(wf.message):
-                    Log.error('Route', 'delete route domain %s failed %s'
-                              % (folder, wf.message))
-                    return False
-                else:
-                    raise wf
-            return True
-        else:
-            return False
+        folder = str(folder).replace('/', '')
+        if not folder == 'Common':
+            request_url = self.bigip.icr_url + '/net/route-domain/'
+            request_url += '~' + folder + '~' + folder
+            response = self.bigip.icr_session.delete(request_url,
+                                  timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            elif response.status_code != 404:
+                Log.error('route-domain', response.text)
+                raise exceptions.RouteDeleteException(response.text)
+        return True
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def domain_exists(self, folder='Common'):
-        return self._domain_exists(folder)
-
-    def _domain_exists(self, folder='Common'):
-        domain_name = self._get_domain_name(folder)
-        all_route_domains = self.net_domain.get_list()
-        if domain_name in all_route_domains:
+        folder = str(folder).replace('/', '')
+        if folder == 'Common':
             return True
-        else:
-            return False
+        request_url = self.bigip.icr_url + '/net/route-domain/'
+        request_url += '~' + folder + '~' + folder
+        request_url += '?$select=name'
 
-    @icontrol_folder
+        response = self.bigip.icr_session.get(request_url,
+                             timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return True
+        elif response.status_code != 404:
+            Log.error('route', response.text)
+            raise exceptions.RouteQueryException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
     def get_domain(self, folder='Common'):
-        try:
-            return self.net_domain.get_identifier(
-                 [self._get_domain_name(folder)])[0]
-        except WebFault as wf:
-            if "was not found" in str(wf.message):
-                return self.create_domain(folder)
+        folder = str(folder).replace('/', '')
+        if folder == 'Common':
+            return 0
+        if folder in self.domain_index:
+            return self.domain_index[folder]
+        else:
+            request_url = self.bigip.icr_url + '/net/route-domain/'
+            request_url += '~' + folder + '~' + folder
+            request_url += '?$select=id'
+            response = self.bigip.icr_session.get(request_url,
+                                      timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                response_obj = json.loads(response.text)
+                if 'id' in response_obj:
+                    self.domain_index[folder] = int(response_obj['id'])
+                    return self.domain_index[folder]
+            elif response.status_code != 404:
+                Log.error('route-domain', response.text)
+                raise exceptions.RouteQueryException(response.text)
+            return 0
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def exists(self, name=None, folder='Common'):
-        if name in self.net_route2.get_static_route_list():
-            return True
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/net/route/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
 
-    def _get_domain_name(self, folder='Common'):
-        folder = folder.replace('/', '')
-        return '/' + folder + '/' + folder
+        response = self.bigip.icr_session.get(request_url,
+                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return True
+        elif response.status_code != 404:
+            Log.error('route', response.text)
+            raise exceptions.RouteQueryException(response.text)
+        return False
 
     def _get_next_domain_id(self):
-        self.bigip.system.set_folder('/')
-        self.bigip.system.sys_session.set_recursive_query_state(1)
-        all_route_domains = self.net_domain.get_list()
-        if len(all_route_domains) > 1:
-            all_identifiers = sorted(
-                self.net_domain.get_identifier(all_route_domains))
-            self.bigip.system.set_folder('Common')
-            self.bigip.system.sys_session.set_recursive_query_state(0)
+        request_url = self.bigip.icr_url + '/net/route-domain?$select=id'
+        response = self.bigip.icr_session.get(request_url,
+                              timeout=const.CONNECTION_TIMEOUT)
+        all_identifiers = []
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                for route_domain in response_obj['items']:
+                    all_identifiers.append(int(route_domain['id']))
+                all_identifiers = sorted(all_identifiers)
+                all_identifiers.remove(0)
         else:
-            self.bigip.system.set_folder('Common')
-            self.bigip.system.sys_session.set_recursive_query_state(0)
-            return 1
+            raise exceptions.RouteQueryException(response.text)
+
         lowest_available_index = 1
         for i in range(len(all_identifiers)):
             if all_identifiers[i] < lowest_available_index:
@@ -171,5 +302,7 @@ class Route(object):
                         return lowest_available_index
                     else:
                         lowest_available_index = lowest_available_index + 1
+            elif all_identifiers[i] == lowest_available_index:
+                lowest_available_index = lowest_available_index + 1
         else:
             return lowest_available_index

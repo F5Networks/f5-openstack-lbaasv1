@@ -1,12 +1,20 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 from f5.common import constants as const
+from f5.bigip.bigip_interfaces import log
 
 import time
 
@@ -23,6 +31,7 @@ class Stat(object):
         self.sys_info = self.bigip.icontrol.System.SystemInfo
         self.sys_stat = self.bigip.icontrol.System.Statistics
 
+    @log
     def get_composite_score(self):
         cpu_score = self.get_cpu_health_score() * \
                     const.DEVICE_HEALTH_SCORE_CPU_WEIGHT
@@ -38,6 +47,7 @@ class Stat(object):
         return int((cpu_score + mem_score + cps_score) / total_weight)
 
     # returns percentage of TMM memory currently in use
+    @log
     def get_mem_health_score(self):
         # use TMM memory usage for memory health
         stat_type = self.sys_stat.typefactory.create(
@@ -57,6 +67,7 @@ class Stat(object):
         else:
             return 0
 
+    @log
     def get_cpu_health_score(self):
         cpu_stats = self.sys_info.get_cpu_usage_information()
         used_cycles = 1
@@ -71,6 +82,7 @@ class Stat(object):
                 (100 * (float(used_cycles) / float(idle_cycles))))
         return score
 
+    @log
     def get_cps_health_score(self):
         count_init = self._get_tcp_accepted_count()
         time.sleep(const.DEVICE_HEALTH_SCORE_CPS_PERIOD)

@@ -1,94 +1,180 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 from f5.common.logger import Log
-from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.common import constants as const
 from f5.bigip.bigip_interfaces import icontrol_rest_folder
+from f5.bigip import exceptions
+from f5.bigip.bigip_interfaces import log
 
-from suds import WebFault
+import json
 
 
 class Rule(object):
     def __init__(self, bigip):
         self.bigip = bigip
 
-        # add iControl interfaces if they don't exist yet
-        self.bigip.icontrol.add_interface('LocalLB.Rule')
-
-        # iControl helper objects
-        self.lb_rule = self.bigip.icontrol.LocalLB.Rule
-
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def create(self, name=None, rule_definition=None, folder='Common'):
-        if not self.exists(name=name, folder=folder):
-            rule_def = self.lb_rule.typefactory.create(
-                                        'LocalLB.Rule.RuleDefinition')
-            rule_def.rule_name = name
-            rule_def.rule_definition = rule_definition
-            try:
-                self.lb_rule.create([rule_def])
+        if name and rule_definition:
+            folder = str(folder).replace('/', '')
+            self.bigip.system.set_rest_folder(folder)
+            payload = dict()
+            payload['name'] = name
+            payload['partition'] = folder
+            payload['apiAnonymous'] = rule_definition
+            request_url = self.bigip.icr_url + '/ltm/rule/'
+            response = self.bigip.icr_session.post(request_url,
+                            data=json.dumps(payload),
+                            timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
                 return True
-            except WebFault as wf:
-                if "already exists in partition" in str(wf.message):
-                    Log.error('Rule',
-                              'tried to create a Rule when exists')
-                    self.update(name=name,
-                                rule_definition=rule_definition,
-                                folder=folder)
-                    return True
-                else:
-                    raise wf
-        else:
-            return False
-
-    @icontrol_folder
-    def update(self, name=None, rule_definition=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
-            rule_def = self.lb_rule.typefactory.create(
-                                        'LocalLB.Rule.RuleDefinition')
-            rule_def.rule_name = name
-            rule_def.rule_definition = rule_definition
-            self.lb_rule.modify_rule([rule_def])
-            return True
-        else:
-            return False
-
-    @icontrol_folder
-    def delete(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
-            try:
-                self.lb_rule.delete_rule([name])
-            except WebFault as wf:
-                if "is in use" in str(wf.message):
-                    return False
-            return True
-        else:
-            return False
-
-    @icontrol_folder
-    def get_rule(self, name=None, folder='Common'):
-        if self.exists(name=name, folder=folder):
-            return self.lb_rule.query_rule([name])[0]
-        else:
-            return False
+            elif response.status_code == 409:
+                return True
+            else:
+                Log.error('rule', response.text)
+                raise exceptions.RuleCreationException(response.text)
+        return False
 
     @icontrol_rest_folder
+    @log
+    def update(self, name=None, rule_definition=None, folder='Common'):
+        if name and rule_definition:
+            folder = str(folder).replace('/', '')
+            request_url = self.bigip.icr_url + '/ltm/rule/'
+            request_url += '~' + folder + '~' + name
+            payload = dict()
+            payload['apiAnonymous'] = rule_definition
+            response = self.bigip.icr_session.put(request_url,
+                            data=json.dumps(payload),
+                            timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            else:
+                Log.error('rule', response.text)
+                raise exceptions.RuleUpdateException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def delete(self, name=None, folder='Common'):
+        if name:
+            folder = str(folder).replace('/', '')
+            request_url = self.bigip.icr_url + '/ltm/rule/'
+            request_url += '~' + folder + '~' + name
+            response = self.bigip.icr_session.delete(request_url,
+                                   timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            elif response.status_code == 404:
+                return True
+            else:
+                Log.error('rule', response.text)
+                raise exceptions.RouteDeleteException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def delete_like(self, match=None, folder='Common'):
+        if match:
+            folder = str(folder).replace('/', '')
+            request_url = self.bigip.icr_url + '/ltm/rule/'
+            request_url += '?$select=name,selfLink'
+            request_filter = 'partition eq ' + folder
+            request_url += '&$filter=' + request_filter
+            response = self.bigip.icr_session.get(request_url,
+                                    timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                response_obj = json.loads(response.text)
+                if 'items' in response_obj:
+                    for item in response_obj['items']:
+                        if item['name'].find(match) > -1:
+                            response = self.bigip.icr_session.delete(
+                                    self.bigip.icr_link(item['selfLink']),
+                                    timeout=const.CONNECTION_TIMEOUT)
+                            if response.status_code > 400 and \
+                               response.status_code != 404:
+                                Log.error('rule', response.text)
+                                raise exceptions.RuleDeleteException(
+                                                            response.text)
+                return True
+            elif response.status_code != 404:
+                Log.error('rule', response.text)
+                raise exceptions.RuleQueryException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def delete_all(self, folder='Common'):
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/ltm/rule/'
+        request_url += '?$select=name,selfLink'
+        request_filter = 'partition eq ' + folder
+        request_url += '&$filter=' + request_filter
+        response = self.bigip.icr_session.get(request_url,
+                                timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                for item in response_obj['items']:
+                    if item['name'].startswith(self.OBJ_PREFIX):
+                        response = self.bigip.icr_session.delete(
+                                       self.bigip.icr_link(item['selfLink']),
+                                       timeout=const.CONNECTION_TIMEOUT)
+                        if response.status_code > 400 and \
+                           response.status_code != 404:
+                            Log.error('rule', response.text)
+                            raise exceptions.RuleDeleteException(response.text)
+            return True
+        elif response.status_code != 404:
+            Log.error('rule', response.text)
+            raise exceptions.RuleQueryException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def get_rule(self, name=None, folder='Common'):
+        if name:
+            folder = str(folder).replace('/', '')
+            request_url = self.bigip.icr_url + '/ltm/rule/'
+            request_url += '~' + folder + '~' + name
+            request_url += '?$select=apiAnonymous'
+            response = self.bigip.icr_session.get(request_url,
+                                 timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                response_obj = json.loads(response.text)
+                if 'apiAnonymous' in response_obj:
+                    return response_obj['apiAnonymous']
+            elif response.status_code != 404:
+                Log.error('rule', response.text)
+                raise exceptions.RuleQueryException(response.text)
+        return None
+
+    @icontrol_rest_folder
+    @log
     def exists(self, name=None, folder='Common'):
+        folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/rule/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url)
+        response = self.bigip.icr_session.get(request_url,
+                             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
-        else:
-            return False
-
-        #for rule_name in self.lb_rule.get_list():
-        #    if rule_name == name:
-        #        return True
-        #return False
+        elif response.status_code != 404:
+            Log.error('rule', response.text)
+            raise exceptions.RuleQueryException(response.text)
+        return False

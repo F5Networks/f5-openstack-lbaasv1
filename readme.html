@@ -1,13 +1,20 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
 "http://www.w3.org/TR/html4/strict.dtd">
 <!-- 
-#-------------------------------------------------------------------------------
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-# 
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-#-------------------------------------------------------------------------------
+# Copyright 2014 F5 Networks Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 -->
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 	<head>
@@ -207,9 +214,9 @@
 | admin_state_up            | True                                 |
 | id                        | 07f92400-4bb6-4ebc-9b5e-eb8ffcd5b34c |
 | name                      | Provider-VLAN-62                     |
-| <b>provider:network_type</b>     | vlan                                 |
-| <b>provider:physical_network</b> | ph-eth3                              |
-| <b>provider:segmentation_id</b>  | 62                                   |
+| <b>provider:network_type</b>      | vlan                                 |
+| <b>provider:physical_network</b>  | ph-eth3                              |
+| <b>provider:segmentation_id</b>   | 62                                   |
 | router:external           | False                                |
 | shared                    | True                                 |
 | status                    | ACTIVE                               |
@@ -281,7 +288,7 @@
                 <p>
                 F5 LBaaS agent processes support the configuration of static name value parameters which will get passed to the
                 plugin every time it updates its status.  These custom values can be used to inventory the f5 LBaaS agents or 
-                as input to custom agent schedulers. Please see the reference to the <span class='command_text'>f5_static_agent_configuration_data</span> 
+                as input to custom agent schedulers. Please see the reference to the <span class='command_text'>static_agent_configuration_data</span> 
                 entry in the agent <span class='command_text'>f5-bigip-lbaas-agent.ini</span> configuration in the following section.
                 </p>
            
@@ -372,22 +379,25 @@
 					<tr><td nowrap>debug</td><td>True or False</td><td>False</td><td>Should the agent create verbose debug logging in /var/log/neutron/f5-bigip-lbaas-agent.log</td></tr>
 					<tr><td nowrap>periodic_interval</td><td>integer number of seconds</td><td>10</td><td>How often should the get_stats, and save configurations be considered. (not run, but considered)</td></tr>
 					<tr><td nowrap>use_namespace</td><td>True or False</td><td>True</td><td>Should all Neutron non-shared subnet addresses be assigned to route domains</td></tr>
-					<tr><td nowrap>f5_static_agent_configuration_data</td><td>single or comma separated list</td><td>None</td><td>This list of name:value attribues will be sent as part of the agent configuration data to the plugin.</td></tr>				    
+					<tr><td nowrap>static_agent_configuration_data</td><td>single or comma separated list</td><td>None</td><td>This list of name:value attribues will be sent as part of the agent configuration data to the plugin.</td></tr>				    
+					<tr><td nowrap>environment_prefix</td><td>String prefix</td><td>'' (blank string)</td><td>This is the prefix this agent will use for all BIG-IP objects. Default is a blank string which will result in BIG-IP objects prefixed with uuid_.</td></tr>
 					<tr><td nowrap>f5_device_type</td><td>external</td><td>external</td><td>This determines the type of automatica device onboarding.  Only external, is acceptable for this release.</td></tr>
 				    <tr><td nowrap>f5_ha_type</td><td>standalone, pair, or scalen</td><td>pair</td><td>This determines the way LBaaS will be deployed for HA</td></tr>
-				    <tr><td nowrap>sync_mode</td><td>auto_sync or replication</td><td>replication</td><td>This determines the way LBaaS will be provisioned. For auto_sync, only a single TMOS device will be provisioned and DSG syncing used to replicate the configuration objects.  For replication, each device will be provisioned independantly. The recommended mode is replication.  It is faster for large configurations.</td></tr>
+				    <tr><td nowrap>f5_sync_mode</td><td>auto_sync or replication</td><td>replication</td><td>This determines the way LBaaS will be provisioned. For auto_sync, only a single TMOS device will be provisioned and DSG syncing used to replicate the configuration objects.  For replication, each device will be provisioned independantly. The recommended mode is replication.  It is faster for large configurations.</td></tr>
 				    <tr><td nowrap>f5_external_physical_mappings</td><td>comma separated list</td><td>default:1.1:True</td><td>Determines how Neutron VLAN networks are created. The format for each mapp entry is 
 				    	    [provider:physical_network]:[TMOS interface or trunk name]:[Boolean to tag the VLAN ]. One entry with 'default' as it initial entry should be present to allow for cases where 
 				    	    the provider:physical_network does not match any other specified mapping.</td></tr>
 				    <tr><td nowrap>f5_vtep_folder</td><td>TMOS folder name</td><td>Common</td><td>For tenant tunneling, this determines the TMOS folder to discover the VTEP interface.</td></tr>
 				    <tr><td nowrap>f5_vtep_selfip_name</td><td>TMOS Self IP name</td><td>vtep</td><td>For tennant tunneling, this determines the pre-provisioned VTEP Self IP name.</td></tr>
+				    <tr><td nowrap>advertised_tunnel_types</td><td>gre<br/>vxlan<br/>gre,vxlan</td><td>gre,vxlan</td><td>Specifies the tunnel types the agent advertises via RPC to other VTEPs. This should match your ML2 allowed network_typs. Default is to advertise both gre and vxlan.</td></tr>
 				    <tr><td nowrap>f5_global_routed_mode</td><td>True or False</td><td>False</td><td>If set, only L4+ objects will be provisioned.  All necessary L2 and L3 routes will be assumed pre-provisioned. SNAT will be truned to AutoMAP on all VIPs, and all L2 and L3 tenancy isolation will not be provisioned.</td></tr>
 				    <tr><td nowrap>f5_snat_mode</td><td>True or False</td><td>True</td><td>For L3 forwarding, should SNAT be used. If set to False, the LBaaS device attempt to become the default gateway for the Neutron subnet of Member objects.</td></tr>
 				    <tr><td>f5_snat_addresses_per_subnet</td><td>integer number of SNAT addresses</td><td>1</td><td>If set to 0(zero), AutoMAP SNAT will be used.  If set to a positive integer, that number of SNAT addresses will
 				    	     be created per Neutron subnet of Members, per active TMOS device in an HA mode.</td></tr>
 				    <tr><td nowrap>f5_route_domain_strictness</td><td>True or False</td><td>False</td><td>If set to True, tenant route domain isolation will be set to strict and VIPs and Members must be placed in the same route domain. This would mean that all Neutron networks with the shared attribute can not be used for VIPs or Members.</td></tr>
 				    <tr><td nowrap>f5_common_external_networks</td><td>True or False</td><td>False</td><td>If set to True, any VIP address or member address associated with a Neutron network with router:external set to True will be created in the Common parition and in the default route domain.</td></tr>  
-				    <tr><td>f5_bigip_lbaas_device_driver</td><td>python class name of the device driver to use</td><td>neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver</td><td>In EA only the neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver is allowed</td></tr>
+				    <tr><td nowrap>common_network_ids</td><td>comma separated list</td><td>None</td><td>List in [vlan]:[neutron network UUID] format. All defined network UUIDs defined will exempt services from creating new VLANs, but will use the /Common/[vlan] specified instead.</td></tr>
+				    <tr><td>f5_bigip_lbaas_device_driver</td><td>python class name of the device driver to use</td><td>neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver</td><td>Only the neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver.iControlDriver is supplied.</td></tr>
 				    <tr><td>icontrol_hostname</td><td>either a single entry or a comma separated list iControl endpoint IP address or FQDNs </td><td>192.168.1.245</td><td>The iControl endpoint to connect to for this agent. If a comma separated list is given, you must include each device in your DSG. If only one address is given, the other device's management address will be learned from the DSG and must be reachable from the LBaaS agent.</td></tr>
 				    <tr><td>icontrol_username</d><td>valid username for the TMOS device</td><td>admin</td><td>The iControl endpoint username for this agent</td></tr>
 				    <tr><td>icontrol_password</d><td>valid password for the TMOS device</td><td>admin</td><td>The iControl endpoint password for this agent</td></tr>

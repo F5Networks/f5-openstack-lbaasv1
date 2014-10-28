@@ -1,262 +1,382 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-from f5.bigip import exceptions
 from f5.common.logger import Log
-from f5.bigip.bigip_interfaces import icontrol_folder
+from f5.common import constants as const
 from f5.bigip.bigip_interfaces import icontrol_rest_folder
+#from f5.bigip.bigip_interfaces import strip_folder_and_prefix
+from f5.bigip import exceptions
+from f5.bigip.bigip_interfaces import log
 
-from suds import WebFault
+import json
 
 
 class Monitor(object):
     def __init__(self, bigip):
         self.bigip = bigip
 
-        # add iControl interfaces if they don't exist yet
-        self.bigip.icontrol.add_interface('LocalLB.Monitor')
+        self.monitor_type = {
+             'ping': {'name': 'gateway-icmp',
+                      'url': '/ltm/monitor/gateway-icmp'},
+             'icmp': {'name': 'gateway-icmp',
+                      'url': '/ltm/monitor/gateway-icmp'},
+             'tcp': {'name': 'tcp',
+                     'url': '/ltm/monitor/tcp'},
+             'http': {'name': 'http',
+                      'url': '/ltm/monitor/http'},
+             'https': {'name': 'https',
+                       'url': '/ltm/monitor/https'},
+             'udp': {'name': 'udp', 'url': '/ltm/monitor/udp'},
+             'inband': {'name': 'inband',
+                        'url': '/ltm/monitor/inband'}
+        }
 
-        # iControl helper objects
-        self.lb_monitor = self.bigip.icontrol.LocalLB.Monitor
-
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def create(self, name=None, mon_type=None, interval=5,
                timeout=16, send_text=None, recv_text=None,
                folder='Common'):
-        if not self.exists(name=name, mon_type=mon_type, folder=folder):
-            template = self.lb_monitor.typefactory.create(
-                                    'LocalLB.Monitor.MonitorTemplate')
-            template.template_name = name
-            template.template_type = self._get_monitor_type(mon_type)
-
-            monitor_ipport = self.lb_monitor.typefactory.create(
-                                            'LocalLB.MonitorIPPort')
-            ipport_def = self.lb_monitor.typefactory.create(
-                                            'Common.IPPortDefinition')
-            ipport_def.address = '0.0.0.0'
-            ipport_def.port = 0
-
-            monitor_ipport.address_type = self.lb_monitor.typefactory.create(
-                'LocalLB.AddressType').ATYPE_STAR_ADDRESS_STAR_PORT
-
-            monitor_ipport.ipport = ipport_def
-
-            template_attributes = self.lb_monitor.typefactory.create(
-                                    'LocalLB.Monitor.CommonAttributes')
-
-            if str(mon_type) == 'PING':
-                template_attributes.parent_template = 'gateway_icmp'
-            else:
-                template_attributes.parent_template = mon_type.lower()
-
-            template_attributes.interval = interval
-            template_attributes.timeout = timeout
-            template_attributes.dest_ipport = monitor_ipport
-            template_attributes.is_read_only = False
-            template_attributes.is_directly_usable = True
-
-            try:
-                self.lb_monitor.create_template([template],
-                                                [template_attributes])
-                if mon_type.lower() in ['tcp', 'http']:
-                    self.set_send_string(name, send_text)
-                    self.set_recv_string(name, recv_text)
-                return True
-            except WebFault as wf:
-                if "already exists in partition" in str(wf.message):
-                    Log.error('Monitor',
-                              'tried to create a Monitor when exists')
-                    return False
-                else:
-                    raise wf
-        else:
-            return False
-
-    @icontrol_folder
-    def delete(self, name=None, mon_type=None, folder='Common'):
-        if not mon_type:
-            mon_type = self.get_type(name=name, folder=folder)
-        if mon_type and self.exists(name=name,
-                                    mon_type=mon_type,
-                                    folder=folder):
-            try:
-                self.lb_monitor.delete_template([name])
-            except WebFault as wf:
-                if "is in use" in str(wf.message):
-                    return False
+        folder = str(folder).replace('/', '')
+        self.bigip.system.set_rest_folder(folder)
+        mon_type = self._get_monitor_rest_type(mon_type)
+        payload = dict()
+        payload['name'] = name
+        payload['partition'] = folder
+        parent = mon_type.replace('-', '_')
+        payload['defaultsFrom'] = '/Common/' + parent
+        payload['timeout'] = timeout
+        payload['interval'] = interval
+        if send_text:
+            payload['send'] = send_text
+        if recv_text:
+            payload['recv'] = recv_text
+        request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type
+        response = self.bigip.icr_session.post(request_url,
+                              data=json.dumps(payload),
+                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
             return True
+        elif response.status_code == 409:
+            return True
+        else:
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorCreationException(response.text)
         return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
+    def delete(self, name=None, mon_type=None, folder='Common'):
+        if name and mon_type:
+            folder = str(folder).replace('/', '')
+            mon_type = self._get_monitor_rest_type(mon_type)
+            request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+            request_url += '~' + folder + '~' + name
+            response = self.bigip.icr_session.delete(request_url,
+                                              timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            elif response.status_code == 404:
+                return True
+            else:
+                Log.error('monitor', response.text)
+                raise exceptions.MonitorDeleteException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def delete_all(self, folder='Common'):
+        request_url = self.bigip.icr_url + '/ltm/monitor'
+        folder = str(folder).replace('/', '')
+        request_filter = 'partition eq ' + folder
+        request_url += '?$filter=' + request_filter
+        response = self.bigip.icr_session.get(request_url,
+                                         timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return_obj = json.loads(response.text)
+            monitor_types = []
+            if 'items' in return_obj:
+                for monitor_type in return_obj['items']:
+                    ref = monitor_type['reference']['link']
+                    monitor_types.append(
+                                    self.bigip.icr_link(ref).split('?')[0])
+            for monitor in monitor_types:
+                mon_req = monitor
+                mon_req += '?$select=name,selfLink'
+                if folder:
+                    mon_req += '&$filter=' + request_filter
+                mon_resp = self.bigip.icr_session.get(mon_req,
+                                           timeout=const.CONNECTION_TIMEOUT)
+                if mon_resp.status_code < 400:
+                    mon_resp_obj = json.loads(mon_resp.text)
+                    if 'items' in mon_resp_obj:
+                        for mon_def in mon_resp_obj['items']:
+                            if mon_def['name'].startswith(self.OBJ_PREFIX):
+                                response = self.bigip.icr_session.delete(
+                                    self.bigip.icr_link(mon_def['selfLink']),
+                                    timeout=const.CONNECTION_TIMEOUT)
+                                if response.status_code > 400 and \
+                                   response.status_code != 404:
+                                    Log.error('monitor', response.text)
+                                    raise exceptions.MonitorDeleteException(
+                                                               response.text)
+            return True
+        elif response.status_code != 404:
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorQueryException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
     def get_type(self, name=None, folder='Common'):
-        try:
-            monitor_temp_type_type = self.lb_monitor.typefactory.create(
-                                        'LocalLB.Monitor.TemplateType')
-            monitor_temp_type = self.lb_monitor.get_template_type(
-                                                            [name])[0]
-            if monitor_temp_type == monitor_temp_type_type.TTYPE_HTTP:
-                return 'HTTP'
-            elif monitor_temp_type == monitor_temp_type_type.TTYPE_TCP:
-                return 'TCP'
-            elif monitor_temp_type == \
-                    monitor_temp_type_type.TTYPE_GATEWAY_ICMP:
-                return 'ICMP'
-            else:
-                return None
-        except WebFault as wf:
-            if "was not found" in str(wf.message):
-                return None
-            else:
-                raise
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/ltm/monitor'
+        request_filter = 'partition eq ' + folder
+        request_url += '?$filter=' + request_filter
+        response = self.bigip.icr_session.get(request_url,
+                                             timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return_obj = json.loads(response.text)
+            monitor_types = []
+            if 'items' in return_obj:
+                for monitor_type in return_obj['items']:
+                    ref = monitor_type['reference']['link']
+                    monitor_types.append(ref.replace(
+                                'https://localhost/mgmt/tm', '').split('?')[0])
+            for monitor in monitor_types:
+                mon_req = self.bigip.icr_url + monitor
+                mon_req += '?$select=name,defaultsFrom'
+                if folder:
+                    mon_req += '&$filter=' + request_filter
+                mon_resp = self.bigip.icr_session.get(mon_req,
+                                            timeout=const.CONNECTION_TIMEOUT)
+                if mon_resp.status_code < 400:
+                    mon_resp_obj = json.loads(mon_resp.text)
+                    if 'items' in mon_resp_obj:
+                        for mon_def in mon_resp_obj['items']:
+                            if mon_def['name'] == name:
+                                mon_type = \
+                               mon_def['defaultsFrom'].replace('/Common/', '')
+                                return \
+                                  self._get_monitor_type_from_parent(mon_type)
+                else:
+                    Log.error('monitor', mon_resp.text)
+                    raise exceptions.MonitorQueryException(mon_resp.text)
+        else:
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorQueryException(response.text)
+        return None
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def get_interval(self, name=None, mon_type=None, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder):
-            prop_type = self.lb_monitor.typefactory.create(
-                    'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
-            return self.lb_monitor.get_template_integer_property(
-                                        [name], [prop_type])[0].value
+        folder = str(folder).replace('/', '')
+        if name and mon_type:
+            mon_type = self._get_monitor_rest_type(mon_type)
+            request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+            request_url += '~' + folder + '~' + name
+            request_url += '/?$select=interval'
+            response = self.bigip.icr_session.get(request_url,
+                                              timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return_obj = json.loads(response.text)
+                if 'interval' in return_obj:
+                    return return_obj['interval']
+            else:
+                Log.error('monitor', response.text)
+                raise exceptions.MonitorQueryException(response.text)
+        return 0
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def set_interval(self, name=None,
                      mon_type=None, interval=5, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder):
-            value = self.lb_monitor.typefactory.create(
-                        'LocalLB.Monitor.IntegerValue')
-            value.type = self.lb_monitor.typefactory.create(
-                        'LocalLB.Monitor.IntPropertyType').ITYPE_INTERVAL
-            value.value = int(interval)
-            self.lb_monitor.set_template_integer_property([name], [value])
+        folder = str(folder).replace('/', '')
+        payload = dict()
+        payload['interval'] = interval
+
+        mon_type = self._get_monitor_rest_type(mon_type)
+        request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+        request_url += '~' + folder + '~' + name
+        response = self.bigip.icr_session.put(request_url,
+                              data=json.dumps(payload),
+                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
             return True
         else:
-            return False
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorUpdateException(response.text)
+        return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def get_timeout(self, name=None, mon_type=None, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder):
-            prop_type = self.lb_monitor.typefactory.create(
-                        'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
-            return self.lb_monitor.get_template_integer_property(
-                                            [name], [prop_type])[0].value
+        folder = str(folder).replace('/', '')
+        if name and mon_type:
+            mon_type = self._get_monitor_rest_type(mon_type)
+            request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+            request_url += '~' + folder + '~' + name
+            request_url += '/?$select=timeout'
+            response = self.bigip.icr_session.get(request_url,
+                                              timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return_obj = json.loads(response.text)
+                if 'timeout' in return_obj:
+                    return return_obj['timeout']
+            else:
+                Log.error('monitor', response.text)
+                raise exceptions.MonitorQueryException(response.text)
+        return 0
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def set_timeout(self, name=None, mon_type=None,
                     timeout=16, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder):
-            value = self.lb_monitor.typefactory.create(
-                                'LocalLB.Monitor.IntegerValue')
-            value.type = self.lb_monitor.typefactory.create(
-                        'LocalLB.Monitor.IntPropertyType').ITYPE_TIMEOUT
-            value.value = int(timeout)
-            self.lb_monitor.set_template_integer_property([name], [value])
+        folder = str(folder).replace('/', '')
+        payload = dict()
+        payload['timeout'] = timeout
+
+        mon_type = self._get_monitor_rest_type(mon_type)
+        request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+        request_url += '~' + folder + '~' + name
+        response = self.bigip.icr_session.put(request_url,
+                              data=json.dumps(payload),
+                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
             return True
         else:
-            return False
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorUpdateException(response.text)
+        return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def get_send_string(self, name=None, mon_type=None, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder):
-            prop_type = self.lb_monitor.typefactory.create(
-                         'LocalLB.Monitor.StrPropertyType').STYPE_SEND
-            return self.lb_monitor.get_template_string_property(
-                                        [name], [prop_type])[0].value
+        folder = str(folder).replace('/', '')
+        if name and mon_type:
+            mon_type = self._get_monitor_rest_type(mon_type)
+            request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+            request_url += '~' + folder + '~' + name
+            request_url += '/?$select=send'
+            response = self.bigip.icr_session.get(request_url,
+                                        timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return_obj = json.loads(response.text)
+                if 'send' in return_obj:
+                    return return_obj['send']
+            else:
+                Log.error('monitor', response.text)
+                raise exceptions.MonitorQueryException(response.text)
+        return None
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def set_send_string(self, name=None, mon_type=None,
                         send_text=None, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder) and \
-           send_text:
-            value = self.lb_monitor.typefactory.create(
-                            'LocalLB.Monitor.StringValue')
-            value.type = self.lb_monitor.typefactory.create(
-                            'LocalLB.Monitor.StrPropertyType').STYPE_SEND
-            value.value = send_text
-            self.lb_monitor.set_template_string_property([name], [value])
+        folder = str(folder).replace('/', '')
+        payload = dict()
+        if send_text:
+            payload['send'] = send_text
+        else:
+            payload['send'] = ''
+
+        mon_type = self._get_monitor_rest_type(mon_type)
+        request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+        request_url += '~' + folder + '~' + name
+        response = self.bigip.icr_session.put(request_url,
+                              data=json.dumps(payload),
+                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
             return True
         else:
-            return False
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorUpdateException(response.text)
+        return False
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def get_recv_string(self, name=None, mon_type=None, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder):
-            prop_type = self.lb_monitor.typefactory.create(
-                         'LocalLB.Monitor.StrPropertyType').STYPE_RECEIVE
-            return self.lb_monitor.get_template_string_property(
-                                            [name], [prop_type])[0].value
+        folder = str(folder).replace('/', '')
+        if name and mon_type:
+            mon_type = self._get_monitor_rest_type(mon_type)
+            request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+            request_url += '~' + folder + '~' + name
+            request_url += '/?$select=recv'
+            response = self.bigip.icr_session.get(request_url,
+                                        timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return_obj = json.loads(response.text)
+                if 'recv' in return_obj:
+                    return return_obj['recv']
+            else:
+                Log.error('monitor', response.text)
+                raise exceptions.MonitorQueryException(response.text)
+        return None
 
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def set_recv_string(self, name=None, mon_type=None,
                         recv_text=None, folder='Common'):
-        if self.exists(name=name, mon_type=mon_type, folder=folder) and \
-           recv_text:
-            value = self.lb_monitor.typefactory.create(
-                         'LocalLB.Monitor.StringValue')
-            value.type = self.lb_monitor.typefactory.create(
-                         'LocalLB.Monitor.StrPropertyType').STYPE_RECEIVE
-            value.value = recv_text
-            self.lb_monitor.set_template_string_property([name], [value])
+        folder = str(folder).replace('/', '')
+        payload = dict()
+        if recv_text:
+            payload['recv'] = recv_text
+        else:
+            payload['recv'] = ''
+
+        mon_type = self._get_monitor_rest_type(mon_type)
+        request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
+        request_url += '~' + folder + '~' + name
+        response = self.bigip.icr_session.put(request_url,
+                              data=json.dumps(payload),
+                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
             return True
         else:
-            return False
-
-    def _get_monitor_type(self, type_str):
-        type_str = type_str.upper()
-        monitor_temp_type = self.lb_monitor.typefactory.create(
-                                        'LocalLB.Monitor.TemplateType')
-        if type_str == 'TCP':
-            return monitor_temp_type.TTYPE_TCP
-        elif type_str == 'HTTP':
-            return monitor_temp_type.TTYPE_HTTP
-        elif type_str == 'HTTPS':
-            return monitor_temp_type.TTYPE_HTTPS
-        elif type_str == 'PING':
-            return monitor_temp_type.TTYPE_GATEWAY_ICMP
-        elif type_str == 'ICMP':
-            return monitor_temp_type.TTYPE_GATEWAY_ICMP
-        elif type_str == 'UDP':
-            return monitor_temp_type.TTYPE_UDP
-        elif type_str == 'INBAND':
-            return monitor_temp_type.TTYPE_INBAND
-        else:
-            raise exceptions.UnknownMonitorType(
-                                        'Unknown monitor %s' % type_str)
+            Log.error('monitor', response.text)
+            raise exceptions.MonitorQueryException(response.text)
+        return False
 
     def _get_monitor_rest_type(self, type_str):
-        type_str = type_str.upper()
-        if type_str == 'TCP':
-            return 'tcp'
-        elif type_str == 'HTTP':
-            return 'http'
-        elif type_str == 'HTTPS':
-            return 'https'
-        elif type_str == 'PING':
-            return 'gateway-icmp'
-        elif type_str == 'ICMP':
-            return 'gateway-icmp'
-        elif type_str == 'UDP':
-            return 'udp'
-        elif type_str == 'INBAND':
-            return 'inband'
+        type_str = type_str.lower()
+        if type_str in self.monitor_type:
+            return self.monitor_type[type_str]['name']
         else:
             raise exceptions.UnknownMonitorType(
-                                        'Unknown monitor %s' % type_str)
+                       'Unknown monitor %s' % type_str)
+
+    def _get_monitor_type_from_parent(self, parent):
+        parent = parent.upper()
+        if parent == 'GATEWAY_ICMP':
+            return 'PING'
+        else:
+            return parent
 
     #TODO: turn this into iControl ReST.
     #That will require us to know the type in every call
     #to exists, because it's in the URL path.
 
     @icontrol_rest_folder
+    @log
     def exists(self, name=None, mon_type=None, folder='Common'):
+        folder = str(folder).replace('/', '')
         if name and mon_type:
             mon_type = self._get_monitor_rest_type(mon_type)
             request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.get(request_url)
+            response = self.bigip.icr_session.get(request_url,
+                                        timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -264,11 +384,25 @@ class Monitor(object):
         else:
             return False
 
-        #for template in self.lb_monitor.get_template_list():
-        #    if template.template_name == name:
-        #        return True
-
-    @icontrol_folder
+    @icontrol_rest_folder
+    @log
     def get_monitors(self, folder='Common'):
-        monitors = self.lb_monitor.get_template_list()
-        return monitors
+        folder = str(folder).replace('/', '')
+        request_filter = 'partition eq ' + folder
+        return_monitors = []
+        urls = {}
+        for mon in self.monitor_type:
+            if not self.monitor_type[mon]['url'] in urls:
+                mon_req = self.bigip.icr_url + self.monitor_type[mon]['url']
+                mon_req += '?$select=name,partition'
+                if folder:
+                    mon_req += '&$filter=' + request_filter
+                mon_resp = self.bigip.icr_session.get(mon_req,
+                                            timeout=const.CONNECTION_TIMEOUT)
+                urls[self.monitor_type[mon]['url']] = mon_resp.status_code
+                if mon_resp.status_code < 400:
+                    mon_resp_obj = json.loads(mon_resp.text)
+                    if 'items' in mon_resp_obj:
+                        for mon_def in mon_resp_obj['items']:
+                            return_monitors.append(mon_def['name'])
+        return return_monitors

@@ -1,10 +1,17 @@
-##############################################################################
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright 2014 F5 Networks Inc.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
-##############################################################################
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 # CONSTANTS MODULE
 MIN_TMOS_MAJOR_VERSION = 11
@@ -13,15 +20,17 @@ MIN_EXTRA_MB = 500
 DEFAULT_HOSTNAME = 'bigip1'
 MAX_HOSTNAME_LENGTH = 128
 DEFAULT_FOLDER = "/Common"
+FOLDER_CACHE_TIMEOUT = 120
 CONNECTION_TIMEOUT = 30
+FDB_POPULATE_STATIC_ARP = True
 # DEVICE LOCK PREFIX
 DEVICE_LOCK_PREFIX = 'lock_'
 # DIR TO CACHE WSDLS.  SET TO NONE TO READ FROM DEVICE
 # WSDL_CACHE_DIR = "/data/iControl-11.4.0/sdk/wsdl/"
 WSDL_CACHE_DIR = ''
 # HA CONSTANTS
-HA_VLAN_NAME = "/Common/HA"
-HA_SELFIP_NAME = "/Common/HA"
+HA_VLAN_NAME = "HA"
+HA_SELFIP_NAME = "HA"
 # VIRTUAL SERVER CONSTANTS
 VS_PREFIX = 'vs'
 # POOL CONSTANTS
@@ -48,6 +57,6 @@ DEFAULT_SYNC_MODE = 'autosync'
 SYNC_DELAY = 3
 MAX_SYNC_ATTEMPTS = 6
 # SHARED CONFIG CONSTANTS
-SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP = '/Common/traffic-group-local-only'
-SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP = '/Common/traffic-group-1'
+SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP = 'traffic-group-local-only'
+SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP = 'traffic-group-1'
 VXLAN_UDP_PORT = 4789
