@@ -95,6 +95,7 @@ class L2GRE(object):
             if description:
                 payload['description'] = description
             request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
+            Log.info('L2GRE', 'creating tunnel with %s' % json.dumps(payload))
             response = self.bigip.icr_session.post(request_url,
                                   data=json.dumps(payload),
                                   timeout=const.CONNECTION_TIMEOUT)
@@ -168,14 +169,15 @@ class L2GRE(object):
             if 'items' in response_obj:
                 for item in response_obj['items']:
                     if item['name'].startswith(self.OBJ_PREFIX):
+                        self.delete_all_fdb_entries(item['name'], folder)
                         response = self.bigip.icr_session.delete(
                                        self.bigip.icr_link(item['selfLink']),
                                        timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code > 400 and \
                            response.status_code != 404:
                             Log.error('L2GRE', response.text)
-                            raise exceptions.L2GRETunnelDeleteException(
-                                                                response.txt)
+                            raise exceptions.VXLANDeleteException(
+                                                               response.text)
             return True
         else:
             Log.error('self', response.text)
@@ -245,11 +247,17 @@ class L2GRE(object):
         if response.status_code < 400:
             if const.FDB_POPULATE_STATIC_ARP:
                 if arp_ip_address:
-                    if self.bigip.arp.create(ip_address=arp_ip_address,
-                                             mac_address=mac_address,
-                                             folder=folder):
-                        return True
-                    else:
+                    try:
+                        if self.bigip.arp.create(ip_address=arp_ip_address,
+                                                 mac_address=mac_address,
+                                                 folder=folder):
+                            return True
+                        else:
+                            return False
+                    except Exception as e:
+                        Log.error('L2GRE',
+                                  'could not create static arp: %s'
+                                  % e.message)
                         return False
             return True
         else:
@@ -296,10 +304,15 @@ class L2GRE(object):
             if response.status_code < 400:
                 if const.FDB_POPULATE_STATIC_ARP:
                     for mac in new_arp_addresses:
-                        self.bigip.arp.create(
-                            ip_address=new_arp_addresses[mac],
-                            mac_address=mac,
-                            folder=folder)
+                        try:
+                            self.bigip.arp.create(
+                                ip_address=new_arp_addresses[mac],
+                                mac_address=mac,
+                                folder=folder)
+                        except Exception as e:
+                            Log.error('L2GRE',
+                                      'could not create static arp: %s'
+                                      % e.message)
             return True
         else:
             Log.error('L2GRE', response.text)

@@ -65,11 +65,7 @@ class SNAT(object):
                 response = self.bigip.icr_session.post(request_url,
                                         data=json.dumps(payload),
                                         timeout=const.CONNECTION_TIMEOUT)
-                if not (response.status_code < '400' or \
-                        response.status_code == 409):
-                    Log.error('snatpool', response.text)
-                    raise exceptions.SNATCreationException(response.text)
-                elif response.status_code == 409:
+                if response.status_code == 409:
                     # get existing members
                     request_url += '/~' + folder + '~' + snat_pool_name
                     request_url += '?$select=members'
@@ -79,7 +75,7 @@ class SNAT(object):
                         response_obj = json.loads(response.text)
                         if 'members' in response_obj:
                             if not sa_path in response_obj['members']:
-                                members = response['members']
+                                members = response_obj['members']
                                 members.append(sa_path)
                             else:
                                 return True
@@ -90,13 +86,16 @@ class SNAT(object):
                         raise exceptions.SNATQueryException(response.text)
                     payload = dict()
                     payload['members'] = members
+                    request_url = self.bigip.icr_url + '/ltm/snatpool'
                     request_url += '/~' + folder + '~' + snat_pool_name
                     response = self.bigip.icr_session.put(request_url,
                                            data=json.dumps(payload),
                                            timeout=const.CONNECTION_TIMEOUT)
+                elif response.status_code < '400':
+                    return True
                 else:
                     Log.error('snatpool', response.text)
-                    return False
+                    raise exceptions.SNATCreationException(response.text)
         return False
 
     @icontrol_rest_folder
@@ -110,6 +109,43 @@ class SNAT(object):
                                   timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
+            elif response.status_code == 400 and \
+                (response.text.find('is still referenced by a snat pool') > 0):
+                # what SNAT pool is referencing this SNAT address
+                request_url = self.bigip.icr_url + '/ltm/snatpool'
+                request_filter = 'partition eq ' + folder
+                response = self.bigip.icr_session.get(
+                                    request_url + '?$filter=' + request_filter,
+                                    timeout=const.CONNECTION_TIMEOUT)
+                if response.status_code < 400:
+                    response_obj = json.loads(response.text)
+                    if 'items' in response_obj:
+                        for snatpool in response_obj['items']:
+                            if 'members' in snatpool:
+                                snat_path = '/' + folder + '/' + name
+                                if snat_path in snatpool['members']:
+                                    if len(snatpool['members']) == 1:
+                                        # if this is the last SNAT address
+                                        # in this SNAT pool delete
+                                        #the SNAT pool
+                                        response = \
+                                          self.bigip.icr_session.delete(
+                                            self.bigip.icr_link(
+                                                        snatpool['selfLink']),
+                                            timeout=const.CONNECTION_TIMEOUT)
+                                        if response.status_code < 400:
+                                            return True
+                                        elif response.status_code != 404:
+                                            Log.error('snat-translation',
+                                                      response.text)
+                                            raise \
+                                                exceptions.SNATDeleteException(
+                                                                 response.text)
+                                    else:
+                                        return self.remove_from_pool(
+                                                name=snatpool['name'],
+                                                member_name=name,
+                                                folder=folder)
             elif response.status_code != 404:
                 Log.error('snat-translation', response.text)
                 raise exceptions.SNATDeleteException(response.text)
@@ -144,6 +180,36 @@ class SNAT(object):
         elif response.status_code != 404:
             Log.error('snat-translation', response.text)
             raise exceptions.SNATQueryException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def delete_snatpool(self, name=None, folder='Common'):
+        if name:
+            folder = str(folder).replace('/', '')
+            request_url = self.bigip.icr_url + '/ltm/snatpool/'
+            request_url += '?$select=name,selfLink'
+            request_filter = 'partition eq ' + folder
+            request_url += '&$filter=' + request_filter
+            response = self.bigip.icr_session.get(request_url,
+                                timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                response_obj = json.loads(response.text)
+                if 'items' in response_obj:
+                    for item in response_obj['items']:
+                        if item['name'] == name:
+                            response = self.bigip.icr_session.delete(
+                                        self.bigip.icr_link(item['selfLink']),
+                                        timeout=const.CONNECTION_TIMEOUT)
+                            if response.status_code > 400 and \
+                               response.status_code != 404:
+                                Log.error('snatpool', response.text)
+                                raise exceptions.SNATDeleteException(
+                                                                response.text)
+                return True
+            elif response.status_code != 404:
+                Log.error('snatpool', response.text)
+                raise exceptions.SNATQueryException(response.text)
         return False
 
     @icontrol_rest_folder
@@ -306,7 +372,9 @@ class SNAT(object):
                         members.remove(sa_path)
                         payload = dict()
                         payload['members'] = members
-                        request_url = '/~' + folder + '~' + name
+                        request_url = self.bigip.icr_url
+                        request_url += '/ltm/snatpool'
+                        request_url += '/~' + folder + '~' + name
                         response = self.bigip.icr_session.put(request_url,
                                               data=json.dumps(payload),
                                               timeout=const.CONNECTION_TIMEOUT)

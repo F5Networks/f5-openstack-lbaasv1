@@ -62,6 +62,7 @@ class VirtualServer(object):
             else:
                 protocol = self._get_rest_protocol(protocol)
             payload['ipProtocol'] = protocol
+            payload['vlansEnabled'] = True
             if vlan_name:
                 payload['vlans'] = [vlan_name]
             if use_snat:
@@ -116,6 +117,7 @@ class VirtualServer(object):
             payload['destination'] = ip_address + ':0'
             payload['mask'] = mask
             payload['ipProtocol'] = 'any'
+            payload['vlansEnabled'] = True
             if vlan_name:
                 payload['vlans'] = [vlan_name]
             if use_snat:
@@ -178,6 +180,7 @@ class VirtualServer(object):
             else:
                 protocol = self._get_rest_protocol(protocol)
             payload['ipProtocol'] = protocol
+            payload['vlansEnabled'] = True
             if vlan_name:
                 payload['vlans'] = [vlan_name]
             if use_snat:

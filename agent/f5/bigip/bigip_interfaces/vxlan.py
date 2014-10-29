@@ -249,11 +249,17 @@ class VXLAN(object):
         if response.status_code < 400:
             if const.FDB_POPULATE_STATIC_ARP:
                 if arp_ip_address:
-                    if self.bigip.arp.create(ip_address=arp_ip_address,
-                                             mac_address=mac_address,
-                                             folder=folder):
-                        return True
-                    else:
+                    try:
+                        if self.bigip.arp.create(ip_address=arp_ip_address,
+                                                 mac_address=mac_address,
+                                                 folder=folder):
+                            return True
+                        else:
+                            return False
+                    except Exception as e:
+                        Log.error('VXLAN',
+                                  'could not create static arp: %s'
+                                  % e.message)
                         return False
             return True
         else:
@@ -300,10 +306,15 @@ class VXLAN(object):
             if response.status_code < 400:
                 if const.FDB_POPULATE_STATIC_ARP:
                     for mac in new_arp_addresses:
-                        self.bigip.arp.create(
-                            ip_address=new_arp_addresses[mac],
-                            mac_address=mac,
-                            folder=folder)
+                        try:
+                            self.bigip.arp.create(
+                                ip_address=new_arp_addresses[mac],
+                                mac_address=mac,
+                                folder=folder)
+                        except Exception as e:
+                            Log.error('VXLAN',
+                                      'could not create static arp: %s'
+                                      % e.message)
             return True
         else:
             Log.error('VXLAN', response.text)

@@ -29,12 +29,14 @@ class System(object):
         self.bigip = bigip
 
         self.bigip.icontrol.add_interfaces(['System.Session',
-                                            'System.SystemInfo'
-                                            ])
+                                            'System.SystemInfo',
+                                            'System.VCMP']
+                                           )
 
         # iControl helper objects
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_info = self.bigip.icontrol.System.SystemInfo
+        self.sys_vcmp = self.bigip.icontrol.System.VCMP
 
         # create stubs to hold static system params to avoid redundant calls
         self.version = None
@@ -248,7 +250,7 @@ class System(object):
             if decorated_folder in existing_folders:
                 existing_folders.remove(decorated_folder)
         # anything left should be purged
-        Log.info('system', 'purging orphaned tenants: %s' % existing_folders)
+        Log.debug('system', 'purging orphaned tenants: %s' % existing_folders)
         for folder in existing_folders:
             try:
                 bigip.system.purge_folder(folder, bigip)

@@ -241,7 +241,7 @@ class Pool(object):
             Log.error('pool', response.text)
             raise exceptions.PoolQueryException(response.text)
 
-        Log.info('pool', 'purging pools - existing : %s, known : %s'
+        Log.debug('pool', 'purging pools - existing : %s, known : %s'
                  % (existing_pools.keys(), known_pools))
 
         # remove all pools which are not managed

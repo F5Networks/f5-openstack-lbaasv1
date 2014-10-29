@@ -25,6 +25,10 @@ from neutron.openstack.common.rpc import proxy
 from neutron.plugins.common import constants
 from neutron.extensions import portbindings
 from neutron.services.loadbalancer.drivers import abstract_driver
+from neutron.extensions.loadbalancer import MemberNotFound
+from neutron.extensions.loadbalancer import PoolNotFound
+from neutron.extensions.loadbalancer import VipNotFound
+from neutron.extensions.loadbalancer import HealthMonitorNotFound
 from neutron.context import get_admin_context
 from time import time
 
@@ -790,14 +794,17 @@ class LoadBalancerCallbacks(object):
                            status=constants.ERROR, status_description=None,
                            host=None):
         """Agent confirmation hook to update VIP status."""
-        vip = self.plugin.get_vip(context, vip_id)
-        if vip['status'] == constants.PENDING_DELETE:
-            status = constants.PENDING_DELETE
-        self.plugin.update_status(context,
-                                  lb_db.Vip,
-                                  vip_id,
-                                  status,
-                                  status_description)
+        try:
+            vip = self.plugin.get_vip(context, vip_id)
+            if vip['status'] == constants.PENDING_DELETE:
+                status = constants.PENDING_DELETE
+            self.plugin.update_status(context,
+                                      lb_db.Vip,
+                                      vip_id,
+                                      status,
+                                      status_description)
+        except VipNotFound:
+            pass
 
     @log.log
     def vip_destroyed(self, context, vip_id=None, host=None):
@@ -810,11 +817,14 @@ class LoadBalancerCallbacks(object):
                            status=constants.ERROR, status_description=None,
                            host=None):
         """Agent confirmation hook to update pool status."""
-        self.plugin.update_status(context,
-                                  lb_db.Pool,
-                                  pool_id,
-                                  status,
-                                  status_description)
+        try:
+            self.plugin.update_status(context,
+                                      lb_db.Pool,
+                                      pool_id,
+                                      status,
+                                      status_description)
+        except PoolNotFound:
+            pass
 
     @log.log
     def pool_destroyed(self, context, pool_id=None, host=None):
@@ -827,14 +837,17 @@ class LoadBalancerCallbacks(object):
                            status=constants.ERROR, status_description=None,
                            host=None):
         """Agent confirmation hook to update member status."""
-        member = self.plugin.get_member(context, member_id)
-        if member['status'] == constants.PENDING_DELETE:
-            status = constants.PENDING_DELETE
-        self.plugin.update_status(context,
-                                  lb_db.Member,
-                                  member_id,
-                                  status,
-                                  status_description)
+        try:
+            member = self.plugin.get_member(context, member_id)
+            if member['status'] == constants.PENDING_DELETE:
+                status = constants.PENDING_DELETE
+                self.plugin.update_status(context,
+                                      lb_db.Member,
+                                      member_id,
+                                      status,
+                                      status_description)
+        except MemberNotFound:
+            pass
 
     @log.log
     def member_destroyed(self, context, member_id=None, host=None):
@@ -849,9 +862,12 @@ class LoadBalancerCallbacks(object):
                                      status_description=None,
                                      host=None):
         """Agent confirmation hook to update healthmonitor status."""
-        self.plugin.update_pool_health_monitor(context,
+        try:
+            self.plugin.update_pool_health_monitor(context,
                                                health_monitor_id, pool_id,
                                                status, status_description)
+        except HealthMonitorNotFound:
+            pass
 
     @log.log
     def health_monitor_destroyed(self, context, health_monitor_id=None,
@@ -870,6 +886,8 @@ class LoadBalancerCallbacks(object):
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
         try:
             self.plugin.update_pool_stats(context, pool_id, stats)
+        except PoolNotFound:
+            pass
         except Exception as ex:
             LOG.error(_('error updating pool stats: %s' % ex.message))
 

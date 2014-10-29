@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 
-import weakref
 import datetime
 
 from oslo.config import cfg
@@ -103,52 +102,50 @@ class LogicalServiceCache(object):
     def __init__(self):
         LOG.debug(_("Initializing LogicalServiceCache version %s"
                     % __VERSION__))
-        self.services = set()
-        self.port_lookup = weakref.WeakValueDictionary()
-        self.pool_lookup = weakref.WeakValueDictionary()
+        self.services = {}
+
+    @property
+    def size(self):
+        return len(self.services)
 
     def put(self, service):
         if 'port_id' in service['vip']:
             port_id = service['vip']['port_id']
         else:
-            # No VIP... don't cache the service yet
-            return
+            port_id = None
         pool_id = service['pool']['id']
         tenant_id = service['pool']['tenant_id']
-        s = self.Service(port_id, pool_id, tenant_id)
-        if s not in self.services:
-            self.services.add(s)
-            if port_id:
-                self.port_lookup[port_id] = s
-            self.pool_lookup[pool_id] = s
+        if not pool_id in self.services:
+            s = self.Service(port_id, pool_id, tenant_id)
+            self.services[pool_id] = s
+        else:
+            s = self.services[pool_id]
+            s.tenant_id = tenant_id
+            s.port_id = port_id
 
     def remove(self, service):
         if not isinstance(service, self.Service):
-            if 'port_id' in service['vip']:
-                port_id = service['vip']['port_id']
-            else:
-                # No VIP... shouldn't be in cache
-                return
-            service = self.Service(
-                port_id, service['pool']['id'],
-                service['pool']['tenant_id']
-            )
-        if service in self.services:
-            self.services.remove(service)
+            pool_id = service['pool']['id']
+        else:
+            pool_id = service.pool_id
+        if pool_id in self.services:
+            del(self.services[pool_id])
 
     def remove_by_pool_id(self, pool_id):
-        s = self.pool_lookup.get(pool_id)
-        if s:
-            self.services.remove(s)
+        if pool_id in self.services:
+            del(self.services[pool_id])
 
     def get_by_pool_id(self, pool_id):
-        return self.pool_lookup.get(pool_id)
+        if pool_id in self.services:
+            return self.services[pool_id]
+        else:
+            return None
 
-    def get_by_port_id(self, port_id):
-        return self.port_lookup.get(port_id)
+    #def get_by_port_id(self, port_id):
+    #    return self.port_lookup.get(port_id)
 
     def get_pool_ids(self):
-        return self.pool_lookup.keys()
+        return self.services.keys()
 
     def get_tenant_ids(self):
         tenant_ids = {}
@@ -286,7 +283,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             if not self.lbdriver.connected:
                 self.lbdriver._init_connection()
 
-            service_count = len(self.cache.services)
+            service_count = self.cache.size
             self.agent_state['configurations']['services'] = service_count
             if hasattr(self.lbdriver, 'service_queue'):
                 self.agent_state['configurations']['request_queue_depth'] = \
@@ -306,15 +303,18 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     @periodic_task.periodic_task
     def periodic_resync(self, context):
         now = datetime.datetime.now()
+        # Only force resync if the agent thinks it is
+        # synchronized and the resync timer has exired
         if (now - self.last_resync).seconds > \
                             self.service_resync_interval:
-            LOG.debug(
-                'Forcing resync of services on resync timer (%d seconds).'
-                % self.service_resync_interval)
-            self.cache = LogicalServiceCache()
-            self.needs_resync = True
-            self.last_resync = now
-            self.lbdriver.flush_cache()
+            if not self.needs_resync:
+                self.needs_resync = True
+                LOG.debug(
+                    'Forcing resync of services on resync timer (%d seconds).'
+                    % self.service_resync_interval)
+                self.cache.services = {}
+                self.last_resync = now
+                self.lbdriver.flush_cache()
         # resync if we need to
         if self.needs_resync:
             self.needs_resync = False
@@ -356,7 +356,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             active_pool_ids = set(self.plugin_rpc.get_active_pool_ids())
             LOG.debug(_('plugin produced the list of active pool ids: %s'
                         % list(active_pool_ids)))
-            LOG.debug(_('currently known pool ids are: %s'
+            LOG.debug(_('currently known pool ids before sync are: %s'
                         % list(known_services)))
             for deleted_id in known_services - active_pool_ids:
                 self.destroy_service(deleted_id)
@@ -368,10 +368,13 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                         % pending_pool_ids))
             for pool_id in pending_pool_ids:
                 self.refresh_service(pool_id)
+            known_services = set(self.cache.get_pool_ids())
+            LOG.debug(_('currently known pool ids after sync are: %s'
+                        % list(known_services)))
+            self.remove_orphans()
         except Exception:
             LOG.exception(_('Unable to retrieve ready services'))
             resync = True
-        self.remove_orphans()
         return resync
 
     @log.log
@@ -381,12 +384,12 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                         self.conf.f5_global_routed_mode)
+            self.cache.put(service)
             if not self.lbdriver.exists(service):
                 LOG.error(_('active pool %s is not on BIG-IP.. syncing'
                             % pool_id))
                 # update is create or update
                 self.lbdriver.sync(service)
-            self.cache.put(service)
         except Exception:
             LOG.exception(_('Unable to validate service for pool: %s'),
                           pool_id)
@@ -398,9 +401,9 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
         try:
             service = self.plugin_rpc.get_service_by_pool_id(pool_id,
                                          self.conf.f5_global_routed_mode)
+            self.cache.put(service)
             # update is create or update
             self.lbdriver.sync(service)
-            self.cache.put(service)
         except Exception:
             LOG.exception(_('Unable to refresh service for pool: %s'),
                           pool_id)
@@ -426,7 +429,7 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
     @log.log
     def remove_orphans(self):
         try:
-            self.lbdriver.remove_orphans(set(self.cache.services))
+            self.lbdriver.remove_orphans(self.cache.services)
         except NotImplementedError:
             pass  # Not all drivers will support this
 
