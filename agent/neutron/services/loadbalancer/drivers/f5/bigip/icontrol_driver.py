@@ -2470,7 +2470,8 @@ class iControlDriver(object):
                        ip_address=ip_address,
                        traffic_group=tglo,
                        snat_pool_name=snat_pool_name,
-                       folder=snat_folder)
+                       folder=snat_folder,
+                       snat_pool_folder=snat_pool_folder)
 
         bigip.assured_snat_subnets.append(subnet['id'])
 
@@ -2523,7 +2524,8 @@ class iControlDriver(object):
                            ip_address=ip_address,
                            traffic_group='traffic-group-1',
                            snat_pool_name=snat_pool_name,
-                           folder=snat_folder)
+                           folder=snat_folder,
+                           snat_pool_folder=snat_pool_folder)
 
         for set_bigip in bigip.group_bigips:
             if subnet['id'] in set_bigip.assured_snat_subnets:
@@ -2580,7 +2582,8 @@ class iControlDriver(object):
                            ip_address=ip_address,
                            traffic_group=traffic_group,
                            snat_pool_name=snat_pool_name,
-                           folder=snat_folder)
+                           folder=snat_folder,
+                           snat_pool_folder=snat_pool_folder)
 
         for set_bigip in bigip.group_bigips:
             if subnet['id'] in set_bigip.assured_snat_subnets:
@@ -2883,7 +2886,9 @@ class iControlDriver(object):
                                          member_name=tmos_snat_name,
                                          folder=service['pool']['tenant_id'])
                     if bigip.snat.delete(name=tmos_snat_name,
-                                         folder=network_folder):
+                                         folder=network_folder,
+                                         snat_pool_folder=\
+                                               service['pool']['tenant_id']):
                         # Only if it still exists and can be
                         # deleted because it is not in use can
                         # we safely delete the neutron port
@@ -2903,7 +2908,9 @@ class iControlDriver(object):
                                         member_name=tmos_snat_name,
                                         folder=service['pool']['tenant_id'])
                     if bigip.snat.delete(name=tmos_snat_name,
-                                         folder=network_folder):
+                                         folder=network_folder,
+                                         snat_pool_folder=\
+                                              service['pool']['tenant_id']):
                         # Only if it still exists and can be
                         # deleted because it is not in use can
                         # we safely delete the neutron port
@@ -2925,7 +2932,9 @@ class iControlDriver(object):
                                     member_name=tmos_snat_name,
                                     folder=service['pool']['tenant_id'])
                     if bigip.snat.delete(name=tmos_snat_name,
-                                         folder=network_folder):
+                                         folder=network_folder,
+                                         snat_pool_folder=\
+                                           service['pool']['tenant_id']):
                         # Only if it still exists and can be
                         # deleted because it is not in use can
                         # we safely delete the neutron port

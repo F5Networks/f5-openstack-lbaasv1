@@ -90,7 +90,11 @@ class Pool(object):
                     # in use by another pool
                     if node_res.status_code < 400:
                         self._del_arp_and_fdb(node_address, folder)
-                    elif node_res.status_code > 499:
+                    elif node_res.status_code == 400 and \
+                         (node_res.text.find('is referenced') > 0):
+                        # same node can be in multiple pools
+                        pass
+                    else:
                         raise exceptions.PoolDeleteException(node_res.text)
             return True
         return False
@@ -479,11 +483,16 @@ class Pool(object):
                 node_req += '~' + folder + '~' + urllib.quote(ip_address)
                 response = self.bigip.icr_session.delete(node_req,
                                         timeout=const.CONNECTION_TIMEOUT)
-                if response.status_code > 399 and \
+                if response.status_code == 400 and \
+                 (response.text.find('is referenced') > 0):
+                    # Node address is part of multiple pools
+                    pass
+                elif response.status_code > 399 and \
                    (not response.status_code == 404):
                     Log.error('node', response.text)
                     raise exceptions.PoolDeleteException(response.text)
-                self._del_arp_and_fdb(ip_address, folder)
+                else:
+                    self._del_arp_and_fdb(ip_address, folder)
             else:
                 Log.error('pool', response.text)
                 raise exceptions.PoolDeleteException(response.text)

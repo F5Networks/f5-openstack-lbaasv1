@@ -92,6 +92,12 @@ def icontrol_folder(method):
                             instance.bigip.set_folder(kwargs['named_address'],
                                                       kwargs['folder'])
             for name in kwargs:
+                if name.find('_folder') > 0 and kwargs[name]:
+                    if kwargs[name].find('~') > -1:
+                        kwargs[name] = kwargs[name].replace('~', '/')
+                    kwargs[name] = os.path.basename(kwargs[name])
+                    if not kwargs[name] == 'Common':
+                        kwargs[name] = prefixed(kwargs[name])
                 if name.find('_name') > 0 and kwargs[name]:
                     if isinstance(kwargs['name'], basestring):
                         if kwargs[name].find('~') > -1:
@@ -150,6 +156,12 @@ def icontrol_rest_folder(method):
                     kwargs['name'] = os.path.basename(kwargs['name'])
                 kwargs['name'] = prefixed(kwargs['name'])
         for name in kwargs:
+            if name.find('_folder') > 0 and kwargs[name]:
+                if kwargs[name].find('~') > -1:
+                    kwargs[name] = kwargs[name].replace('~', '/')
+                kwargs[name] = os.path.basename(kwargs[name])
+                if not kwargs[name] == 'Common':
+                    kwargs[name] = prefixed(kwargs[name])
             if name.find('_name') > 0 and kwargs[name]:
                 if isinstance(kwargs[name], basestring):
                     if kwargs[name].find('~') > -1:
