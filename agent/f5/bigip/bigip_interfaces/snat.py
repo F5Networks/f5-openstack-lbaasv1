@@ -371,7 +371,7 @@ class SNAT(object):
         request_url += '?$select=members'
         response = self.bigip.icr_session.get(request_url,
                                         timeout=const.CONNECTION_TIMEOUT)
-        if response.status_code < '400':
+        if response.status_code < 400:
             response_obj = json.loads(response.text)
             sa_to_remove = None
             for member in response_obj['members']:
