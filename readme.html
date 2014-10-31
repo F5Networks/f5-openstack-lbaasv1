@@ -378,6 +378,8 @@
 					<tr><th nowrap>Setting</th><th nowrap>Allowed Values</th><th nowrap>Default Value</th><th nowrap>Description</th></tr>
 					<tr><td nowrap>debug</td><td>True or False</td><td>False</td><td>Should the agent create verbose debug logging in /var/log/neutron/f5-bigip-lbaas-agent.log</td></tr>
 					<tr><td nowrap>periodic_interval</td><td>integer number of seconds</td><td>10</td><td>How often should the get_stats, and save configurations be considered. (not run, but considered)</td></tr>
+					
+					<tr><td nowrap>service_resync_interval</td><td>integer number of seconds<td>500</td><td>How often the agent pulls known configurations with neutron and cleans up orphaned configurations on the BIG-IPs.</td></tr>
 					<tr><td nowrap>use_namespace</td><td>True or False</td><td>True</td><td>Should all Neutron non-shared subnet addresses be assigned to route domains</td></tr>
 					<tr><td nowrap>static_agent_configuration_data</td><td>single or comma separated list</td><td>None</td><td>This list of name:value attribues will be sent as part of the agent configuration data to the plugin.</td></tr>				    
 					<tr><td nowrap>environment_prefix</td><td>String prefix</td><td>'' (blank string)</td><td>This is the prefix this agent will use for all BIG-IP objects. Default is a blank string which will result in BIG-IP objects prefixed with uuid_.</td></tr>
