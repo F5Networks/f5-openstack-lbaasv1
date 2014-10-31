@@ -22,6 +22,7 @@ from f5.bigip import exceptions
 from f5.bigip.bigip_interfaces import log
 
 import json
+import os
 
 
 class SNAT(object):
@@ -118,11 +119,11 @@ class SNAT(object):
                 # what SNAT pool is referencing this SNAT address
                 if not snat_pool_folder:
                     snat_pool_folder = folder
-                request_url = self.bigip.icr_url + '/ltm/snatpool'
+                pool_req_url = self.bigip.icr_url + '/ltm/snatpool'
                 request_filter = 'partition eq ' + snat_pool_folder
                 response = self.bigip.icr_session.get(
-                                    request_url + '?$filter=' + request_filter,
-                                    timeout=const.CONNECTION_TIMEOUT)
+                                pool_req_url + '?$filter=' + request_filter,
+                                timeout=const.CONNECTION_TIMEOUT)
                 if response.status_code < 400:
                     response_obj = json.loads(response.text)
                     if 'items' in response_obj:
@@ -148,10 +149,24 @@ class SNAT(object):
                                                 exceptions.SNATDeleteException(
                                                                  response.text)
                                     else:
-                                        return self.remove_from_pool(
+                                        if self.remove_from_pool(
                                                 name=snatpool['name'],
                                                 member_name=name,
-                                                folder=snat_pool_folder)
+                                                folder=snat_pool_folder):
+                                        # now try to delete it again
+                                            response = \
+                                              self.bigip.icr_session.delete(
+                                             request_url,
+                                             timeout=const.CONNECTION_TIMEOUT)
+                                            if response.status_code < 400:
+                                                return True
+                                            elif response.status_code == 404:
+                                                return True
+                                            else:
+                                                Log.error('snat-translation',
+                                                          response.text)
+                                                raise \
+                                exceptions.SNATDeleteException(response.text)
             elif response.status_code != 404:
                 Log.error('snat-translation', response.text)
                 raise exceptions.SNATDeleteException(response.text)
@@ -351,7 +366,6 @@ class SNAT(object):
     @log
     def remove_from_pool(self, name=None, member_name=None, folder='Common'):
         folder = str(folder).replace('/', '')
-        sa_path = '/' + folder + '/' + member_name
         request_url = self.bigip.icr_url + '/ltm/snatpool'
         request_url += '/~' + folder + '~' + name
         request_url += '?$select=members'
@@ -359,8 +373,12 @@ class SNAT(object):
                                         timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < '400':
             response_obj = json.loads(response.text)
-            if 'members' in response_obj:
-                if not sa_path in response_obj['members']:
+            sa_to_remove = None
+            for member in response_obj['members']:
+                member_base_name = os.path.basename(member)
+                if member_base_name == member_name:
+                    sa_to_remove = member
+                if not sa_to_remove:
                     return True
                 else:
                     members = response_obj['members']
@@ -375,7 +393,7 @@ class SNAT(object):
                             Log.error('snatpool', response.text)
                             raise exceptions.SNATDeleteException(response.text)
                     else:
-                        members.remove(sa_path)
+                        members.remove(sa_to_remove)
                         payload = dict()
                         payload['members'] = members
                         request_url = self.bigip.icr_url
