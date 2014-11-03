@@ -115,7 +115,7 @@ class SNAT(object):
             if response.status_code < 400:
                 return True
             elif response.status_code == 400 and \
-                (response.text.find('is still referenced by a snat pool') > 0):
+                (response.text.find('is still referenced') > 0):
                 # what SNAT pool is referencing this SNAT address
                 if not snat_pool_folder:
                     snat_pool_folder = folder
