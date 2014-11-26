@@ -22,18 +22,21 @@ from suds import WebFault
 
 import json
 import time
+import uuid
 
 
 class System(object):
     def __init__(self, bigip):
         self.bigip = bigip
 
-        self.bigip.icontrol.add_interfaces(['System.Session',
+        self.bigip.icontrol.add_interfaces(['Management.Folder',
+                                            'System.Session',
                                             'System.SystemInfo',
                                             'System.VCMP']
                                            )
 
         # iControl helper objects
+        self.mgmt_folder = self.bigip.icontrol.Management.Folder
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_info = self.bigip.icontrol.System.SystemInfo
         self.sys_vcmp = self.bigip.icontrol.System.VCMP
@@ -106,6 +109,19 @@ class System(object):
     @log
     def delete_folder(self, folder):
         if folder:
+            # Before deleting the folder, change the iControl SOAP
+            # active folder to '/' so that we do not delete the
+            # active folder, which breaks the iControl session.
+            # We also need to do a fake query and fake command
+            # because changing your active folder, by itself, does
+            # not do anything.
+            self.sys_session.set_active_folder('/')
+            self.current_folder = '/'
+            self.mgmt_folder.get_list()
+            fakename = '/delme-'+str(uuid.uuid4())[0:8]
+            self.mgmt_folder.create([fakename])
+            self.mgmt_folder.delete_folder([fakename])
+
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/sys/folder/~' + folder
             response = self.bigip.icr_session.delete(request_url,

@@ -2,7 +2,6 @@
 setup.py
 neutron/services/loadbalancer/drivers/f5/__init__.py
 neutron/services/loadbalancer/drivers/f5/agent_scheduler.py
-neutron/services/loadbalancer/drivers/f5/graph.py
 neutron/services/loadbalancer/drivers/f5/plugin_driver.py
 neutron/services/loadbalancer/drivers/f5/log/__init__.py
 neutron/services/loadbalancer/drivers/f5/log/plugin_driver.py

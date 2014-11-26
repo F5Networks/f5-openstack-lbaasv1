@@ -378,45 +378,35 @@ class SNAT(object):
                 member_base_name = os.path.basename(member)
                 if member_base_name == member_name:
                     sa_to_remove = member
-                if not sa_to_remove:
-                    return True
-                else:
-                    members = response_obj['members']
-                    if len(members) == 1:
-                        request_url = self.bigip.icr_url + '/ltm/snatpool'
-                        request_url += '/~' + folder + '~' + name
-                        response = self.bigip.icr_session.delete(request_url,
-                                              timeout=const.CONNECTION_TIMEOUT)
-                        if response.status_code:
-                            return True
-                        else:
-                            Log.error('snatpool', response.text)
-                            raise exceptions.SNATDeleteException(response.text)
-                    else:
-                        members.remove(sa_to_remove)
-                        payload = dict()
-                        payload['members'] = members
-                        request_url = self.bigip.icr_url
-                        request_url += '/ltm/snatpool'
-                        request_url += '/~' + folder + '~' + name
-                        response = self.bigip.icr_session.put(request_url,
-                                              data=json.dumps(payload),
-                                              timeout=const.CONNECTION_TIMEOUT)
-                        if response.status_code < 400:
-                            return True
-                        else:
-                            Log.error('snatpool', response.text)
-                            raise exceptions.SNATUpdateException(response.text)
+            if not sa_to_remove:
+                return True
             else:
-                request_url = self.bigip.icr_url + '/ltm/snatpool'
-                request_url += '/~' + folder + '~' + name
-                response = self.bigip.icr_session.delete(request_url,
-                                              timeout=const.CONNECTION_TIMEOUT)
-                if response.status_code:
-                    return True
+                members = response_obj['members']
+                if len(members) == 1:
+                    request_url = self.bigip.icr_url + '/ltm/snatpool'
+                    request_url += '/~' + folder + '~' + name
+                    response = self.bigip.icr_session.delete(request_url,
+                                          timeout=const.CONNECTION_TIMEOUT)
+                    if response.status_code:
+                        return True
+                    else:
+                        Log.error('snatpool', response.text)
+                        raise exceptions.SNATDeleteException(response.text)
                 else:
-                    Log.error('snatpool', response.text)
-                    raise exceptions.SNATDeleteException(response.text)
+                    members.remove(sa_to_remove)
+                    payload = dict()
+                    payload['members'] = members
+                    request_url = self.bigip.icr_url
+                    request_url += '/ltm/snatpool'
+                    request_url += '/~' + folder + '~' + name
+                    response = self.bigip.icr_session.put(request_url,
+                                          data=json.dumps(payload),
+                                          timeout=const.CONNECTION_TIMEOUT)
+                    if response.status_code < 400:
+                        return True
+                    else:
+                        Log.error('snatpool', response.text)
+                        raise exceptions.SNATUpdateException(response.text)
         else:
             Log.error('snatpool', response.text)
             raise exceptions.SNATQueryException(response.text)
