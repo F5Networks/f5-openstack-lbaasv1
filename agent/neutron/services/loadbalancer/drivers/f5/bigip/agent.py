@@ -14,15 +14,25 @@
 #
 
 import eventlet
+eventlet.monkey_patch()
 from oslo.config import cfg
 
 from neutron.agent.common import config
-from neutron.common import legacy
-from neutron.openstack.common.rpc import service as rpc_service
+preJuno = False
+try:
+    from neutron.common import legacy
+    from neutron.openstack.common.rpc import service as rpc_service
+    preJuno = True
+except:
+    from neutron.common import rpc as rpc_service
+    from neutron.common import config as common_config
 from neutron.openstack.common import service
 from neutron.services.loadbalancer.drivers.f5.bigip import \
      agent_manager as manager
 from neutron.services.loadbalancer.drivers.f5 import plugin_driver
+from neutron.openstack.common import log as logging
+
+import sys
 
 OPTS = [
     cfg.IntOpt(
@@ -45,15 +55,18 @@ class LbaasAgentService(rpc_service.Service):
 
 
 def main():
-    eventlet.monkey_patch()
     cfg.CONF.register_opts(OPTS)
     cfg.CONF.register_opts(manager.OPTS)
     config.register_agent_state_opts_helper(cfg.CONF)
     config.register_root_helper(cfg.CONF)
 
-    cfg.CONF(project='neutron')
-    config.setup_logging(cfg.CONF)
-    legacy.modernize_quantum_config(cfg.CONF)
+    if preJuno:
+        cfg.CONF(project='neutron')
+        config.setup_logging(cfg.CONF)
+        legacy.modernize_quantum_config(cfg.CONF)
+    else:
+        common_config.init(sys.argv[1:])
+        config.setup_logging()
 
     mgr = manager.LbaasAgentManager(cfg.CONF)
     svc = LbaasAgentService(

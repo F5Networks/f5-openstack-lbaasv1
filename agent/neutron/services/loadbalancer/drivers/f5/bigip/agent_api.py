@@ -13,7 +13,10 @@
 # limitations under the License.
 #
 
-from neutron.openstack.common.rpc import proxy
+try:
+    from neutron.openstack.common.rpc import proxy as n_rpc
+except:
+    from neutron.common import rpc as n_rpc
 from neutron.agent import rpc as agent_rpc
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron.common import log
@@ -31,7 +34,7 @@ class L2PopulationApi(l2pop_rpc.L2populationAgentNotifyAPI):
     pass
 
 
-class LbaasAgentApi(proxy.RpcProxy):
+class LbaasAgentApi(n_rpc.RpcProxy):
     """Agent side of the Agent to Plugin RPC API."""
 
     API_VERSION = '1.0'

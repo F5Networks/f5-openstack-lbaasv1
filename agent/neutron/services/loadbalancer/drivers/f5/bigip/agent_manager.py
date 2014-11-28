@@ -15,6 +15,12 @@
 
 import datetime
 
+preJuno = False
+try:
+    from neutron.openstack.common.rpc import dispatcher
+    preJuno = True
+except:
+    from neutron.common import rpc as n_rpc
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
@@ -26,7 +32,6 @@ from neutron.common import topics
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
-from neutron.openstack.common.rpc import dispatcher
 
 from neutron.services.loadbalancer.drivers.f5.bigip import agent_api
 from neutron.services.loadbalancer.drivers.f5.bigip import constants
@@ -154,14 +159,16 @@ class LogicalServiceCache(object):
         return tenant_ids.keys()
 
 
-class LbaasAgentManager(periodic_task.PeriodicTasks):
+class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
     # history
     #   1.0 Initial version
     #   1.1 Support agent_updated call
     RPC_API_VERSION = '1.1'
 
-    def __init__(self, conf):
+    # Not using __init__ in order to avoid complexities with super().
+    # See derived classes after this class
+    def do_init(self, conf):
         LOG.info(_('Initializing LbaasAgentManager with conf %s' % conf))
         self.conf = conf
 
@@ -269,11 +276,19 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
                                   topics.UPDATE,
                                   self.agent_host])
 
-            self.dispatcher = dispatcher.RpcDispatcher([self])
+            if preJuno:
+                self.dispatcher = dispatcher.RpcDispatcher([self])
+            else:
+                self.endpoints = [self]
 
             LOG.debug(_('registering to %s consumer on RPC topic: %s'
                         % (consumers, topics.AGENT)))
-            self.connection = agent_rpc.create_consumers(self.dispatcher,
+            if preJuno:
+                self.connection = agent_rpc.create_consumers(self.dispatcher,
+                                                         topics.AGENT,
+                                                         consumers)
+            else:
+                self.connection = agent_rpc.create_consumers(self.endpoints,
                                                          topics.AGENT,
                                                          consumers)
 
@@ -658,3 +673,14 @@ class LbaasAgentManager(periodic_task.PeriodicTasks):
             self.lbdriver.fdb_update(fdb_entries)
         except Exception as e:
             LOG.error(_('could not update tunnel:' + e.message))
+
+if preJuno:
+    class LbaasAgentManager(LbaasAgentManagerBase):
+        def __init__(self, conf):
+            LbaasAgentManagerBase.do_init(self, conf)
+else:
+    class LbaasAgentManager(n_rpc.RpcCallback, LbaasAgentManagerBase):
+        def __init__(self, conf):
+            super(LbaasAgentManager, self).__init__()
+            LbaasAgentManagerBase.do_init(self, conf)
+

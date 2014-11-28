@@ -15,13 +15,19 @@ from oslo.config import cfg
 from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
 from neutron.common import rpc as q_rpc
+from neutron.db import agents_db
 from neutron.db.loadbalancer import loadbalancer_db as lb_db
 from neutron.extensions import lbaas_agentscheduler
 from neutron.openstack.common import importutils
 from neutron.common import log
 from neutron.openstack.common import log as logging
-from neutron.openstack.common import rpc
-from neutron.openstack.common.rpc import proxy
+preJuno = False
+try:
+    from neutron.openstack.common import rpc
+    from neutron.openstack.common.rpc import proxy
+    preJuno = True
+except:
+    from neutron.common import rpc as proxy
 from neutron.plugins.common import constants
 from neutron.extensions import portbindings
 from neutron.services.loadbalancer.drivers import abstract_driver
@@ -892,7 +898,6 @@ class LoadBalancerCallbacks(object):
             LOG.error(_('error updating pool stats: %s' % ex.message))
 
     def create_rpc_dispatcher(self):
-        from neutron.db import agents_db
         return q_rpc.PluginRpcDispatcher(
             [self, agents_db.AgentExtRpcCallback(self.plugin)])
 
@@ -1106,28 +1111,38 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     def __init__(self, plugin):
         LOG.debug('Initializing F5PluginDriver')
 
-        # create the RPC message casting class - publisher
         self.agent_rpc = LoadBalancerAgentApi(TOPIC_LOADBALANCER_AGENT)
-        # register the RPC call back receiving class - subscriber
-        self.callbacks = LoadBalancerCallbacks(plugin)
-        # connect to the RPC message bus
-        self.conn = rpc.create_connection(new=True)
-        # register the callback consumer
-        self.conn.create_consumer(
-            TOPIC_PROCESS_ON_HOST,
-            self.callbacks.create_rpc_dispatcher(),
-            fanout=False)
 
-        self.conn.consume_in_thread()
-        # create an instance reference to the core plugin
-        # this is a regular part of the extensions model
         self.plugin = plugin
-        # register as a load loadbalancer agent
+        self._set_callbacks()
+
         self.plugin.agent_notifiers.update(
             {q_const.AGENT_TYPE_LOADBALANCER: self.agent_rpc})
-        # create an instance reference to the agent scheduler
+
         self.pool_scheduler = importutils.import_object(
             cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
+
+    def _set_callbacks(self):
+        self.callbacks = LoadBalancerCallbacks(self.plugin)
+
+        if preJuno:
+            self.conn = rpc.create_connection(new=True)
+            # register the callback consumer
+            self.conn.create_consumer(
+                TOPIC_PROCESS_ON_HOST,
+                self.callbacks.create_rpc_dispatcher(),
+                fanout=False)
+            self.conn.consume_in_thread()
+        else:
+            self.conn = q_rpc.create_connection(new=True)
+            self.conn.create_consumer(
+                TOPIC_PROCESS_ON_HOST,
+                [self.callbacks, agents_db.AgentExtRpcCallback(self.plugin)],
+                fanout=False)
+            self.conn.consume_in_threads()
+
+
+        # create an instance reference to the core plugin
 
     def get_pool_agent(self, context, pool_id):
         # define which agent to communicate with to handle provision
@@ -1209,6 +1224,8 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         agent = self.pool_scheduler.schedule(self.plugin, context, pool)
         if not agent:
             raise lbaas_agentscheduler.NoEligibleLbaasAgent(pool_id=pool['id'])
+        if not preJuno:
+            agent = self.plugin._make_agent_dict(agent)
 
         # get the complete service definition from the data model
         service = self.callbacks.get_service_by_pool_id(context,
