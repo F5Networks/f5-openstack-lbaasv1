@@ -40,7 +40,7 @@ class Vlan(object):
             payload['partition'] = folder
             if vlanid:
                 payload['tag'] = vlanid
-                payload['interfaces'] = [{'name':interface, 'untagged':False}]
+                payload['interfaces'] = [{'name':interface, 'tagged':True}]
             else:
                 payload['tag'] = 0
                 payload['interfaces'] = [{'name':interface, 'untagged':True}]

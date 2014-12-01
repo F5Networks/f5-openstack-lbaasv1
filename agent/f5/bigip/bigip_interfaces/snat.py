@@ -50,7 +50,7 @@ class SNAT(object):
             response = self.bigip.icr_session.post(request_url,
                                              data=json.dumps(payload),
                                              timeout=const.CONNECTION_TIMEOUT)
-            if not (response.status_code < '400' or \
+            if not (response.status_code < 400 or \
                     response.status_code == 409):
                 Log.error('snat-translation', response.text)
                 raise exceptions.SNATCreationException(response.text)
@@ -75,7 +75,7 @@ class SNAT(object):
                     request_url += '?$select=members'
                     response = self.bigip.icr_session.get(request_url,
                                         timeout=const.CONNECTION_TIMEOUT)
-                    if response.status_code < '400':
+                    if response.status_code < 400:
                         response_obj = json.loads(response.text)
                         if 'members' in response_obj:
                             if not sa_path in response_obj['members']:
@@ -96,7 +96,7 @@ class SNAT(object):
                     response = self.bigip.icr_session.put(request_url,
                                            data=json.dumps(payload),
                                            timeout=const.CONNECTION_TIMEOUT)
-                elif response.status_code < '400':
+                elif response.status_code < 400:
                     return True
                 else:
                     Log.error('snatpool', response.text)
@@ -318,7 +318,7 @@ class SNAT(object):
             response = self.bigip.icr_session.post(request_url,
                                    data=json.dumps(payload),
                                    timeout=const.CONNECTION_TIMEOUT)
-            if response.status_code < '400' or \
+            if response.status_code < 400 or \
                     response.status_code == 409:
                 return True
             else:
@@ -336,7 +336,7 @@ class SNAT(object):
         request_url += '?$select=members'
         response = self.bigip.icr_session.get(request_url,
                                       timeout=const.CONNECTION_TIMEOUT)
-        if response.status_code < '400':
+        if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'members' in response_obj:
                 if not sa_path in response_obj['members']:

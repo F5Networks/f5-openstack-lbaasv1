@@ -2464,7 +2464,7 @@ class iControlDriver(object):
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
-            tglo = '/Common/traffic-group-local-only',
+            tglo = '/Common/traffic-group-local-only'
             bigip.snat.create(
                        name=index_snat_name,
                        ip_address=ip_address,
@@ -3346,10 +3346,11 @@ class iControlDriver(object):
                     set_bigip.assured_snat_subnets = []
                     set_bigip.assured_gateway_subnets = []
                     set_bigip.local_ip = None
-                    if autosync:
-                        set_bigip.cluster.enable_auto_sync(cluster_name)
-                    else:
-                        set_bigip.cluster.disable_auto_sync(cluster_name)
+                    if cluster_name:
+                        if autosync:
+                            set_bigip.cluster.enable_auto_sync(cluster_name)
+                        else:
+                            set_bigip.cluster.disable_auto_sync(cluster_name)
 
                 # setup tunneling
                 # setup VTEP tunnels if needed
