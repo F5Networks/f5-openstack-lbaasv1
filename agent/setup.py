@@ -24,8 +24,10 @@ version = os.environ['VERSION']
 release = os.environ['RELEASE']
 project_dir = os.environ['PROJECT_DIR']
 
-data_files = [('/usr/bin', ['usr/bin/f5-bigip-lbaas-agent']),
-              ('/etc/neutron', ['etc/neutron/f5-bigip-lbaas-agent.ini']),
+data_files = [('/usr/bin',
+               [project_dir + '/agent/usr/bin/f5-bigip-lbaas-agent']),
+              ('/etc/neutron',
+               [project_dir + '/agent/etc/neutron/f5-bigip-lbaas-agent.ini']),
               ('/usr/share/doc/f5-bigip-lbaas-agent',
                [project_dir + '/doc/f5lbaas-readme.pdf',
                 project_dir + '/SUPPORT'])]
