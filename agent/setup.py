@@ -15,22 +15,39 @@
 # limitations under the License.
 #
 
+import sys
+import os
+
 from distutils.core import setup
-import platform
+
+version = os.environ['VERSION']
+release = os.environ['RELEASE']
+project_dir = os.environ['PROJECT_DIR']
 
 data_files = [('/usr/bin', ['usr/bin/f5-bigip-lbaas-agent']),
-             ('/etc/neutron', ['etc/neutron/f5-bigip-lbaas-agent.ini'])]
+              ('/etc/neutron', ['etc/neutron/f5-bigip-lbaas-agent.ini']),
+              ('/usr/share/doc/f5-bigip-lbaas-agent',
+               [project_dir + '/doc/f5lbaas-readme.pdf'])]
 
-dist = platform.dist()[0]
-if dist == 'centos' or dist == 'redhat':
+if 'bdist_rpm' in sys.argv:
+    os.environ['ADD_INIT_STARTUP_SCRIPT'] = 'true'
+
+if 'bdist_deb' in sys.argv:
+    stdebcfg = open('stdeb.cfg', 'w')
+    stdebcfg.write('[DEFAULT]\n')
+    stdebcfg.write('Package: f5-bigip-lbaas-agent\n')
+    stdebcfg.write('Debian-Version: ' + release + '\n')
+    stdebcfg.close()
+
+if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
     data_files.append(('/etc/init.d', ['etc/init.d/f5-bigip-lbaas-agent']))
 
 setup(name='f5-bigip-lbaas-agent',
-      version='1.0.5.icehouse-1',
       description='F5 LBaaS Agent for OpenStack',
+      version=version,
       author='F5 DevCentral',
       author_email='devcentral@f5.com',
-      url='http://devcentral.f5.com/f5',
+      url='http://devcentral.f5.com/openstack',
       py_modules=[
          'neutron.services.loadbalancer.drivers.f5.bigip.agent',
          'neutron.services.loadbalancer.drivers.f5.bigip.agent_api',

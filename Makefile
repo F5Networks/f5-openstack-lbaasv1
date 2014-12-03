@@ -6,9 +6,8 @@
 # 
 # 
 PROJECT_DIR := $(shell pwd)
-
-VERSION := $(shell cat VERSION|tr -d '\n'; echo -n '.'; cat OS_RELEASE|tr -d '\n'; echo -n '-1')
-RPM_VERSION := $(shell cat VERSION|tr -d '\n'; echo -n '.'; cat OS_RELEASE|tr -d '\n'|tr '-' '_'; echo -n '_1')
+VERSION := $(shell cat VERSION|tr -d '\n';)
+RELEASE := $(shell cat RELEASE|tr -d '\n';)
 
 default: debs rpms
 
@@ -21,42 +20,58 @@ rpms: build/f5-lbaas-driver-$(VERSION).noarch.rpm \
 build/f5-lbaas-driver_$(VERSION)_all.deb:
 	(cd driver; \
 	rm -rf deb_dist; \
-	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
+	rm -f stdeb.cfg; \
         ) 
 	mkdir -p build
-	cp driver/deb_dist/f5-lbaas-driver_$(VERSION)-1_all.deb build/
+	cp driver/deb_dist/f5-lbaas-driver_$(VERSION)-$(RELEASE)_all.deb build/
 
 
 build/f5-bigip-lbaas-agent_$(VERSION)_all.deb:
 	(cd agent; \
 	rm -rf deb_dist; \
-	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
+	rm -f stdeb.cfg; \
         )
 	mkdir -p build
-	cp agent/deb_dist/f5-bigip-lbaas-agent_$(VERSION)-1_all.deb build
+	cp agent/deb_dist/f5-bigip-lbaas-agent_$(VERSION)-$(RELEASE)_all.deb build
 
 
 build/f5-lbaas-driver-$(VERSION).noarch.rpm:
 	(cd driver; \
-	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
-	python setup.py bdist_rpm; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
+	python setup.py bdist_rpm --release $(RELEASE); \
         ) 
 	mkdir -p build
-	cp driver/dist/f5-lbaas-driver-$(RPM_VERSION)-1.noarch.rpm build
+	cp driver/dist/f5-lbaas-driver-$(VERSION)-$(RELEASE).noarch.rpm build
 
 build/f5-bigip-lbaas-agent-$(VERSION).noarch.rpm:
 	(cd agent; \
-	sed -i.orig "s/\(.*version=\).*/\1\'$(VERSION)\',/g" setup.py; \
-	python setup.py bdist_rpm; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
+	python setup.py bdist_rpm --release $(RELEASE); \
 	)
 	mkdir -p build
-	cp agent/dist/f5-bigip-lbaas-agent-$(RPM_VERSION)-1.noarch.rpm build
+	cp agent/dist/f5-bigip-lbaas-agent-$(VERSION)-$(RELEASE).noarch.rpm build
+
+pdf:
+	html2pdf $(PROJECT_DIR)/doc/f5lbaas-readme.html $(PROJECT_DIR)/doc/f5lbaas-readme.pdf
 
 clean: clean-debs clean-rpms 
 
-clean-debs: 
+clean-debs:
+	find . -name "*.pyc" -exec rm -rf {} \;
+	rm -f driver/MANIFEST
+	rm -f agent/MANIFEST
 	rm -f build/f5-bigip-lbaas-agent_*.deb
 	(cd agent; \
 	rm -rf deb_dist; \
@@ -66,13 +81,17 @@ clean-debs:
 	rm -rf deb_dist; \
         )
 
-clean-rpms: 
+clean-rpms:
+	find . -name "*.pyc" -exec rm -rf {} \;
+	rm -f driver/MANIFEST
+	rm -f agent/MANIFEST 
 	rm -f build/f5-bigip-lbaas-agent-*.rpm
 	(cd agent; \
 	rm -rf dist; \
+	rm -rf /build/bdist.linux-x86_64; \
         )
 	rm -f build/f5-lbaas-driver-*.rpm
 	(cd driver; \
 	rm -rf dist; \
+	rm -rf build/bdist.linux-x86_64; \
         )
-
