@@ -24,7 +24,8 @@ release = os.environ['RELEASE']
 project_dir = os.environ['PROJECT_DIR']
 
 data_files = [('/usr/share/doc/f5-lbaas-driver',
-               [project_dir + '/doc/f5lbaas-readme.pdf'])]
+               [project_dir + '/doc/f5lbaas-readme.pdf',
+                project_dir + '/SUPPORT'])]
 
 if 'bdist_deb' in sys.argv:
     stdebcfg = open('stdeb.cfg', 'w')

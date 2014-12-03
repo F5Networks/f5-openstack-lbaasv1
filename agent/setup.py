@@ -27,7 +27,8 @@ project_dir = os.environ['PROJECT_DIR']
 data_files = [('/usr/bin', ['usr/bin/f5-bigip-lbaas-agent']),
               ('/etc/neutron', ['etc/neutron/f5-bigip-lbaas-agent.ini']),
               ('/usr/share/doc/f5-bigip-lbaas-agent',
-               [project_dir + '/doc/f5lbaas-readme.pdf'])]
+               [project_dir + '/doc/f5lbaas-readme.pdf',
+                project_dir + '/SUPPORT'])]
 
 if 'bdist_rpm' in sys.argv:
     os.environ['ADD_INIT_STARTUP_SCRIPT'] = 'true'
