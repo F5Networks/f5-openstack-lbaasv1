@@ -41,7 +41,8 @@ if 'bdist_deb' in sys.argv:
     stdebcfg.close()
 
 if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
-    data_files.append(('/etc/init.d', ['etc/init.d/f5-bigip-lbaas-agent']))
+    data_files.append(('/etc/init.d',
+                [project_dir + '/agent/etc/init.d/f5-bigip-lbaas-agent']))
 
 setup(name='f5-bigip-lbaas-agent',
       description='F5 LBaaS Agent for OpenStack',
