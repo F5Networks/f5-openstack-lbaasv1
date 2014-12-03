@@ -19,7 +19,7 @@ preJuno = False
 try:
     from neutron.openstack.common.rpc import dispatcher
     preJuno = True
-except:
+except ImportError:
     from neutron.common import rpc as n_rpc
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
@@ -679,8 +679,7 @@ if preJuno:
         def __init__(self, conf):
             LbaasAgentManagerBase.do_init(self, conf)
 else:
-    class LbaasAgentManager(n_rpc.RpcCallback, LbaasAgentManagerBase):
+    class LbaasAgentManager(n_rpc.RpcCallback, LbaasAgentManagerBase):  # @UndefinedVariable
         def __init__(self, conf):
             super(LbaasAgentManager, self).__init__()
             LbaasAgentManagerBase.do_init(self, conf)
-

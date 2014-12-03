@@ -26,7 +26,7 @@ try:
     from neutron.openstack.common import rpc
     from neutron.openstack.common.rpc import proxy
     preJuno = True
-except:
+except ImportError:
     from neutron.common import rpc as proxy
 from neutron.plugins.common import constants
 from neutron.extensions import portbindings
@@ -257,7 +257,7 @@ class LoadBalancerCallbacks(object):
                             # get resources needed to find port to host
                             # binding so we can defined vteps and fdb entries
                             # for this Vip's port
-                            from neutron.plugins.ml2 import models as ml2_db
+                            from neutron.plugins.ml2 import models as ml2_db  # @Reimport
                             segment_qry = context.session.query(
                                                         ml2_db.NetworkSegment)
                             segment = segment_qry.filter_by(
@@ -951,7 +951,7 @@ class LoadBalancerCallbacks(object):
         return endpoints
 
 
-class LoadBalancerAgentApi(proxy.RpcProxy):
+class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     """Plugin side of plugin to agent RPC API.
 
        This class publishes RPC messages for
@@ -1134,15 +1134,12 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 fanout=False)
             self.conn.consume_in_thread()
         else:
-            self.conn = q_rpc.create_connection(new=True)
+            self.conn = q_rpc.create_connection(new=True)  # @UndefinedVariable
             self.conn.create_consumer(
                 TOPIC_PROCESS_ON_HOST,
                 [self.callbacks, agents_db.AgentExtRpcCallback(self.plugin)],
                 fanout=False)
             self.conn.consume_in_threads()
-
-
-        # create an instance reference to the core plugin
 
     def get_pool_agent(self, context, pool_id):
         # define which agent to communicate with to handle provision
