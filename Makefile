@@ -95,3 +95,19 @@ clean-rpms:
 	rm -rf dist; \
 	rm -rf build/bdist.linux-x86_64; \
         )
+
+pylint:
+	(cd agent; \
+         > neutron/services/loadbalancer/drivers/__init__.py; \
+         pylint --init-hook='import sys;sys.path.insert(1,"/home/manager/f5-onboard-refactor/src/f5-lbaas/agent")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py | \
+            grep -v "Undefined variable '_'" | \
+            more; \
+         rm neutron/services/loadbalancer/drivers/__init__.py \
+        )
+
+pep8:
+	(cd agent; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py; \
+        )
+
