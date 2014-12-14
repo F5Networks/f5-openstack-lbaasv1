@@ -1958,31 +1958,26 @@ class iControlDriver(object):
             if self.conf.f5_sync_mode == 'replication':
                 bigip.route.delete_domain(
                     folder=service['pool']['tenant_id'])
+                bigip.system.force_root_folder()
                 bigip.system.delete_folder(
                     folder=bigip.decorate_folder(service['pool']['tenant_id']))
             else:
-                # syncing the folder delete seems to cause problems,
-                # so try deleting it on each device
                 clustered = (len(self.__bigips.values()) > 1)
                 if clustered:
                     bigip.device_group = bigip.device.get_device_group()
-                # turn off sync on all devices so we can prevent
-                # a sync from another device doing it
-                for set_bigip in self.__bigips.values():
-                    if clustered:
-                        set_bigip.cluster.disable_auto_sync(bigip.device_group)
                 # all domains must be gone before we attempt to delete
                 # the folder or it won't delete due to not being empty
+                folder = service['pool']['tenant_id']
                 for set_bigip in self.__bigips.values():
-                    folder = service['pool']['tenant_id']
                     set_bigip.route.delete_domain(folder=folder)
-                    set_bigip.system.delete_folder(
-                        folder=set_bigip.decorate_folder(folder))
-                # turn off sync on all devices so we can delete the folder
-                # on each device individually
-                for set_bigip in self.__bigips.values():
-                    if clustered:
-                        set_bigip.cluster.enable_auto_sync(bigip.device_group)
+                    set_bigip.system.force_root_folder()
+                # we need to ensure that the following folder deletion
+                # is clearly the last change that needs to be synced.
+                if clustered:
+                    self._sync_if_clustered(bigip)
+                greenthread.sleep(5)
+                bigip.system.delete_folder(
+                    folder=set_bigip.decorate_folder(folder))
                 if clustered:
                     # Need to make sure this folder delete syncs before
                     # something else runs and changes the current folder to

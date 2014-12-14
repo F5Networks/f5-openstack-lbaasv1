@@ -106,22 +106,29 @@ class System(object):
                 raise exceptions.SystemCreationException(response.text)
         return False
 
+
+    # Force iControl SOAP context into root folder.
+    # This is typically done before deleting a folder.
+    # We need to ensure the internal context of the iControl
+    # SOAP portal is not associated with a folder before
+    # the folder is deleted or the SOAP portal will become
+    # inoperative.
+    # We need to do a fake query and fake command
+    # because setting your active folder, by itself, does
+    # not do anything.
+    def force_root_folder(self):
+        self.sys_session.set_active_folder('/')
+        self.current_folder = '/'
+        self.mgmt_folder.get_list()
+        fakename = '/set-folder-workaround-'+str(uuid.uuid4())[0:8]
+        try:
+            self.mgmt_folder.delete_folder([fakename])
+        except WebFault as e:
+            pass
+
     @log
     def delete_folder(self, folder):
         if folder:
-            # Before deleting the folder, change the iControl SOAP
-            # active folder to '/' so that we do not delete the
-            # active folder, which breaks the iControl session.
-            # We also need to do a fake query and fake command
-            # because changing your active folder, by itself, does
-            # not do anything.
-            self.sys_session.set_active_folder('/')
-            self.current_folder = '/'
-            self.mgmt_folder.get_list()
-            fakename = '/delme-'+str(uuid.uuid4())[0:8]
-            self.mgmt_folder.create([fakename])
-            self.mgmt_folder.delete_folder([fakename])
-
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/sys/folder/~' + folder
             response = self.bigip.icr_session.delete(request_url,
@@ -201,6 +208,8 @@ class System(object):
                 bigip.cluster.sync(dg)
                 # get_device_group and sync will change the current
                 # folder.
+                if not str(folder).startswith('/'):
+                    folder = '/' + folder
                 self.sys_session.set_active_folder(folder)
                 self.current_folder = folder
             if bigip.route_domain_required:
