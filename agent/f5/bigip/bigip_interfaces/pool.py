@@ -228,7 +228,7 @@ class Pool(object):
         return pool_names
 
     @log
-    def purge_orhpaned_pools(self, known_pools,
+    def purge_orphaned_pools(self, known_pools,
                               delete_virtual_server=True):
         request_url = self.bigip.icr_url + '/ltm/pool'
         request_url += '?$select=name,partition'

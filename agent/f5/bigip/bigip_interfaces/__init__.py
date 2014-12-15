@@ -65,20 +65,17 @@ def icontrol_folder(method):
                         kwargs['name'] = os.path.basename(kwargs['name'])
                         kwargs['name'] = prefixed(kwargs['name'])
                         kwargs['name'] = instance.bigip.set_folder(
-                                                            kwargs['name'],
-                                                            'Common')
+                            kwargs['name'], 'Common')
                     else:
                         kwargs['name'] = os.path.basename(kwargs['name'])
                         kwargs['name'] = prefixed(kwargs['name'])
                         kwargs['name'] = instance.bigip.set_folder(
-                                                            kwargs['name'],
-                                                            kwargs['folder'])
+                            kwargs['name'], kwargs['folder'])
             if 'named_address' in kwargs and kwargs['named_address']:
                 if isinstance(kwargs['name'], basestring):
                     if kwargs['named_address'].find('~') > -1:
                         kwargs['named_address'] = \
-                                         kwargs['named_address'].replace('~',
-                                                                         '/')
+                            kwargs['named_address'].replace('~', '/')
                     if kwargs['named_address'].startswith('/Common/'):
                         kwargs['named_address'] = \
                             os.path.basename(kwargs['named_address'])
@@ -107,8 +104,7 @@ def icontrol_folder(method):
                             if name != 'vlan_name' or not preserve_vlan_name:
                                 kwargs[name] = prefixed(kwargs[name])
                             kwargs[name] = instance.bigip.set_folder(
-                                                                kwargs[name],
-                                                                'Common')
+                                kwargs[name], 'Common')
                         else:
                             name_prefix = name[0:name.index('_name')]
                             specific_folder_name = name_prefix + "_folder"
@@ -119,8 +115,7 @@ def icontrol_folder(method):
                             if name != 'vlan_name' or not preserve_vlan_name:
                                 kwargs[name] = prefixed(kwargs[name])
                             kwargs[name] = instance.bigip.set_folder(
-                                                                kwargs[name],
-                                                                folder)
+                                kwargs[name], folder)
             instance.bigip.set_folder(None, kwargs['folder'])
         return method(*args, **kwargs)
     return wrapper
@@ -138,39 +133,39 @@ def icontrol_rest_folder(method):
         preserve_vlan_name = False
         if 'preserve_vlan_name' in kwargs:
             preserve_vlan_name = kwargs['preserve_vlan_name']
+
+        # Here we make sure the name or folder is not REST formatted,
+        # which uses '~' instead of '/'. We change them back to '/'.
+        # We normalize the object names to their base name (with no
+        # / in the name at all) and then use a common prefix.
         if 'folder' in kwargs and kwargs['folder']:
-            if not kwargs['folder'] == '/':
-                if kwargs['folder'].find('Common') < 0:
-                    if kwargs['folder'].find('~') > -1:
-                        kwargs['folder'] = kwargs['folder'].replace('~', '/')
-                        kwargs['folder'] = os.path.basename(kwargs['folder'])
-                    if kwargs['folder'].find('/') > -1:
-                        kwargs['folder'] = os.path.basename(kwargs['folder'])
-                    kwargs['folder'] = prefixed(kwargs['folder'])
+            if kwargs['folder'] != '/' and kwargs['folder'].find('Common') < 0:
+                temp = kwargs['folder'].replace('~', '/')
+                kwargs['folder'] = prefixed(os.path.basename(temp))
         if 'name' in kwargs and kwargs['name']:
             if isinstance(kwargs['name'], basestring):
-                if kwargs['name'].find('~') > -1:
-                    kwargs['name'] = kwargs['name'].replace('~', '/')
-                    kwargs['name'] = os.path.basename(kwargs['name'])
-                if kwargs['name'].find('/') > -1:
-                    kwargs['name'] = os.path.basename(kwargs['name'])
-                kwargs['name'] = prefixed(kwargs['name'])
+                temp = kwargs['name'].replace('~', '/')
+                kwargs['name'] = prefixed(os.path.basename(temp))
+            else:
+                LOG.warn('attempting to normalize non basestring name. '
+                         'Argument: val: ' + str(kwargs['name']))
+
         for name in kwargs:
             if name.find('_folder') > 0 and kwargs[name]:
-                if kwargs[name].find('~') > -1:
-                    kwargs[name] = kwargs[name].replace('~', '/')
+                kwargs[name] = kwargs[name].replace('~', '/')
                 kwargs[name] = os.path.basename(kwargs[name])
                 if not kwargs[name] == 'Common':
                     kwargs[name] = prefixed(kwargs[name])
             if name.find('_name') > 0 and kwargs[name]:
                 if isinstance(kwargs[name], basestring):
-                    if kwargs[name].find('~') > -1:
-                        kwargs[name] = kwargs[name].replace('~', '/')
-                        kwargs[name] = os.path.basename(kwargs[name])
-                    if kwargs[name].find('/') > -1:
-                        kwargs[name] = os.path.basename(kwargs[name])
+                    kwargs[name] = kwargs[name].replace('~', '/')
+                    kwargs[name] = os.path.basename(kwargs[name])
                     if name != 'vlan_name' or not preserve_vlan_name:
                         kwargs[name] = prefixed(kwargs[name])
+                else:
+                    LOG.warn('attempting to normalize non basestring name. '
+                             ' Argument: name: ' + str(name) +
+                             ' val:' + str(kwargs[name]))
         return method(*args, **kwargs)
     return wrapper
 
@@ -254,14 +249,13 @@ def domain_address(method):
                                 if instance.bigip.route_domain_required:
                                     # discover route domain
                                     rid = \
-                                      instance.bigip.get_domain_index(folder)
+                                        instance.bigip.get_domain_index(folder)
                                     # decorate address
                                     if rid > 0:
                                         address = address + "%" + str(rid)
                             else:
                                 # validate_address format
-                                netaddr.IPAddress(
-                                               address[:decorator_index])
+                                netaddr.IPAddress(address[:decorator_index])
                             return_list.append(address)
                         # overwrite argument value with now decorated
                         # values list
@@ -278,7 +272,7 @@ def domain_address(method):
                                 # decorate address
                                 if rid > 0:
                                     kwargs[name] = kwargs[name] + \
-                                                        "%" + str(rid)
+                                        "%" + str(rid)
                         else:
                             # validate address
                             address = kwargs[name][:decorator_index]
@@ -313,7 +307,7 @@ def strip_folder_and_prefix(path):
                 path[i] = path[i].replace(OBJ_PREFIX, '')
             else:
                 path[i] = \
-                  os.path.basename(str(path[i])).replace(OBJ_PREFIX, '')
+                    os.path.basename(str(path[i])).replace(OBJ_PREFIX, '')
         return path
     else:
         if path.find('~') > -1:
@@ -336,11 +330,10 @@ def log(method):
     """Decorator helping to log method calls."""
     def wrapper(*args, **kwargs):
         instance = args[0]
-        LOG.debug('%s::%s called with args: %s kwargs: %s' % (
-                                            instance.__class__.__name__,
-                                            method.__name__,
-                                            args[1:],
-                                            kwargs
-                                           ))
+        LOG.debug('%s::%s called with args: %s kwargs: %s' %
+                  (instance.__class__.__name__,
+                   method.__name__,
+                   args[1:],
+                   kwargs))
         return method(*args, **kwargs)
     return wrapper
