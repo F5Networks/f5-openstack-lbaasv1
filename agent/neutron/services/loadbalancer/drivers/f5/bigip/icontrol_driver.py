@@ -15,18 +15,19 @@
 #
 
 from oslo.config import cfg
-from neutron.common import constants as q_const
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import NeutronException, \
     InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
 
+from neutron.services.loadbalancer.drivers.f5.bigip.l2 import \
+    BigipL2Manager
+
 from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
-from f5.bigip.bigip_interfaces import prefixed
 
 from eventlet import greenthread
 import os
@@ -35,9 +36,7 @@ import urllib2
 import netaddr
 import datetime
 import hashlib
-import random
 from time import time
-from time import sleep
 import logging as std_logging
 
 LOG = logging.getLogger(__name__)
@@ -279,6 +278,7 @@ class iControlDriver(object):
     def __init__(self, conf):
         self.conf = conf
         self.conf.register_opts(OPTS)
+        self.context = None
         self.agent_id = None
         self.hostnames = None
         self.username = None
@@ -289,7 +289,8 @@ class iControlDriver(object):
         self.__last_connect_attempt = None
         self.service_queue = []
         self.agent_configurations = {}
-        self.__vcmp_hosts = []
+        self.tunnel_rpc = None
+        self.l2pop_rpc = None
 
         # BIG-IP containers
         self.__bigips = {}
@@ -315,26 +316,8 @@ class iControlDriver(object):
             self.agent_configurations['tunnel_types'] = []
             self.agent_configurations['bridge_mappings'] = {}
         else:
-            self.interface_mapping = {}
-            self.tagging_mapping = {}
-
             self.tunnel_types = self.conf.advertised_tunnel_types
-
             self.agent_configurations['tunnel_types'] = self.tunnel_types
-
-            # map format is   phynet:interface:tagged
-            for maps in self.conf.f5_external_physical_mappings:
-                intmap = maps.split(':')
-                net_key = str(intmap[0]).strip()
-                if len(intmap) > 3:
-                    net_key = net_key + ':' + str(intmap[3]).strip()
-                self.interface_mapping[net_key] = str(intmap[1]).strip()
-                self.tagging_mapping[net_key] = str(intmap[2]).strip()
-                LOG.debug(_('physical_network %s = interface %s, tagged %s'
-                            % (net_key, intmap[1], intmap[2])
-                            ))
-            self.agent_configurations['bridge_mappings'] = \
-                self.interface_mapping
 
             for net_id in self.conf.common_network_ids:
                 LOG.debug(_('network %s will be mapped to /Common/%s'
@@ -356,12 +339,33 @@ class iControlDriver(object):
             f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
 
         self._init_connection()
-        self._init_vcmp_hosts()
+
+        if self.conf.f5_global_routed_mode:
+            self.bigip_l2_manager = None
+        else:
+            self.bigip_l2_manager = BigipL2Manager(self)
+            self.agent_configurations['bridge_mappings'] = \
+                self.bigip_l2_manager.interface_mapping
 
         LOG.info(_('iControlDriver initialized to %d hosts with username:%s'
                    % (len(self.__bigips), self.username)))
         LOG.info(_('iControlDriver dynamic agent configurations:%s'
                    % self.agent_configurations))
+
+    def get_bigips(self):
+        return self.__bigips
+
+    def set_context(self, context):
+        self.context = context
+
+    def set_tunnel_rpc(self, tunnel_rpc):
+        self.tunnel_rpc = tunnel_rpc
+        if self.bigip_l2_manager:
+            self.bigip_l2_manager.tunnel_rpc = tunnel_rpc
+
+    def set_l2pop_rpc(self, l2pop_rpc):
+        if self.bigip_l2_manager:
+            self.bigip_l2_manager.l2pop_rpc = l2pop_rpc
 
     @serialized('exists')
     @is_connected
@@ -565,166 +569,13 @@ class iControlDriver(object):
             bigip.system.purge_orphaned_folders(existing_tenants)
 
     def fdb_add(self, fdb_entries):
-        """ Add L2 records for MAC addresses behind tunnel endpoints """
-        for network in fdb_entries:
-            net = {'name': network,
-                   'provider:network_type':
-                   fdb_entries[network]['network_type'],
-                   'provider:segmentation_id':
-                   fdb_entries[network]['segment_id']
-                   }
-            tn = self._get_tunnel_name(net)
-            bigip = self._get_bigip()
-            add_fdb = {}
-            for vtep in fdb_entries[network]['ports']:
-                for host in self.__bigips:
-                    bigip = self.__bigips[host]
-                    if hasattr(bigip, 'local_ip') and vtep != bigip.local_ip:
-                        if fdb_entries[network]['network_type'] == 'gre':
-                            folder = bigip.l2gre.get_tunnel_folder(
-                                tunnel_name=tn)
-                            if folder:
-                                entries = fdb_entries[network]['ports'][vtep]
-                                for ent in entries:
-                                    if ent[0] != '00:00:00:00:00:00':
-                                        if not tn in add_fdb:
-                                            add_fdb[tn] = {}
-                                        add_fdb[tn]['folder'] = folder
-                                        if not 'records' in add_fdb[tn]:
-                                            add_fdb[tn]['records'] = {}
-                                        add_fdb[tn]['records'][ent[0]] = {
-                                            'endpoint': vtep,
-                                            'ip_address': ent[1]}
-                        if fdb_entries[network]['network_type'] == 'vxlan':
-                            folder = bigip.l2gre.get_tunnel_folder(
-                                tunnel_name=tn)
-                            if folder:
-                                entries = fdb_entries[network]['ports'][vtep]
-                                for ent in entries:
-                                    if ent[0] != '00:00:00:00:00:00':
-                                        if not tn in add_fdb:
-                                            add_fdb[tn] = {}
-                                        add_fdb[tn]['folder'] = folder
-                                        if not 'records' in add_fdb[tn]:
-                                            add_fdb[tn]['records'] = {}
-                                        add_fdb[tn]['records'][ent[0]] = {
-                                            'endpoint': vtep,
-                                            'ip_address': ent[1]}
-            if len(add_fdb) > 0:
-                if fdb_entries[network]['network_type'] == 'vxlan':
-                    bigip.vxlan.add_fdb_entries(tunnel_name=tn,
-                                                fdb_entries=add_fdb)
-                if fdb_entries[network]['network_type'] == 'vxlan':
-                    bigip.l2gre.add_fdb_entries(tunnel_name=tn,
-                                                fdb_entries=add_fdb)
+        return self.bigip_l2_manager.fdb_add(fdb_entries)
 
     def fdb_remove(self, fdb_entries):
-        """ Remove L2 records for MAC addresses behind tunnel endpoints """
-        for network in fdb_entries:
-            net = {'name': network,
-                   'provider:network_type':
-                   fdb_entries[network]['network_type'],
-                   'provider:segmentation_id':
-                   fdb_entries[network]['segment_id']
-                   }
-            tn = self._get_tunnel_name(net)
-            bigip = self._get_bigip()
-            remove_fdb = {}
-            for vtep in fdb_entries[network]['ports']:
-                for host in self.__bigips:
-                    bigip = self.__bigips[host]
-                    if hasattr(bigip, 'local_ip') and vtep != bigip.local_ip:
-                        if fdb_entries[network]['network_type'] == 'gre':
-                            folder = bigip.l2gre.get_tunnel_folder(
-                                tunnel_name=tn)
-                            if folder:
-                                entries = fdb_entries[network]['ports'][vtep]
-                                for ent in entries:
-                                    if ent[0] != '00:00:00:00:00:00':
-                                        if not tn in remove_fdb:
-                                            remove_fdb[tn] = {}
-                                        remove_fdb[tn]['folder'] = folder
-                                        if not 'records' in remove_fdb[tn]:
-                                            remove_fdb[tn]['records'] = {}
-                                        remove_fdb[tn]['records'][ent[0]] = {
-                                            'endpoint': vtep,
-                                            'ip_address': ent[1]}
-                        if fdb_entries[network]['network_type'] == 'vxlan':
-                            folder = bigip.l2gre.get_tunnel_folder(
-                                tunnel_name=tn)
-                            if folder:
-                                entries = fdb_entries[network]['ports'][vtep]
-                                for ent in entries:
-                                    if ent[0] != '00:00:00:00:00:00':
-                                        if not tn in remove_fdb:
-                                            remove_fdb[tn] = {}
-                                        remove_fdb[tn]['folder'] = folder
-                                        if not 'records' in remove_fdb[tn]:
-                                            remove_fdb[tn]['records'] = {}
-                                        remove_fdb[tn]['records'][ent[0]] = {
-                                            'endpoint': vtep,
-                                            'ip_address': ent[1]}
-            if len(remove_fdb) > 0:
-                if fdb_entries[network]['network_type'] == 'vxlan':
-                    bigip.vxlan.delete_fdb_entries(tunnel_name=tn,
-                                                   fdb_entries=remove_fdb)
-                if fdb_entries[network]['network_type'] == 'vxlan':
-                    bigip.l2gre.delete_fdb_entries(tunnel_name=tn,
-                                                   fdb_entries=remove_fdb)
+        return self.bigip_l2_manager.fdb_remove(fdb_entries)
 
     def fdb_update(self, fdb_entries):
-        """ Update L2 records for MAC addresses behind tunnel endpoints """
-        for network in fdb_entries:
-            net = {'name': network,
-                   'provider:network_type':
-                   fdb_entries[network]['network_type'],
-                   'provider:segmentation_id':
-                   fdb_entries[network]['segment_id']
-                   }
-            tn = self._get_tunnel_name(net)
-            bigip = self._get_bigip()
-            update_fdb = {}
-            for vtep in fdb_entries[network]['ports']:
-                for host in self.__bigips:
-                    bigip = self.__bigips[host]
-                    if hasattr(bigip, 'local_ip') and vtep != bigip.local_ip:
-                        if fdb_entries[network]['network_type'] == 'gre':
-                            folder = bigip.l2gre.get_tunnel_folder(
-                                tunnel_name=tn)
-                            if folder:
-                                entries = fdb_entries[network]['ports'][vtep]
-                                for ent in entries:
-                                    if ent[0] != '00:00:00:00:00:00':
-                                        if not tn in update_fdb:
-                                            update_fdb[tn] = {}
-                                        update_fdb[tn]['folder'] = folder
-                                        if not 'records' in update_fdb[tn]:
-                                            update_fdb[tn]['records'] = {}
-                                        update_fdb[tn]['records'][ent[0]] = {
-                                            'endpoint': vtep,
-                                            'ip_address': ent[1]}
-                        if fdb_entries[network]['network_type'] == 'vxlan':
-                            folder = bigip.l2gre.get_tunnel_folder(
-                                tunnel_name=tn)
-                            if folder:
-                                entries = fdb_entries[network]['ports'][vtep]
-                                for ent in entries:
-                                    if ent[0] != '00:00:00:00:00:00':
-                                        if not tn in update_fdb:
-                                            update_fdb[tn] = {}
-                                        update_fdb[tn]['folder'] = folder
-                                        if not 'records' in update_fdb[tn]:
-                                            update_fdb[tn]['records'] = {}
-                                        update_fdb[tn]['records'][ent[0]] = {
-                                            'endpoint': vtep,
-                                            'ip_address': ent[1]}
-            if len(update_fdb) > 0:
-                if fdb_entries[network]['network_type'] == 'vxlan':
-                    bigip.vxlan.add_fdb_entries(tunnel_name=tn,
-                                                fdb_entries=update_fdb)
-                if fdb_entries[network]['network_type'] == 'vxlan':
-                    bigip.l2gre.add_fdb_entries(tunnel_name=tn,
-                                                fdb_entries=update_fdb)
+        return self.bigip_l2_manager.fdb_update(fdb_entries)
 
     def tunnel_sync(self):
         """ Update list of tunnel endpoints """
@@ -734,7 +585,7 @@ class iControlDriver(object):
             if hasattr(bigip, 'local_ip') and bigip.local_ip:
                 try:
                     for tunnel_type in self.tunnel_types:
-                        if hasattr(self, 'tunnel_rpc'):
+                        if self.tunnel_rpc:
                             self.tunnel_rpc.tunnel_sync(self.context,
                                                         bigip.local_ip,
                                                         tunnel_type)
@@ -1115,7 +966,7 @@ class iControlDriver(object):
 
         ip_address = member['address']
         if self.conf.f5_global_routed_mode or not network or \
-                self._is_common_network(network):
+                self.bigip_l2_manager.is_common_network(network):
             ip_address = ip_address + '%0'
 
         found_existing_member = None
@@ -1215,51 +1066,26 @@ class iControlDriver(object):
             using_ratio = True
 
         network = member['network']
-        if not network or self._is_common_network(network):
-            net_folder = 'Common'
-        else:
-            net_folder = pool['tenant_id']
-        if network and network['provider:network_type'] == 'vxlan':
-            tunnel_name = self._get_tunnel_name(network)
-            if 'vxlan_vteps' in member:
-                for vtep in member['vxlan_vteps']:
-                    # In autosync mode, assure_device_members
-                    # is only called for one big-ip, because it is
-                    # assumed everything will sync to the other
-                    # big-ips.
-                    # However, we add fdb entries for tunnels here
-                    # and those do not sync. So, we have to loop
-                    # through the big-ips for fdb entries and add
-                    # them to each big-ip.
-                    if self.conf.f5_sync_mode == 'autosync':
-                        bigips = bigip.group_bigips
-                    else:
-                        bigips = [bigip]
-                    for fdb_bigip in bigips:
-                        mac_addr = member['port']['mac_address']
-                        add_fdb = fdb_bigip.vxlan.add_fdb_entry
-                        add_fdb(tunnel_name=tunnel_name,
-                                mac_address=mac_addr,
-                                vtep_ip_address=vtep,
-                                arp_ip_address=ip_address,
-                                folder=net_folder)
-        if network and network['provider:network_type'] == 'gre':
-            tunnel_name = self._get_tunnel_name(network)
-            if 'gre_vteps' in member:
-                for vtep in member['gre_vteps']:
-                    # See comment above about this loop.
-                    if self.conf.f5_sync_mode == 'autosync':
-                        bigips = bigip.group_bigips
-                    else:
-                        bigips = [bigip]
-                    for fdb_bigip in bigips:
-                        mac_addr = member['port']['mac_address']
-                        add_fdb = fdb_bigip.l2gre.add_fdb_entry
-                        add_fdb(tunnel_name=tunnel_name,
-                                mac_address=mac_addr,
-                                vtep_ip_address=vtep,
-                                arp_ip_address=ip_address,
-                                folder=net_folder)
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = pool['tenant_id']
+            if network['provider:network_type'] == 'vxlan' \
+                    and 'vxlan_vteps' in member:
+                self.bigip_l2_manager.add_vxlan_fdbs(
+                    bigip, net_folder, network,
+                    member['vxlan_vteps'],
+                    ip_address,
+                    member['port']['mac_address'])
+
+            if network['provider:network_type'] == 'gre' \
+                    and 'gre_vteps' in member:
+                self.bigip_l2_manager.add_gre_fdbs(
+                    bigip, net_folder, network,
+                    member['gre_vteps'],
+                    ip_address,
+                    member['port']['mac_address'])
 
         if on_last_bigip:
             if member['status'] == plugin_const.PENDING_UPDATE:
@@ -1282,58 +1108,34 @@ class iControlDriver(object):
                                  folder=pool['tenant_id'])
 
         network = member['network']
-        if not network or self._is_common_network(network):
-            net_folder = 'Common'
-        else:
-            net_folder = pool['tenant_id']
-        if network and 'provider:network_type' in network:
-            if network['provider:network_type'] == 'vxlan':
-                tunnel_name = self._get_tunnel_name(network)
-                if member['port']:
-                    # In autosync mode, assure_device_members
-                    # is only called for one big-ip, because it is
-                    # assumed everything will sync to the other
-                    # big-ips.
-                    # However, we add fdb entries for tunnels here
-                    # and those do not sync. So, we have to loop
-                    # through the big-ips for fdb entries and add
-                    # them to each big-ip.
-                    if self.conf.f5_sync_mode == 'autosync':
-                        bigips = bigip.group_bigips
-                    else:
-                        bigips = [bigip]
-                    for fdb_bigip in bigips:
-                        fdb_bigip.vxlan.delete_fdb_entry(
-                            tunnel_name=tunnel_name,
-                            mac_address=member['port']['mac_address'],
-                            arp_ip_address=ip_address,
-                            folder=net_folder)
+        if network:
+            if member['port']:
+                if self.bigip_l2_manager.is_common_network(network):
+                    net_folder = 'Common'
                 else:
-                    LOG.error(_('Member on SDN has no port. Manual '
-                                'removal on the BIG-IP will be '
-                                'required. Was the vm instance '
-                                'deleted before the pool member '
-                                'was deleted?'))
-            if network['provider:network_type'] == 'gre':
-                tunnel_name = self._get_tunnel_name(network)
-                if member['port']:
-                    # See comment above about this loop.
-                    if self.conf.f5_sync_mode == 'autosync':
-                        bigips = bigip.group_bigips
-                    else:
-                        bigips = [bigip]
-                    for fdb_bigip in bigips:
-                        fdb_bigip.l2gre.delete_fdb_entry(
-                            tunnel_name=tunnel_name,
-                            mac_address=member['port']['mac_address'],
-                            arp_ip_address=ip_address,
-                            folder=net_folder)
-                else:
-                    LOG.error(_('Member on SDN has no port. Manual '
-                                'removal on the BIG-IP will be '
-                                'required. Was the vm instance '
-                                'deleted before the pool member '
-                                'was deleted?'))
+                    net_folder = pool['tenant_id']
+                if network['provider:network_type'] == 'vxlan' \
+                        and 'vxlan_vteps' in member:
+                    self.bigip_l2_manager.delete_vxlan_fdbs(
+                        bigip, net_folder, network,
+                        member['vxlan_vteps'],
+                        ip_address,
+                        member['port']['mac_address'])
+
+                if network['provider:network_type'] == 'gre' \
+                        and 'gre_vteps' in member:
+                    self.bigip_l2_manager.delete_gre_fdbs(
+                        bigip, net_folder, network,
+                        member['gre_vteps'],
+                        ip_address,
+                        member['port']['mac_address'])
+            else:
+                LOG.error(_('Member on SDN has no port. Manual '
+                            'removal on the BIG-IP will be '
+                            'required. Was the vm instance '
+                            'deleted before the pool member '
+                            'was deleted?'))
+
         # avoids race condition:
         # deletion of pool member objects must sync before we
         # remove the selfip from the peer bigips.
@@ -1374,26 +1176,10 @@ class iControlDriver(object):
             network_name = None
             ip_address = ip_address + '%0'
         else:
-            if network['id'] in self.conf.common_network_ids:
-                network_name = self.conf.common_network_ids[network['id']]
-                preserve_network_name = True
-            elif network['provider:network_type'] == 'vlan':
-                network_name = self._get_vlan_name(network,
-                                                   bigip.icontrol.hostname)
-            elif network['provider:network_type'] == 'flat':
-                network_name = self._get_vlan_name(network,
-                                                   bigip.icontrol.hostname)
-            elif network['provider:network_type'] == 'vxlan':
-                network_name = self._get_tunnel_name(network)
-            elif network['provider:network_type'] == 'gre':
-                network_name = self._get_tunnel_name(network)
-            else:
-                error_message = 'Unsupported network type %s.' \
-                    % network['provider:network_type'] + \
-                    ' Cannot allocate VIP.'
-                LOG.error(_(error_message))
-                raise f5ex.InvalidNetworkType(error_message)
-            if self._is_common_network(network):
+            (network_name, preserve_network_name) = \
+                self.bigip_l2_manager.get_network_name(bigip, network)
+
+            if self.bigip_l2_manager.is_common_network(network):
                 network_name = '/Common/' + network_name
                 ip_address = ip_address + '%0'
 
@@ -1450,47 +1236,22 @@ class iControlDriver(object):
                           vip['id'],
                           folder=vip['tenant_id'])
 
-        if network and \
-           'provider:network_type' in vip['network']:
-            if network['provider:network_type'] == 'vxlan':
-                if 'vxlan_vteps' in vip:
-                    tunnel_name = self._get_tunnel_name(network)
-                    for vtep in vip['vxlan_vteps']:
-                        # In autosync mode, assure_device_vip
-                        # is only called for one big-ip, because it is
-                        # assumed everything will sync to the other
-                        # big-ips.
-                        # However, we add fdb entries for tunnels here
-                        # and those do not sync. So, we have to loop
-                        # through the big-ips for fdb entries and add
-                        # them to each big-ip.
-                        if self.conf.f5_sync_mode == 'autosync':
-                            bigips = bigip.group_bigips
-                        else:
-                            bigips = [bigip]
-                        for fdb_bigip in bigips:
-                            fdb_bigip.vxlan.delete_fdb_entry(
-                                tunnel_name=tunnel_name,
-                                mac_address=self._get_tunnel_fake_mac(
-                                    network, vtep),
-                                arp_ip_address=None,
-                                folder=vip['tenant_id'])
-            if network['provider:network_type'] == 'gre':
-                if 'gre_vteps' in vip:
-                    tunnel_name = self._get_tunnel_name(network)
-                    for vtep in vip['gre_vteps']:
-                        # See comment above about this loop.
-                        if self.conf.f5_sync_mode == 'autosync':
-                            bigips = bigip.group_bigips
-                        else:
-                            bigips = [bigip]
-                        for fdb_bigip in bigips:
-                            fdb_bigip.l2gre.delete_fdb_entry(
-                                tunnel_name=tunnel_name,
-                                mac_address=self._get_tunnel_fake_mac(
-                                    network, vtep),
-                                arp_ip_address=None,
-                                folder=vip['tenant_id'])
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = vip['tenant_id']
+            if network['provider:network_type'] == 'vxlan' \
+                    and 'vxlan_vteps' in vip:
+                self.bigip_l2_manager.delete_vxlan_fdbs(
+                    bigip, net_folder, network,
+                    vip['vxlan_vteps'], None, None)
+            if network['provider:network_type'] == 'gre' \
+                    and 'gre_vteps' in vip:
+                self.bigip_l2_manager.delete_gre_fdbs(
+                    bigip, net_folder, network,
+                    vip['gre_vteps'], None, None)
+
         # avoids race condition:
         # deletion of vip address must sync before we
         # remove the selfip from the peer bigips.
@@ -1758,52 +1519,21 @@ class iControlDriver(object):
                                           connection_limit=0,
                                           folder=pool['tenant_id'])
 
-        if vip['network'] and 'provider:network_type' in vip['network']:
-            if self._is_common_network(network):
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
                 net_folder = 'Common'
             else:
                 net_folder = vip['tenant_id']
-            if network['provider:network_type'] == 'vxlan':
-                if 'vxlan_vteps' in vip:
-                    tunnel_name = self._get_tunnel_name(network)
-                    for vtep in vip['vxlan_vteps']:
-                        mac_address = self._get_tunnel_fake_mac(network, vtep)
-                        # In autosync mode, assure_device_vip
-                        # is only called for one big-ip,
-                        # because it is assumed everything will
-                        # sync to the other big-ips.
-                        # However, we add fdb entries for tunnels
-                        # here and those do not sync. So, we have
-                        # to loop through the big-ips for fdb
-                        # entries and add them to each big-ip.
-                        if self.conf.f5_sync_mode == 'autosync':
-                            bigips = bigip.group_bigips
-                        else:
-                            bigips = [bigip]
-                        for fdb_bigip in bigips:
-                            fdb_bigip.vxlan.add_fdb_entry(
-                                tunnel_name=tunnel_name,
-                                mac_address=mac_address,
-                                vtep_ip_address=vtep,
-                                arp_ip_address=None,
-                                folder=net_folder)
-            if network['provider:network_type'] == 'gre':
-                if 'gre_vteps' in vip:
-                    tunnel_name = self._get_tunnel_name(network)
-                    for vtep in vip['gre_vteps']:
-                        mac_address = self._get_tunnel_fake_mac(network, vtep)
-                        # See comment above about this loop.
-                        if self.conf.f5_sync_mode == 'autosync':
-                            bigips = bigip.group_bigips
-                        else:
-                            bigips = [bigip]
-                        for fdb_bigip in bigips:
-                            fdb_bigip.l2gre.add_fdb_entry(
-                                tunnel_name=tunnel_name,
-                                mac_address=mac_address,
-                                vtep_ip_address=vtep,
-                                arp_ip_address=None,
-                                folder=net_folder)
+            if network['provider:network_type'] == 'vxlan' \
+                    and 'vxlan_vteps' in vip:
+                self.bigip_l2_manager.add_vxlan_fdbs(
+                    bigip, net_folder, network,
+                    vip['vxlan_vteps'], None, None)
+            if network['provider:network_type'] == 'gre' \
+                    and 'gre_vteps' in vip:
+                self.bigip_l2_manager.add_gre_fdbs(
+                    bigip, net_folder, network,
+                    vip['gre_vteps'], None, None)
 
         if on_last_bigip:
             self.plugin_rpc.update_vip_status(
@@ -1890,9 +1620,6 @@ class iControlDriver(object):
                     if not self.conf.f5_snat_mode:
                         self._delete_gateway_on_subnet(subnetinfo,
                                                        bigip, on_last_bigip)
-                    # Since no virtual addresses or nodes found
-                    # go ahead and try to delete the Self IP
-                    # and SNATs
                     self._delete_selfip_and_snats(
                         service,
                         self.SubnetInfo(network, subnet),
@@ -1902,7 +1629,7 @@ class iControlDriver(object):
                     # remove the vlan from the peer bigips.
                     self._sync_if_clustered(bigip)
                     try:
-                        self._delete_network(network, bigip)
+                        self.bigip_l2_manager.delete_network(network, bigip)
                     except:
                         pass
                     # Flag this network so we won't try to go through
@@ -2055,250 +1782,11 @@ class iControlDriver(object):
         for bigip in bigips:
             if network['id'] in bigip.assured_networks:
                 continue
-            self._assure_device_network(network, bigip)
+            self.bigip_l2_manager.assure_device_network(network, bigip)
             bigip.assured_networks.append(network['id'])
         if time() - start_time > .001:
             LOG.debug("        assure network took %.5f secs" %
                       (time() - start_time))
-
-    def _is_common_network(self, network):
-        return network['shared'] or \
-            (network['id'] in self.conf.common_network_ids) or \
-            ('router:external' in network and
-             network['router:external'] and
-             self.conf.f5_common_external_networks)
-
-    # called for every bigip in every sync mode
-    def _assure_device_network(self, network, bigip):
-        if self._is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = network['tenant_id']
-
-        # setup all needed L2 network segments
-        if network['provider:network_type'] == 'flat':
-            self._assure_device_network_flat(network, bigip, network_folder)
-        elif network['provider:network_type'] == 'vlan':
-            self._assure_device_network_vlan(network, bigip, network_folder)
-        elif network['provider:network_type'] == 'vxlan':
-            self._assure_device_network_vxlan(network, bigip, network_folder)
-        elif network['provider:network_type'] == 'gre':
-            self._assure_device_network_gre(network, bigip, network_folder)
-        else:
-            error_message = 'Unsupported network type %s.' \
-                            % network['provider:network_type'] + \
-                            ' Cannot setup network.'
-            LOG.error(_(error_message))
-            raise f5ex.InvalidNetworkType(error_message)
-
-    def _assure_device_network_flat(self, network, bigip, network_folder):
-        interface = self.interface_mapping['default']
-        vlanid = 0
-
-        # Do we have host specific mappings?
-        net_key = network['provider:physical_network']
-        if net_key + ':' + bigip.icontrol.hostname in \
-                self.interface_mapping:
-            interface = self.interface_mapping[
-                net_key + ':' + bigip.icontrol.hostname]
-        # Do we have a mapping for this network
-        elif net_key in self.interface_mapping:
-            interface = self.interface_mapping[net_key]
-
-        vlan_name = self._get_vlan_name(network,
-                                        bigip.icontrol.hostname)
-
-        self._assure_vcmp_device_network(bigip,
-                                         vlan={'name': vlan_name,
-                                               'folder': network_folder,
-                                               'id': vlanid,
-                                               'interface': interface,
-                                               'network': network})
-
-        if self.get_vcmp_host(bigip):
-            interface = None
-
-        bigip.vlan.create(name=vlan_name,
-                          vlanid=0,
-                          interface=interface,
-                          folder=network_folder,
-                          description=network['id'])
-
-    def _assure_device_network_vlan(self, network, bigip, network_folder):
-        # VLAN names are limited to 64 characters including
-        # the folder name, so we name them foolish things.
-
-        interface = self.interface_mapping['default']
-        tagged = self.tagging_mapping['default']
-        vlanid = 0
-
-        # Do we have host specific mappings?
-        net_key = network['provider:physical_network']
-        if net_key + ':' + bigip.icontrol.hostname in \
-                self.interface_mapping:
-            interface = self.interface_mapping[
-                net_key + ':' + bigip.icontrol.hostname]
-            tagged = self.tagging_mapping[
-                net_key + ':' + bigip.icontrol.hostname]
-        # Do we have a mapping for this network
-        elif net_key in self.interface_mapping:
-            interface = self.interface_mapping[net_key]
-            tagged = self.tagging_mapping[net_key]
-
-        if tagged:
-            vlanid = network['provider:segmentation_id']
-        else:
-            vlanid = 0
-
-        vlan_name = self._get_vlan_name(network,
-                                        bigip.icontrol.hostname)
-
-        self._assure_vcmp_device_network(bigip,
-                                         vlan={'name': vlan_name,
-                                               'folder': network_folder,
-                                               'id': vlanid,
-                                               'interface': interface,
-                                               'network': network})
-
-        if self.get_vcmp_host(bigip):
-            interface = None
-
-        bigip.vlan.create(name=vlan_name,
-                          vlanid=vlanid,
-                          interface=interface,
-                          folder=network_folder,
-                          description=network['id'])
-
-    def _assure_device_network_vxlan(self, network, bigip, network_folder):
-        if not bigip.local_ip:
-            error_message = 'Cannot create tunnel %s on %s' \
-                % (network['id'], bigip.icontrol.hostname)
-            error_message += ' no VTEP SelfIP defined.'
-            LOG.error('VXLAN:' + error_message)
-            raise f5ex.MissingVTEPAddress('VXLAN:' + error_message)
-
-        tunnel_name = self._get_tunnel_name(network)
-        # create the main tunnel entry for the fdb records
-        bigip.vxlan.create_multipoint_tunnel(
-            name=tunnel_name,
-            profile_name='vxlan_ovs',
-            self_ip_address=bigip.local_ip,
-            vxlanid=network['provider:segmentation_id'],
-            description=network['id'],
-            folder=network_folder)
-        # notify all the compute nodes we are VTEPs
-        # for this network now.
-        if self.conf.l2_population:
-            fdb_entries = {network['id']:
-                           {'ports': {
-                            bigip.local_ip: [q_const.FLOODING_ENTRY]
-                            },
-                            'network_type':
-                               network['provider:network_type'],
-                            'segment_id':
-                               network['provider:segmentation_id']}}
-            self.l2pop_rpc.add_fdb_entries(self.context, fdb_entries)
-
-    def _assure_device_network_gre(self, network, bigip, network_folder):
-        if not bigip.local_ip:
-            error_message = 'Cannot create tunnel %s on %s' \
-                % (network['id'], bigip.icontrol.hostname)
-            error_message += ' no VTEP SelfIP defined.'
-            LOG.error('L2GRE:' + error_message)
-            raise f5ex.MissingVTEPAddress('L2GRE:' + error_message)
-
-        tunnel_name = self._get_tunnel_name(network)
-
-        bigip.l2gre.create_multipoint_tunnel(
-            name=tunnel_name,
-            profile_name='gre_ovs',
-            self_ip_address=bigip.local_ip,
-            greid=network['provider:segmentation_id'],
-            description=network['id'],
-            folder=network_folder)
-        # notify all the compute nodes we are VTEPs
-        # for this network now.
-        if self.conf.l2_population:
-            fdb_entries = {network['id']:
-                           {'ports': {
-                            bigip.local_ip: [q_const.FLOODING_ENTRY]
-                            },
-                            'network_type':
-                               network['provider:network_type'],
-                            'segment_id':
-                               network['provider:segmentation_id']}}
-            self.l2pop_rpc.add_fdb_entries(self.context, fdb_entries)
-
-    def _assure_vcmp_device_network(self, bigip, vlan):
-        """For vCMP Guests, add VLAN to vCMP Host, associate VLAN with
-           vCMP Guest, and remove VLAN from /Common on vCMP Guest."""
-        vcmp_host = self.get_vcmp_host(bigip)
-        if not vcmp_host:
-            return
-
-        # Create the VLAN on the vCMP Host
-        try:
-            vcmp_host['bigip'].vlan.create(name=vlan['name'],
-                                           vlanid=vlan['id'],
-                                           interface=vlan['interface'],
-                                           folder='/Common',
-                                           description=vlan['network']['id'])
-            LOG.debug(('Created VLAN %s on vCMP Host %s' %
-                      (vlan['name'], vcmp_host['bigip'].icontrol.hostname)))
-        except Exception as exc:
-            LOG.error(
-                ('Exception creating VLAN %s on vCMP Host %s:%s' %
-                 (vlan['name'], vcmp_host['bigip'].icontrol.hostname, exc)))
-
-        # Associate the VLAN with the vCMP Guest
-        vcmp_guest = get_vcmp_guest(vcmp_host, bigip)
-        try:
-            vlan_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
-                create('Common.StringSequence')
-            vlan_seq.values = prefixed(vlan['name'])
-            vlan_seq_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
-                create('Common.StringSequenceSequence')
-            vlan_seq_seq.values = [vlan_seq]
-            vcmp_host['bigip'].system.sys_vcmp.add_vlan([vcmp_guest['name']],
-                                                        vlan_seq_seq)
-            LOG.debug(('Associated VLAN %s with vCMP Guest %s' %
-                       (vlan['name'], vcmp_guest['mgmt_addr'])))
-        except Exception as exc:
-            LOG.error(('Exception associating VLAN %s to vCMP Guest %s: %s '
-                      % (vlan['name'], vcmp_guest['mgmt_addr'], exc)))
-
-        # Wait for the VLAN to propagate to /Common on vCMP Guest
-        full_path_vlan_name = '/Common/' + prefixed(vlan['name'])
-        try:
-            vlan_created = False
-            for _ in range(0, 30):
-                if full_path_vlan_name in bigip.vlan.get_all(folder='/Common'):
-                    vlan_created = True
-                    break
-                LOG.debug(('Wait for VLAN %s to be created on vCMP Guest %s.'
-                          % (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
-                sleep(1)
-
-            if vlan_created:
-                LOG.debug(('VLAN %s exists on vCMP Guest %s.' %
-                          (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
-            else:
-                LOG.error(('VLAN %s does not exist on vCMP Guest %s.' %
-                          (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
-        except Exception as exc:
-            LOG.error(('Exception waiting for vCMP Host VLAN %s to '
-                       'be created on vCMP Guest %s: %s' %
-                      (vlan['name'], vcmp_guest['mgmt_addr'], exc)))
-
-        # Delete the VLAN from the /Common folder on the vCMP Guest
-        try:
-            bigip.vlan.delete(name=vlan['name'],
-                              folder='/Common')
-            LOG.debug(('Deleted VLAN %s from vCMP Guest %s' %
-                      (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
-        except Exception as exc:
-            LOG.error(('Exception deleting VLAN %s from vCMP Guest %s: %s' %
-                      (full_path_vlan_name, vcmp_guest['mgmt_addr'], exc)))
 
     # called for every bigip only in replication mode.
     # otherwise called once
@@ -2324,31 +1812,13 @@ class iControlDriver(object):
             # we already did this work
             return
 
-        preserve_network_name = False
-        if self._is_common_network(network):
+        if self.bigip_l2_manager.is_common_network(network):
             network_folder = 'Common'
         else:
             network_folder = pool['tenant_id']
 
-        if network['id'] in self.conf.common_network_ids:
-            network_name = self.conf.common_network_ids[network['id']]
-            preserve_network_name = True
-        elif network['provider:network_type'] == 'vlan':
-            network_name = self._get_vlan_name(network,
-                                               bigip.icontrol.hostname)
-        elif network['provider:network_type'] == 'flat':
-            network_name = self._get_vlan_name(network,
-                                               bigip.icontrol.hostname)
-        elif network['provider:network_type'] == 'vxlan':
-            network_name = self._get_tunnel_name(network)
-        elif network['provider:network_type'] == 'gre':
-            network_name = self._get_tunnel_name(network)
-        else:
-            error_message = 'Unsupported network type %s.' \
-                            % network['provider:network_type'] + \
-                            ' Cannot setup selfip or snat.'
-            LOG.error(_(error_message))
-            raise f5ex.InvalidNetworkType(error_message)
+        (network_name, preserve_network_name) = \
+            self.bigip_l2_manager.get_network_name(bigip, network)
 
         # These selfs are unique to each big-ip
         for set_bigip in bigip.group_bigips:
@@ -2436,7 +1906,7 @@ class iControlDriver(object):
                     name=index_snat_name,
                     fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
-            if self._is_common_network(network):
+            if self.bigip_l2_manager.is_common_network(network):
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
@@ -2483,7 +1953,7 @@ class iControlDriver(object):
                     name=index_snat_name,
                     fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
-            if self._is_common_network(network):
+            if self.bigip_l2_manager.is_common_network(network):
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
@@ -2539,7 +2009,7 @@ class iControlDriver(object):
                     name=index_snat_name,
                     fixed_address_count=1)
                 ip_address = new_port['fixed_ips'][0]['ip_address']
-            if self._is_common_network(network):
+            if self.bigip_l2_manager.is_common_network(network):
                 ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
             if self.conf.f5_sync_mode == 'replication':
@@ -2619,27 +2089,10 @@ class iControlDriver(object):
 
         # Setup a floating SelfIP with the subnet's
         # gateway_ip address on this agent's device service group
+        (network_name, preserve_network_name) = \
+            self.bigip_l2_manager.get_network_name(bigip, network)
 
-        preserve_network_name = False
-        if network['id'] in self.conf.common_network_ids:
-            network_name = self.conf.common_network_ids[network['id']]
-            preserve_network_name = True
-        if network['provider:network_type'] == 'vlan':
-            network_name = self._get_vlan_name(network,
-                                               bigip.icontrol.hostname)
-        elif network['provider:network_type'] == 'flat':
-            network_name = self._get_vlan_name(network,
-                                               bigip.icontrol.hostname)
-        elif network['provider:network_type'] == 'vxlan':
-            network_name = self._get_tunnel_name(network)
-        elif network['provider:network_type'] == 'gre':
-            network_name = self._get_tunnel_name(network)
-        else:
-            LOG.error(_('Unsupported network type %s. Cannot setup gateway'
-                        % network['provider:network_type']))
-            return
-
-        if self._is_common_network(network):
+        if self.bigip_l2_manager.is_common_network(network):
             network_folder = 'Common'
             network_name = '/Common/' + network_name
         else:
@@ -2688,122 +2141,6 @@ class iControlDriver(object):
 
     # called for every bigip only in replication mode.
     # otherwise called once
-    def _delete_network(self, network, bigip):
-        if network['id'] in self.conf.common_network_ids:
-            LOG.debug(_('skipping delete of common network %s'
-                        % self.conf.common[network['id']]))
-            return
-        if self._is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = network['tenant_id']
-
-        if self.conf.f5_sync_mode == 'replication':
-            bigips = [bigip]
-        else:
-            bigips = bigip.group_bigips
-        for set_bigip in bigips:
-            if network['provider:network_type'] == 'vlan':
-                vlan_name = self._get_vlan_name(network,
-                                                set_bigip.icontrol.hostname)
-                set_bigip.vlan.delete(name=vlan_name,
-                                      folder=network_folder)
-                self._delete_vcmp_device_network(bigip, vlan_name)
-
-            elif network['provider:network_type'] == 'flat':
-                vlan_name = self._get_vlan_name(network,
-                                                set_bigip.icontrol.hostname)
-                set_bigip.vlan.delete(name=vlan_name,
-                                      folder=network_folder)
-                self._delete_vcmp_device_network(bigip, vlan_name)
-
-            elif network['provider:network_type'] == 'vxlan':
-                tunnel_name = self._get_tunnel_name(network)
-
-                set_bigip.vxlan.delete_all_fdb_entries(tunnel_name=tunnel_name,
-                                                       folder=network_folder)
-                set_bigip.vxlan.delete_tunnel(name=tunnel_name,
-                                              folder=network_folder)
-                # notify all the compute nodes we no longer have
-                # VTEPs for this network now.
-                if self.conf.l2_population:
-                    fdb_entries = {network['id']:
-                                   {'ports':
-                                    {set_bigip.local_ip:
-                                     [q_const.FLOODING_ENTRY]},
-                                    'network_type':
-                                    network['provider:network_type'],
-                                    'segment_id':
-                                    network['provider:segmentation_id']}}
-                    self.l2pop_rpc.remove_fdb_entries(self.context,
-                                                      fdb_entries)
-            elif network['provider:network_type'] == 'gre':
-
-                tunnel_name = self._get_tunnel_name(network)
-
-                # for each known vtep_endpoints to this tunnel
-                set_bigip.l2gre.delete_all_fdb_entries(tunnel_name=tunnel_name,
-                                                       folder=network_folder)
-                set_bigip.l2gre.delete_tunnel(name=tunnel_name,
-                                              folder=network_folder)
-                # notify all the compute nodes we no longer
-                # VTEPs for this network now.
-                if self.conf.l2_population:
-                    fdb_entries = {network['id']:
-                                   {'ports': {
-                                    set_bigip.local_ip:
-                                    [q_const.FLOODING_ENTRY]},
-                                    'network_type':
-                                    network['provider:network_type'],
-                                    'segment_id':
-                                    network['provider:segmentation_id']}}
-                    self.l2pop_rpc.remove_fdb_entries(self.context,
-                                                      fdb_entries)
-            else:
-                LOG.error(_('Unsupported network type %s. Can not delete.'
-                            % network['provider:network_type']))
-
-            if network['id'] in set_bigip.assured_networks:
-                set_bigip.assured_networks.remove(network['id'])
-
-    def _delete_vcmp_device_network(self, bigip, vlan_name):
-        """For vCMP Guests, disassociate VLAN from vCMP Guest and
-           delete VLAN from vCMP Host."""
-        vcmp_host = self.get_vcmp_host(bigip)
-        if not vcmp_host:
-            return
-
-        # Remove VLAN association from the vCMP Guest
-        vcmp_guest = get_vcmp_guest(vcmp_host, bigip)
-        try:
-            vlan_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
-                create('Common.StringSequence')
-            vlan_seq.values = prefixed(vlan_name)
-            vlan_seq_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
-                create('Common.StringSequenceSequence')
-            vlan_seq_seq.values = [vlan_seq]
-            vcmp_host['bigip'].system.sys_vcmp.remove_vlan(
-                [vcmp_guest['name']], vlan_seq_seq)
-            LOG.debug(('Removed VLAN %s association from vCMP Guest %s' %
-                      (vlan_name, vcmp_guest['mgmt_addr'])))
-        except Exception as exc:
-            LOG.error(('Exception removing VLAN %s association from vCMP '
-                       'Guest %s:%s' %
-                       (vlan_name, vcmp_guest['mgmt_addr'], exc)))
-
-        # Delete VLAN from vCMP Host.  This will fail if any other vCMP Guest
-        # is using this VLAN
-        try:
-            vcmp_host['bigip'].vlan.delete(name=vlan_name,
-                                           folder='/Common')
-            LOG.debug(('Deleted VLAN %s from vCMP Host %s' %
-                      (vlan_name, vcmp_host['bigip'].icontrol.hostname)))
-        except Exception as exc:
-            LOG.error(('Exception deleting VLAN %s from vCMP Host %s:%s' %
-                      (vlan_name, vcmp_host['bigip'].icontrol.hostname, exc)))
-
-    # called for every bigip only in replication mode.
-    # otherwise called once
     def _delete_selfip_and_snats(self, service, subnetinfo,
                                  bigip, on_last_bigip):
         network = subnetinfo.network
@@ -2812,7 +2149,7 @@ class iControlDriver(object):
                         ' for network with no id... skipping.'))
             return
         subnet = subnetinfo.subnet
-        if self._is_common_network(network):
+        if self.bigip_l2_manager.is_common_network(network):
             network_folder = 'Common'
         else:
             network_folder = service['pool']['tenant_id']
@@ -2826,7 +2163,7 @@ class iControlDriver(object):
                 snat_name = 'snat-traffic-group-local-only-' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
-                    if self._is_common_network(network):
+                    if self.bigip_l2_manager.is_common_network(network):
                         tmos_snat_name = '/Common/' + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
@@ -2849,7 +2186,7 @@ class iControlDriver(object):
                 snat_name = 'snat-traffic-group-1' + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
-                    if self._is_common_network(network):
+                    if self.bigip_l2_manager.is_common_network(network):
                         tmos_snat_name = '/Common/' + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
@@ -2874,7 +2211,7 @@ class iControlDriver(object):
                 snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
                 for i in range(self.conf.f5_snat_addresses_per_subnet):
                     index_snat_name = snat_name + "_" + str(i)
-                    if self._is_common_network(network):
+                    if self.bigip_l2_manager.is_common_network(network):
                         tmos_snat_name = "/Common/" + index_snat_name
                     else:
                         tmos_snat_name = index_snat_name
@@ -2923,7 +2260,7 @@ class iControlDriver(object):
                         ' for network with no id... skipping.'))
             return
         subnet = subnetinfo.subnet
-        if self._is_common_network(network):
+        if self.bigip_l2_manager.is_common_network(network):
             network_folder = 'Common'
         else:
             network_folder = subnet['tenant_id']
@@ -2999,58 +2336,6 @@ class iControlDriver(object):
             except urllib2.URLError:
                 pass
         raise urllib2.URLError('cannot communicate to any bigips')
-
-    def _get_vlan_name(self, network, hostname):
-        net_key = network['provider:physical_network']
-        # look for host specific interface mapping
-        if net_key + ':' + hostname in self.interface_mapping:
-            interface = self.interface_mapping[net_key + ':' + hostname]
-            tagged = self.tagging_mapping[net_key + ':' + hostname]
-        # look for specific interface mapping
-        elif net_key in self.interface_mapping:
-            interface = self.interface_mapping[net_key]
-            tagged = self.tagging_mapping[net_key]
-        # use default mapping
-        else:
-            interface = self.interface_mapping['default']
-            tagged = self.tagging_mapping['default']
-
-        if tagged:
-            vlanid = network['provider:segmentation_id']
-        else:
-            vlanid = 0
-
-        vlan_name = "vlan-" + \
-                    str(interface).replace(".", "-") + \
-                    "-" + str(vlanid)
-        if len(vlan_name) > 15:
-            vlan_name = 'vlan-tr-' + str(vlanid)
-        return vlan_name
-
-    def _get_tunnel_name(self, network):
-        tunnel_type = network['provider:network_type']
-        tunnel_id = network['provider:segmentation_id']
-        return 'tunnel-' + str(tunnel_type) + '-' + str(tunnel_id)
-
-    def _get_tunnel_fake_mac(self, network, local_ip):
-        network_id = str(network['provider:segmentation_id']).rjust(4, '0')
-        mac_prefix = '02:' + network_id[:2] + ':' + network_id[2:4] + ':'
-        ip_parts = local_ip.split('.')
-        if len(ip_parts) > 3:
-            mac = [int(ip_parts[-3]),
-                   int(ip_parts[-2]),
-                   int(ip_parts[-1])]
-        else:
-            ip_parts = local_ip.split(':')
-            if len(ip_parts) > 3:
-                mac = [int('0x' + ip_parts[-3], 16),
-                       int('0x' + ip_parts[-2], 16),
-                       int('0x' + ip_parts[-1], 16)]
-            else:
-                mac = [random.randint(0x00, 0x7f),
-                       random.randint(0x00, 0xff),
-                       random.randint(0x00, 0xff)]
-        return mac_prefix + ':'.join(map(lambda x: "%02x" % x, mac))
 
     def _create_app_cookie_persist_rule(self, cookiename):
         rule_text = "when HTTP_REQUEST {\n"
@@ -3378,75 +2663,6 @@ class iControlDriver(object):
                 greenthread.sleep(5)
                 raise
 
-    def get_vcmp_host(self, bigip):
-        """Get vCMP Host associated with bigip (if any)"""
-        for vcmp_host in self.__vcmp_hosts:
-            for vcmp_guest in vcmp_host['guests']:
-                if vcmp_guest['mgmt_addr'] == bigip.icontrol.hostname:
-                    return vcmp_host
-        return None
-
-    def _init_vcmp_hosts(self):
-        """Initialize vCMP Hosts.  Includes establishing a bigip connection
-           to the vCMP host and determining associated vCMP Guests."""
-        if not self.conf.icontrol_vcmp_hostname:
-            # No vCMP Hosts. Check if any vCMP Guests exist.
-            # Flag issue in log.
-            self.check_vcmp_host_assignments()
-            return
-
-        vcmp_hostnames = self.conf.icontrol_vcmp_hostname.split(',')
-        for vcmp_hostname in vcmp_hostnames:
-            # vCMP Host Attributes
-            vcmp_host = {}
-            vcmp_host['bigip'] = f5_bigip.BigIP(vcmp_hostname,
-                                                self.conf.icontrol_username,
-                                                self.conf.icontrol_password,
-                                                5)
-            vcmp_host['guests'] = []
-
-            # vCMP Guest Attributes
-            guest_names = vcmp_host['bigip'].system.sys_vcmp.get_list()
-            guest_mgmts = vcmp_host['bigip'].\
-                system.sys_vcmp.get_management_address(guest_names)
-
-            for guest_name, guest_mgmt in zip(guest_names, guest_mgmts):
-                # Only add vCMP Guests with BIG-IP that has been registered
-                if guest_mgmt.address in self.__bigips:
-                    vcmp_guest = {}
-                    vcmp_guest['name'] = guest_name
-                    vcmp_guest['mgmt_addr'] = guest_mgmt.address
-                    vcmp_host['guests'].append(vcmp_guest)
-
-            self.__vcmp_hosts.append(vcmp_host)
-
-        self.check_vcmp_host_assignments()
-
-        # Output vCMP Hosts/Guests in log
-        for vcmp_host in self.__vcmp_hosts:
-            for vcmp_guest in vcmp_host['guests']:
-                LOG.debug(('vCMPHost[%s] vCMPGuest[%s] - mgmt: %s' %
-                          (vcmp_host['bigip'].icontrol.hostname,
-                           vcmp_guest['name'], vcmp_guest['mgmt_addr'])))
-
-    def check_vcmp_host_assignments(self):
-        """Check that all vCMP Guest bigips have a host assignment"""
-        LOG.debug(('Check registered bigips to ensure vCMP Guests '
-                   'have a vCMP host assignment'))
-
-        for bigip in self.__bigips.values():
-            system_info = bigip.system.sys_info.get_system_information()
-            if system_info.platform == 'Z101':
-                if self.get_vcmp_host(bigip):
-                    LOG.debug(('vCMP host found for vCMP Guest %s' %
-                               bigip.icontrol.hostname))
-                else:
-                    LOG.error(('vCMP host not found for vCMP Guest %s' %
-                               bigip.icontrol.hostname))
-            else:
-                LOG.debug(('BIG-IP %s is not a vCMP Guest' %
-                           bigip.icontrol.hostname))
-
     def init_traffic_groups(self, bigip):
         self.__traffic_groups = bigip.cluster.get_traffic_groups()
         if 'traffic-group-local-only' in self.__traffic_groups:
@@ -3503,11 +2719,3 @@ class iControlDriver(object):
             LOG.debug(_('saving %s device configuration.'
                         % bigip.icontrol.hostname))
             bigip.cluster.save_config()
-
-
-def get_vcmp_guest(vcmp_host, bigip):
-    """Get vCMP Guest associated with bigip (if any)"""
-    for vcmp_guest in vcmp_host['guests']:
-        if vcmp_guest['mgmt_addr'] == bigip.icontrol.hostname:
-            return vcmp_guest
-    return None

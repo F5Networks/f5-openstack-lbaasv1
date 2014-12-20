@@ -224,7 +224,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
         self.context = context.get_admin_context_without_session()
         # pass context to driver
-        self.lbdriver.context = self.context
+        self.lbdriver.set_context(self.context)
 
         # setup all rpc and callback objects
         self._setup_rpc()
@@ -254,11 +254,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
         if not self.conf.f5_global_routed_mode:
             # Core plugin Callbacks API
-            self.lbdriver.tunnel_rpc = agent_api.CoreAgentApi(topics.PLUGIN)
+            self.lbdriver.set_tunnel_rpc(agent_api.CoreAgentApi(topics.PLUGIN))
 
             # L2 Populate plugin Callbacks API
             if self.conf.l2_population:
-                self.lbdriver.l2pop_rpc = agent_api.L2PopulationApi()
+                self.lbdriver.set_l2pop_rpc(agent_api.L2PopulationApi())
 
             # Besides LBaaS Plugin calls... what else to consume
 
@@ -464,7 +464,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             if stats:
                     self.plugin_rpc.update_pool_stats(pool['id'], stats)
         except Exception as e:
-            message = 'could not get pool stats:' + e.message
+            message = 'could not get pool stats:' + str(e.message)
             self.plugin_rpc.update_pool_status(pool['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -476,7 +476,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.create_vip(vip, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not create VIP:' + e.message
+            message = 'could not create VIP:' + str(e.message)
             self.plugin_rpc.update_vip_status(vip['id'],
                                               plugin_const.ERROR,
                                               message)
@@ -488,7 +488,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.update_vip(old_vip, vip, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not update VIP: ' + e.message
+            message = 'could not update VIP: ' + str(e.message)
             self.plugin_rpc.update_vip_status(vip['id'],
                                               plugin_const.ERROR,
                                               message)
@@ -500,7 +500,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_vip(vip, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not delete VIP:' + e.message
+            message = 'could not delete VIP:' + str(e.message)
             self.plugin_rpc.update_vip_status(vip['id'],
                                               plugin_const.ERROR,
                                               message)
@@ -512,7 +512,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.create_pool(pool, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not create pool:' + e.message
+            message = 'could not create pool:' + str(e.message)
             self.plugin_rpc.update_pool_status(pool['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -524,7 +524,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.update_pool(old_pool, pool, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not update pool:' + e.message
+            message = 'could not update pool:' + str(e.message)
             self.plugin_rpc.update_pool_status(old_pool['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -536,7 +536,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_pool(pool, service)
             self.cache.remove_by_pool_id(pool['id'])
         except Exception as e:
-            message = 'could not delete pool:' + e.message
+            message = 'could not delete pool:' + str(e.message)
             self.plugin_rpc.update_pool_status(pool['id'],
                                               plugin_const.ERROR,
                                               message)
@@ -548,7 +548,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.create_member(member, service)
             self.cache.put(service)
         except IOError as e:
-            message = 'could not create member:' + e.message
+            message = 'could not create member:' + str(e.message)
             self.plugin_rpc.update_member_status(member['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -560,7 +560,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.update_member(old_member, member, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not update member:' + e.message
+            message = 'could not update member:' + str(e.message)
             self.plugin_rpc.update_member_status(old_member['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -572,7 +572,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_member(member, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not delete member:' + e.message
+            message = 'could not delete member:' + str(e.message)
             self.plugin_rpc.update_member_status(member['id'],
                                                plugin_const.ERROR,
                                                message)
@@ -586,7 +586,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                                                    pool, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not create health monitor:' + e.message
+            message = 'could not create health monitor:' + str(e.message)
             self.plugin_rpc.update_health_monitor_status(
                                                pool['id'],
                                                health_monitor['id'],
@@ -603,7 +603,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                                                  pool, service)
             self.cache.put(service)
         except Exception as e:
-            message = 'could not update health monitor:' + e.message
+            message = 'could not update health monitor:' + str(e.message)
             self.plugin_rpc.update_health_monitor_status(
                                                     pool['id'],
                                                     old_health_monitor['id'],
@@ -618,7 +618,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_pool_health_monitor(health_monitor,
                                                       pool, service)
         except Exception as e:
-            message = 'could not delete health monitor:' + e.message
+            message = 'could not delete health monitor:' + str(e.message)
             self.plugin_rpc.update_health_monitor_status(pool['id'],
                                                          health_monitor['id'],
                                                          plugin_const.ERROR,
@@ -642,7 +642,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             LOG.debug(_('received tunnel_update: %s' % kwargs))
         except Exception as e:
-            LOG.error(_('could not update tunnel:' + e.message))
+            LOG.error(_('could not update tunnel:' + str(e.message)))
 
     @log.log
     def add_fdb_entries(self, context, fdb_entries, host=None):
@@ -652,7 +652,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         % (fdb_entries, host)))
             self.lbdriver.fdb_add(fdb_entries)
         except Exception as e:
-            LOG.error(_('could not add fdb entries:' + e.message))
+            LOG.error(_('could not add fdb entries:' + str(e.message)))
 
     @log.log
     def remove_fdb_entries(self, context, fdb_entries, host=None):
@@ -662,7 +662,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         % (fdb_entries, host)))
             self.lbdriver.fdb_remove(fdb_entries)
         except Exception as e:
-            LOG.error(_('could not remove fdb entries:' + e.message))
+            LOG.error(_('could not remove fdb entries:' + str(e.message)))
 
     @log.log
     def update_fdb_entries(self, context, fdb_entries, host=None):
@@ -672,7 +672,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         % (fdb_entries, host)))
             self.lbdriver.fdb_update(fdb_entries)
         except Exception as e:
-            LOG.error(_('could not update tunnel:' + e.message))
+            LOG.error(_('could not update tunnel:' + str(e.message)))
 
 if preJuno:
     class LbaasAgentManager(LbaasAgentManagerBase):

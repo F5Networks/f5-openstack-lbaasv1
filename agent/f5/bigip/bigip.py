@@ -63,6 +63,7 @@ class BigIP(object):
         self.interfaces = {}
         self.group_bigips = []
         self.sync_mode = const.DEFAULT_SYNC_MODE
+        self.device_name = None
 
     @property
     def system(self):

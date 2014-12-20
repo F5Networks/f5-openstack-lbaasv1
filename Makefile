@@ -98,17 +98,43 @@ clean-rpms:
 
 pylint:
 	(cd agent; \
+         > neutron/__init__.py; \
+         > neutron/services/__init__.py; \
+         > neutron/services/loadbalancer/__init__.py; \
          > neutron/services/loadbalancer/drivers/__init__.py; \
-         pylint --init-hook='import sys;sys.path.insert(1,"/home/manager/f5-onboard-refactor/src/f5-lbaas/agent")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py | \
-            grep -v "Undefined variable '_'" | \
+         ln -s /usr/lib/python2.7/dist-packages/neutron/common neutron/common; \
+         ln -s /usr/lib/python2.7/dist-packages/neutron/openstack neutron/openstack; \
+         ln -s /usr/lib/python2.7/dist-packages/neutron/plugins neutron/plugins; \
+         ln -s /usr/lib/python2.7/dist-packages/neutron/services/constants neutron/services/constants; \
+         ln -s /usr/lib/python2.7/dist-packages/neutron/services/loadbalancer/constants.py neutron/services/loadbalancer/constants.py; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                f5/bigip/bigip_interfaces/arp.py | \
             more; \
-         rm neutron/services/loadbalancer/drivers/__init__.py \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/l2.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py | \
+            more; \
+         rm -v neutron/plugins; \
+         rm -v neutron/openstack; \
+         rm -v neutron/common; \
+         rm -v neutron/services/constants; \
+         rm -v neutron/services/loadbalancer/constants.py; \
+         rm -v neutron/services/loadbalancer/drivers/__init__.py; \
+         rm -v neutron/services/loadbalancer/__init__.py; \
+         rm -v neutron/services/__init__.py; \
+         rm -v neutron/__init__.py; \
         )
 
 pep8:
 	(cd agent; \
          pep8 neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/l2.py; \
          pep8 f5/bigip/bigip_interfaces/__init__.py; \
+         pep8 f5/bigip/bigip_interfaces/arp.py; \
         )
 

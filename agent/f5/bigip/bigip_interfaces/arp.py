@@ -289,8 +289,16 @@ class ARP(object):
         # ARP entries can't handle %0 on them like other
         # TMOS objects.
         ip_address = self._remove_route_domain_zero(ip_address)
-        if '/' + folder + '/' + ip_address in \
-                  self.net_arp.get_static_entry_list():
+        try:
+            arp_list = self.net_arp.get_static_entry_list()
+        except Exception as e:
+            Log.error('ARP', 'query exception: %s on %s' %
+                      (e.message, self.bigip.device_name))
+            raise exceptions.StaticARPQueryException(e.message)
+
+        Log.debug('ARP', 'checking for %s in %s' %
+                  ('/' + folder + '/' + ip_address, str(arp_list)))
+        if '/' + folder + '/' + ip_address in arp_list:
             return True
         else:
             return False

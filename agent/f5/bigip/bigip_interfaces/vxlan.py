@@ -258,8 +258,8 @@ class VXLAN(object):
                             return False
                     except Exception as e:
                         Log.error('VXLAN',
-                                  'could not create static arp: %s'
-                                  % e.message)
+                                  'could not create static arp: %s on %s'
+                                  % (e.message, self.bigip.device_name))
                         return False
             return True
         else:
