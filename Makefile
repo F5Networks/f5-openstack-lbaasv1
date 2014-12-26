@@ -109,15 +109,19 @@ pylint:
          ln -s /usr/lib/python2.7/dist-packages/neutron/services/loadbalancer/constants.py neutron/services/loadbalancer/constants.py; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                f5/bigip/bigip_interfaces/vxlan.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
                 f5/bigip/bigip_interfaces/arp.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
                 neutron/services/loadbalancer/drivers/f5/bigip/l2.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py | \
             more; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \

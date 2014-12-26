@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 
-from f5.common import constants
 from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.bigip_interfaces import icontrol_rest_folder
@@ -24,6 +23,7 @@ from f5.bigip.bigip_interfaces import log
 
 import json
 import os
+from eventlet import greenthread
 
 
 class VXLAN(object):
@@ -42,7 +42,7 @@ class VXLAN(object):
             payload['partition'] = folder
             payload['defaultsFrom'] = 'vxlan'
             payload['floodingType'] = 'multipoint'
-            payload['port'] = constants.VXLAN_UDP_PORT
+            payload['port'] = const.VXLAN_UDP_PORT
             request_url = self.bigip.icr_url + '/net/tunnels/vxlan/'
             response = self.bigip.icr_session.post(request_url,
                                   data=json.dumps(payload),
@@ -283,20 +283,23 @@ class VXLAN(object):
             new_mac_addresses = []
             new_arp_addresses = {}
 
-            for mac in fdb_entries[tunnel_name]['records']:
+            tunnel_records = fdb_entries[tunnel_name]['records']
+            for mac in tunnel_records:
                 fdb_entry = dict()
                 fdb_entry['name'] = mac
-                fdb_entry['endpoint'] = mac['endpoint']
+                fdb_entry['endpoint'] = tunnel_records[mac]['endpoint']
                 new_records.append(fdb_entry)
                 new_mac_addresses.append(mac)
-                new_arp_addresses[mac] = mac['ip_address']
+                new_arp_addresses[mac] = tunnel_records[mac]['ip_address']
 
             for record in existing_records:
                 if not record['name'] in new_mac_addresses:
                     new_records.append(record)
                 else:
+                    # This fdb entry exists and is not being updated.
+                    # So, do not update the ARP record either.
                     if record['name'] in new_arp_addresses:
-                        del(new_arp_addresses[record['name']])
+                        del new_arp_addresses[record['name']] 
 
             payload = dict()
             payload['records'] = new_records
@@ -316,9 +319,6 @@ class VXLAN(object):
                                       'could not create static arp: %s'
                                       % e.message)
             return True
-        else:
-            Log.error('VXLAN', response.text)
-            raise exceptions.VXLANUpdateException(response.text)
         return False
 
     @icontrol_rest_folder
@@ -397,9 +397,6 @@ class VXLAN(object):
                         self.bigip.arp.delete(ip_address=arps_to_delete[mac],
                                               folder='Common')
             return True
-        else:
-            Log.error('VXLAN', response.text)
-            raise exceptions.VXLANUpdateException(response.text)
         return False
 
     @icontrol_rest_folder
@@ -535,13 +532,25 @@ class VXLAN(object):
         request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
         request_url += '~' + folder + '~' + name
 
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
-        if response.status_code < 400:
-            return True
-        elif response.status_code != 404:
-            Log.error('VXLAN', response.text)
-            raise exceptions.VXLANQueryException(response.text)
+        for retry in range(2):
+            if retry > 0:
+                Log.error('VXLAN', 'Attempting REST retry after 401 error')
+            response = self.bigip.icr_session.get(request_url,
+                                    timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            elif response.status_code == 401:
+                if retry < 1:
+                    greenthread.sleep(1)
+                    continue
+                else:
+                    Log.error('VXLAN', response.text)
+                    raise exceptions.VXLANQueryException(response.text)
+            elif response.status_code != 404:
+                Log.error('VXLAN', response.text)
+                raise exceptions.VXLANQueryException(response.text)
+            else:
+                return False
         return False
 
     @icontrol_rest_folder

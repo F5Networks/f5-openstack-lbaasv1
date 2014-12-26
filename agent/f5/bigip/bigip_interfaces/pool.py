@@ -252,12 +252,12 @@ class Pool(object):
         # with this object prefix
         for pool in existing_pools:
             if not pool.startswith(self.OBJ_PREFIX):
-                del(existing_pools[pool])
+                del existing_pools[pool]
 
         for pool in known_pools:
             decorated_pool = self.OBJ_PREFIX + pool
             if decorated_pool in existing_pools:
-                del(existing_pools[decorated_pool])
+                del existing_pools[decorated_pool]
         # anything left should be purged
         for pool in existing_pools:
             vs_name = \
@@ -278,6 +278,9 @@ class Pool(object):
                 except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)
             try:
+                Log.debug('purge_orphaned_pools',
+                          "Deleting pool %s in folder %s" 
+                          % (pool, existing_pools[pool]))
                 self.delete(name=pool, folder=existing_pools[pool])
             except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)

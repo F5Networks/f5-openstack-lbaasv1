@@ -236,7 +236,7 @@ class System(object):
                 self.current_folder = '/Common'
 
     @log
-    def purge_folder(self, folder, bigip=None):
+    def purge_folder_contents(self, folder, bigip=None):
         if not bigip:
             bigip = self.bigip
         if not folder in self.exempt_folders:
@@ -252,10 +252,48 @@ class System(object):
             bigip.vlan.delete_all(folder=folder)
             bigip.l2gre.delete_all(folder=folder)
             bigip.route.delete_domain(folder=folder)
+        else:
+            Log.error('folder', 'request to purge ' + \
+                                str(folder) + ' folder ignored')
+
+    @log
+    def purge_folder(self, folder, bigip=None):
+        if not bigip:
+            bigip = self.bigip
+        if not folder in self.exempt_folders:
             bigip.system.delete_folder(bigip.decorate_folder(folder))
         else:
             Log.error('folder', 'request to purge ' + \
                                 str(folder) + ' folder ignored')
+
+    @log
+    def purge_orphaned_folders_contents(self, known_folders, bigip=None):
+        if not bigip:
+            bigip = self.bigip
+        existing_folders = bigip.system.get_folders()
+        # remove all folders which are default
+        existing_folders.remove('/')
+        existing_folders.remove('Common')
+        # remove all folders which are not managed
+        # with this object prefix
+        for folder in existing_folders:
+            if not folder.startswith(self.OBJ_PREFIX):
+                existing_folders.remove(folder)
+        for folder in known_folders:
+            decorated_folder = bigip.decorate_folder(folder)
+            if decorated_folder in existing_folders:
+                existing_folders.remove(decorated_folder)
+        # anything left should be purged
+        if existing_folders:
+            Log.debug('system',
+                      'purging orphaned folders contents: %s' 
+                      % existing_folders)
+        for folder in existing_folders:
+            try:
+                bigip.system.purge_folder_contents(folder, bigip)
+            except Exception as e:
+                Log.error('purge_orphaned_folders_contents', e.message)
+
 
     @log
     def purge_orphaned_folders(self, known_folders, bigip=None):
@@ -275,7 +313,9 @@ class System(object):
             if decorated_folder in existing_folders:
                 existing_folders.remove(decorated_folder)
         # anything left should be purged
-        Log.debug('system', 'purging orphaned tenants: %s' % existing_folders)
+        if existing_folders:
+            Log.debug('system', 'purging orphaned folders: %s'
+                      % existing_folders)
         for folder in existing_folders:
             try:
                 bigip.system.purge_folder(folder, bigip)

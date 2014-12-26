@@ -309,8 +309,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)
-        except Exception:
-            LOG.exception(_("Failed reporting state!"))
+        except Exception as e:
+            LOG.exception(_("Failed reporting state!: " + str(e.message)))
 
     def initialize_service_hook(self, started_by):
         self.sync_state()
@@ -351,8 +351,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                                         self.conf.f5_global_routed_mode))
                 if stats:
                     self.plugin_rpc.update_pool_stats(pool_id, stats)
-            except Exception:
-                LOG.exception(_('Error upating stats'))
+            except Exception as e:
+                LOG.exception(_('Error upating stats' + str(e.message)))
                 self.needs_resync = True
 
     @periodic_task.periodic_task(spacing=600)
@@ -405,9 +405,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                             % pool_id))
                 # update is create or update
                 self.lbdriver.sync(service)
-        except Exception:
-            LOG.exception(_('Unable to validate service for pool: %s'),
-                          pool_id)
+        except Exception as e:
+            LOG.exception(_('Unable to validate service for pool: %s' +
+                          str(e.message)), pool_id)
 
     @log.log
     def refresh_service(self, pool_id):
@@ -419,9 +419,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.cache.put(service)
             # update is create or update
             self.lbdriver.sync(service)
-        except Exception:
-            LOG.exception(_('Unable to refresh service for pool: %s'),
-                          pool_id)
+        except Exception as e:
+            LOG.exception(_('Unable to refresh service for pool: %s: ' +
+                            str(e.message)), pool_id)
             self.needs_resync = True
 
     @log.log
@@ -435,9 +435,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.delete_pool(pool_id, service)
             self.plugin_rpc.pool_destroyed(pool_id)
-        except Exception:
-            LOG.exception(_('Unable to destroy service for pool: %s'),
-                          pool_id)
+        except Exception as e:
+            LOG.exception(_('Unable to destroy service for pool: %s' +
+                            str(e.message)), pool_id)
             self.needs_resync = True
         self.cache.remove_by_pool_id(pool_id)
 
