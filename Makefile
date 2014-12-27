@@ -140,5 +140,6 @@ pep8:
          pep8 neutron/services/loadbalancer/drivers/f5/bigip/l2.py; \
          pep8 f5/bigip/bigip_interfaces/__init__.py; \
          pep8 f5/bigip/bigip_interfaces/arp.py; \
+         pep8 f5/bigip/bigip_interfaces/cluster.py; \
         )
 

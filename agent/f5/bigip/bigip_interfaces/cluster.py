@@ -36,15 +36,13 @@ class Cluster(object):
     def get_sync_status(self):
         request_url = self.bigip.icr_url + '/cm/sync-status?$select=status'
         response = self.bigip.icr_session.get(request_url,
-                                             timeout=const.CONNECTION_TIMEOUT)
+                                              timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
-            return response_obj['entries'][
-                                'https://localhost/mgmt/tm/cm/sync-status/0'][
-                                'nestedStats'][
-                                'entries'][
-                                'status'][
-                                'description']
+            entries = response_obj['entries']
+            status = entries['https://localhost/mgmt/tm/cm/sync-status/0']
+            desc = status['nestedStats']['entries']['status']['description']
+            return desc
         else:
             Log.error('sync-status', response.text)
             raise exceptions.ClusterQueryException(response.text)
@@ -55,9 +53,9 @@ class Cluster(object):
         request_url = self.bigip.icr_url + '/sys/config'
         payload = dict()
         payload['command'] = 'save'
-        response = self.bigip.icr_session.post(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.post(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -69,8 +67,8 @@ class Cluster(object):
     def get_local_device_name(self):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=selfDevice,name,hostname,managementIp'
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -86,8 +84,8 @@ class Cluster(object):
     def get_local_device_addr(self):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=selfDevice,name,hostname,managementIp'
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -105,9 +103,9 @@ class Cluster(object):
         payload = dict()
         payload['command'] = 'run'
         payload['options'] = [{'config-sync': 'to-group ' + device_group_name}]
-        response = self.bigip.icr_session.post(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.post(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -132,23 +130,21 @@ class Cluster(object):
 
         while attempts < const.MAX_SYNC_ATTEMPTS:
             state = self.get_sync_status()
-            if state in ['Standalone',
-                         'In Sync',
-                        ]:
+            if state in ['Standalone', 'In Sync']:
                 break
 
             elif state == 'Awaiting Initial Sync':
                 attempts += 1
-                Log.info('Cluster',
+                Log.info(
+                    'Cluster',
                     "Device %s - Synchronizing initial config to group %s"
                     % (dev_name, name))
                 self.sync_local_device_to_group(name)
                 time.sleep(sleep_delay)
 
             elif state in ['Disconnected',
-                            'Not All Devices Synced',
-                            'Changes Pending',
-                           ]:
+                           'Not All Devices Synced',
+                           'Changes Pending']:
                 attempts += 1
 
                 last_log_time = 0
@@ -159,16 +155,15 @@ class Cluster(object):
                 while now - wait_start_time < sleep_delay:
                     # Only log once per second
                     if now - last_log_time >= 1:
-                        Log.info('Cluster',
+                        Log.info(
+                            'Cluster',
                             'Device %s, Group %s not synced. '
-                            % (dev_name, name) + \
+                            % (dev_name, name) +
                             'Waiting. State is: %s'
                             % state)
                         last_log_time = now
                     state = self.get_sync_status()
-                    if state in ['Standalone',
-                                 'In Sync',
-                                ]:
+                    if state in ['Standalone', 'In Sync']:
                         break
                     time.sleep(.5)
                     now = time.time()
@@ -189,60 +184,59 @@ class Cluster(object):
 
             elif state == 'Sync Failure':
                 Log.info('Cluster',
-                "Device %s - Synchronization failed for %s"
-                % (dev_name, name))
-                Log.debug('Cluster', 'SYNC SECONDS (Sync Failure): ' + \
-                            str(time.time() - sync_start_time))
+                         "Device %s - Synchronization failed for %s"
+                         % (dev_name, name))
+                Log.debug('Cluster', 'SYNC SECONDS (Sync Failure): ' +
+                          str(time.time() - sync_start_time))
                 raise exceptions.BigIPClusterSyncFailure(
-                   'Device service group %s' % name + \
-                   ' failed after ' + \
-                   '%s attempts.' % const.MAX_SYNC_ATTEMPTS + \
-                   ' Correct sync problem manually' + \
-                   ' according to sol13946 on ' + \
-                   ' support.f5.com.')
+                    'Device service group %s' % name +
+                    ' failed after ' +
+                    '%s attempts.' % const.MAX_SYNC_ATTEMPTS +
+                    ' Correct sync problem manually' +
+                    ' according to sol13946 on ' +
+                    ' support.f5.com.')
             else:
                 attempts += 1
                 Log.info('Cluster',
-                "Device %s " % dev_name \
-                + "Synchronizing config attempt %s to group %s:"
-                % (attempts, name) \
-                + " current state: %s" % state)
+                         "Device %s " % dev_name
+                         + "Synchronizing config attempt %s to group %s:"
+                         % (attempts, name) + " current state: %s" % state)
                 self.sync_local_device_to_group(name)
                 time.sleep(sleep_delay)
                 sleep_delay += const.SYNC_DELAY
         else:
             if state == 'Disconnected':
                 Log.debug('Cluster',
-                          'SYNC SECONDS(Disconnected): ' + \
-                              str(time.time() - sync_start_time))
+                          'SYNC SECONDS(Disconnected): ' +
+                          str(time.time() - sync_start_time))
                 raise exceptions.BigIPClusterSyncFailure(
-                        'Device service group %s' % name + \
-                        ' could not reach a sync state' + \
-                        ' because they can not communicate' + \
-                        ' over the sync network. Please' + \
-                        ' check connectivity.')
+                    'Device service group %s' % name +
+                    ' could not reach a sync state' +
+                    ' because they can not communicate' +
+                    ' over the sync network. Please' +
+                    ' check connectivity.')
             else:
-                Log.debug('Cluster', 'SYNC SECONDS(Timeout): ' + \
-                              str(time.time() - sync_start_time))
+                Log.debug('Cluster', 'SYNC SECONDS(Timeout): ' +
+                          str(time.time() - sync_start_time))
                 raise exceptions.BigIPClusterSyncFailure(
-                    'Device service group %s' % name + \
-                    ' could not reach a sync state after ' + \
-                    '%s attempts.' % const.MAX_SYNC_ATTEMPTS + \
-                    ' It is in %s state currently.' % state + \
-                    ' Correct sync problem manually' + \
-                    ' according to sol13946 on ' + \
+                    'Device service group %s' % name +
+                    ' could not reach a sync state after ' +
+                    '%s attempts.' % const.MAX_SYNC_ATTEMPTS +
+                    ' It is in %s state currently.' % state +
+                    ' Correct sync problem manually' +
+                    ' according to sol13946 on ' +
                     ' support.f5.com.')
 
-        Log.debug('Cluster', 'SYNC SECONDS(Success): ' + \
-                      str(time.time() - sync_start_time))
+        Log.debug('Cluster', 'SYNC SECONDS(Success): ' +
+                  str(time.time() - sync_start_time))
 
     @log
     def sync_failover_dev_group_exists(self, name):
         request_url = self.bigip.icr_url + '/cm/device-group/'
         request_url += '~Common~' + name
         request_url += '?$select=type'
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'type' in response_obj:
@@ -263,26 +257,23 @@ class Cluster(object):
             if self.bigip.device.get_lock():
                 local_device = self.get_local_device_name()
                 local_mgmt_address = self.get_local_device_addr()
-                root_mgmt_dict = {
-                                   'root_device_name': local_device,
-                                   'root_device_mgmt_address':
-                                                       local_mgmt_address
-                                 }
+                root_mgmt_dict = {'root_device_name': local_device,
+                                  'root_device_mgmt_address':
+                                  local_mgmt_address}
                 local_md = self.bigip.device.get_metadata()
                 if 'root_device_name' in local_md.keys():
                     md_device_name = os.path.basename(
-                                             local_md['root_device_name'])
+                        local_md['root_device_name'])
                     if md_device_name:
                         if not md_device_name == local_device:
                             raise exceptions.BigIPClusterPeerAddFailure(
-                                    'the device' \
-                                     + ' used to peer %s ' % name \
-                                     + ' was already itself peered from root' \
-                                     + ' device: %s'
-                                           % local_md['root_device_name'])
+                                'the device used to peer %s ' % name
+                                + ' was already itself peered from root'
+                                + ' device: %s'
+                                % local_md['root_device_name'])
                 self.bigip.device.update_metadata(root_mgmt_dict)
                 Log.info('Cluster', 'Device %s - adding peer %s'
-                                   % (local_device, name))
+                                    % (local_device, name))
 
                 self.mgmt_trust.add_authority_device(mgmt_ip_address,
                                                      username,
@@ -307,11 +298,10 @@ class Cluster(object):
                     attempts += 1
                 else:
                     raise exceptions.BigIPClusterPeerAddFailure(
-                    'Could not add peer device %s' % name +
-                    ' as a trust for device %s'
-                    % os.path.basename(self.mgmt_dev.get_local_device()) +
-                    ' after % attempts' % const.PEER_ADD_ATTEMPTS_MAX
-                    )
+                        'Could not add peer device %s' % name +
+                        ' as a trust for device %s'
+                        % os.path.basename(self.mgmt_dev.get_local_device()) +
+                        ' after % attempts' % const.PEER_ADD_ATTEMPTS_MAX)
             else:
                 raise exceptions.BigIPDeviceLockAcquireFailed(
                     'Unable to obtain device lock for device %s'
@@ -322,8 +312,8 @@ class Cluster(object):
     def get_peer_addr(self, name):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=selfDevice,name,hostname,managementIp'
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -339,8 +329,8 @@ class Cluster(object):
     def peer_exists(self, name):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=selfDevice,name,hostname,managementIp'
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -359,9 +349,8 @@ class Cluster(object):
         request_url += name
         request_filter = '/?$select=name,type'
         request_url += request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                    data=None,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, data=None, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if response_obj['type'] == 'sync-failover':
@@ -383,9 +372,9 @@ class Cluster(object):
             payload['autoSync'] = 'enabled'
         payload['networkFailover'] = 'enabled'
         payload['type'] = 'sync-failover'
-        response = self.bigip.icr_session.post(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.post(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 409:
@@ -400,9 +389,8 @@ class Cluster(object):
             self.remove_all_devices(name)
         request_url = self.bigip.icr_url + '/cm/device-group/~Common~'
         request_url += name
-        response = self.bigip.icr_session.delete(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
-
+        response = self.bigip.icr_session.delete(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -417,9 +405,9 @@ class Cluster(object):
         payload['autoSync'] = 'enabled'
         request_url = self.bigip.icr_url + '/cm/device-group/~Common~'
         request_url += name
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -432,9 +420,9 @@ class Cluster(object):
         payload['autoSync'] = 'disabled'
         request_url = self.bigip.icr_url + '/cm/device-group/~Common~'
         request_url += name
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -446,8 +434,8 @@ class Cluster(object):
         request_url = self.bigip.icr_url + '/cm/device-group/~Common~'
         request_url += name
         request_url += "/devices?$select=name"
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         return_devices = []
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -479,9 +467,9 @@ class Cluster(object):
             for device in existing_devices:
                 devices_list.append({'name': device})
             payload['devices'] = devices_list
-            response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 409:
@@ -508,9 +496,9 @@ class Cluster(object):
             for device in existing_devices:
                 devices_list.append({'name': device})
             payload['devices'] = devices_list
-            response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -525,9 +513,9 @@ class Cluster(object):
         request_url += name
         payload = dict()
         payload['devices'] = list()
-        response = self.bigip.icr_session.put(request_url,
-                                              data=json.dumps(payload),
-                                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -551,9 +539,9 @@ class Cluster(object):
         request_url += name
         payload = dict()
         payload['description'] = base64.encodestring(str_comment)
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -564,8 +552,8 @@ class Cluster(object):
     def get_metadata(self, name):
         request_url = self.bigip.icr_url + '/cm/device-group/~Common~'
         request_url += name + '?$select=name,description'
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         str_comment = None
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -614,8 +602,8 @@ class Cluster(object):
     def get_traffic_groups(self):
         request_url = self.bigip.icr_url + '/cm/traffic-group'
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             traffic_groups = []
@@ -631,8 +619,8 @@ class Cluster(object):
             request_url = self.bigip.icr_url + '/cm/traffic-group/'
             request_url += '~Common~' + name
             request_url += '?$select=name'
-            response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -662,9 +650,9 @@ class Cluster(object):
                 if dev_name in devices:
                     ha_order_list.append('/Common/' + dev_name)
             payload['haOrder'] = ha_order_list
-        response = self.bigip.icr_session.post(request_url,
-                                    data=json.dumps(payload),
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.post(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 409:
@@ -678,8 +666,8 @@ class Cluster(object):
         if name:
             request_url = self.bigip.icr_url + '/cm/traffic-group/'
             request_url += '~Common~' + name
-            response = self.bigip.icr_session.delete(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:

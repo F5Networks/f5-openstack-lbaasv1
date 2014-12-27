@@ -71,8 +71,8 @@ class ARP(object):
             # TMOS objects.
             ip_address = self._remove_route_domain_zero(ip_address)
             try:
-                entry = \
-                  self.net_arp.typefactory.create('Networking.ARP.StaticEntry')
+                create_arp = self.net_arp.typefactory.create
+                entry = create_arp('Networking.ARP.StaticEntry')
                 entry.address = ip_address
                 entry.mac_address = mac_address
                 self.net_arp.add_static_entry([entry])
@@ -112,7 +112,7 @@ class ARP(object):
             ip_address = self._remove_route_domain_zero(ip_address)
             try:
                 self.net_arp.delete_static_entry_v2(
-                                ['/' + folder + '/' + ip_address])
+                    ['/' + folder + '/' + ip_address])
                 return True
             except Exception as e:
                 Log.error('ARP', 'delete exception: ' + e.message)
@@ -139,7 +139,7 @@ class ARP(object):
                     rd_div = subnet.find(':')
                     if rd_div > -1:
                         network = netaddr.IPNetwork(
-                           subnet[0:mask_div][0:rd_div] + subnet[mask_div:])
+                            subnet[0:mask_div][0:rd_div] + subnet[mask_div:])
                     else:
                         network = netaddr.IPNetwork(subnet)
                 except Exception as e:
@@ -152,7 +152,7 @@ class ARP(object):
                     rd_div = subnet.find(':')
                     if rd_div > -1:
                         network = netaddr.IPNetwork(
-                           subnet[0:rd_div] + '/' + mask)
+                            subnet[0:rd_div] + '/' + mask)
                     else:
                         network = netaddr.IPNetwork(subnet + '/' + mask)
                 except Exception as e:
@@ -164,8 +164,8 @@ class ARP(object):
                 request_url = self.bigip.icr_url + '/net/arp'
                 request_filter = 'partition eq ' + folder
                 request_url += '?$filter=' + request_filter
-                response = self.bigip.icr_session.get(request_url,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                response = self.bigip.icr_session.get(
+                    request_url, timeout=const.CONNECTION_TIMEOUT)
                 Log.debug('ARP::get response', '%s' % response.json())
                 if response.status_code < 400:
                     response_obj = json.loads(response.text)
@@ -173,7 +173,7 @@ class ARP(object):
                         for arp in response_obj['items']:
                             ad_rd_div = arp['ipAddress'].find('%')
                             address = netaddr.IPAddress(
-                                        arp['ipAddress'][0:ad_rd_div])
+                                arp['ipAddress'][0:ad_rd_div])
                             if address in network:
                                 mac_addresses.append(arp['macAddress'])
                                 self.delete(arp['ipAddress'],
@@ -188,16 +188,16 @@ class ARP(object):
         if ip_address:
             request_url = self.bigip.icr_url + '/net/arp/'
             request_url += '~' + folder + '~' + urllib.quote(
-                        self._remove_route_domain_zero(ip_address))
-            response = self.bigip.icr_session.get(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+                self._remove_route_domain_zero(ip_address))
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             Log.debug('ARP::get response',
                       '%s' % response.json())
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 return [
-                    {strip_domain_address(response_obj['name']): \
-                                            response_obj['macAddress']}
+                    {strip_domain_address(response_obj['name']):
+                     response_obj['macAddress']}
                 ]
             else:
                 Log.error('ARP', response.text)
@@ -206,8 +206,8 @@ class ARP(object):
             request_url = self.bigip.icr_url + '/net/arp'
             request_filter = 'partition eq ' + folder
             request_url += '?$filter=' + request_filter
-            response = self.bigip.icr_session.get(request_url,
-                                       timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             Log.debug('ARP::get response',
                       '%s' % response.json())
             if response.status_code < 400:
@@ -216,8 +216,8 @@ class ARP(object):
                     arps = []
                     for arp in response_obj['items']:
                         arps.append(
-                         {strip_domain_address(arp['name']): \
-                                               arp['macAddress']}
+                            {strip_domain_address(arp['name']):
+                             arp['macAddress']}
                         )
                     return arps
             else:
