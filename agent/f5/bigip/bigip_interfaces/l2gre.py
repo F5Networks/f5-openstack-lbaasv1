@@ -35,7 +35,6 @@ class L2GRE(object):
     def create_multipoint_profile(self, name=None, folder='Common'):
         folder = str(folder).replace('/', '')
         if not self.profile_exists(name=name, folder=folder):
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder
@@ -84,7 +83,6 @@ class L2GRE(object):
                                  folder='Common'):
         if not self.tunnel_exists(name=name, folder=folder):
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder

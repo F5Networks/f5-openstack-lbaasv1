@@ -1,4 +1,6 @@
 """ Module for managing L2 configuration on F5 BIG-IP """
+# pylint: disable=no-self-use
+
 from neutron.openstack.common import log as logging
 from neutron.common import constants as q_const
 
@@ -24,6 +26,7 @@ def _get_tunnel_name(network):
 
 
 def _get_tunnel_fake_mac(network, local_ip):
+    """ create a fake mac for l2 records for tunnels """
     network_id = str(network['provider:segmentation_id']).rjust(4, '0')
     mac_prefix = '02:' + network_id[:2] + ':' + network_id[2:4] + ':'
     ip_parts = local_ip.split('.')
@@ -56,9 +59,6 @@ class BigipL2Manager(object):
     """ Class for configuring L2 networks and FDB entries """
     def __init__(self, driver):
         self.driver = driver
-        bigips = self.driver.get_bigips()
-        first_bigip_hostip = sorted(bigips)[0]
-        self.__bigip = bigips[first_bigip_hostip]
 
         self.l2pop_rpc = None
 
@@ -74,8 +74,7 @@ class BigipL2Manager(object):
             self.interface_mapping[net_key] = str(intmap[1]).strip()
             self.tagging_mapping[net_key] = str(intmap[2]).strip()
             LOG.debug(_('physical_network %s = interface %s, tagged %s'
-                        % (net_key, intmap[1], intmap[2])
-                        ))
+                        % (net_key, intmap[1], intmap[2])))
 
         self.__vcmp_hosts = []
         self._init_vcmp_hosts()
@@ -114,7 +113,7 @@ class BigipL2Manager(object):
 
             for guest_name, guest_mgmt in zip(guest_names, guest_mgmts):
                 # Only add vCMP Guests with BIG-IP that has been registered
-                if guest_mgmt.address in self.driver.get_bigips():
+                if guest_mgmt.address in self.driver.get_bigip_hosts():
                     vcmp_guest = {}
                     vcmp_guest['name'] = guest_name
                     vcmp_guest['mgmt_addr'] = guest_mgmt.address
@@ -136,7 +135,7 @@ class BigipL2Manager(object):
         LOG.debug(('Check registered bigips to ensure vCMP Guests '
                    'have a vCMP host assignment'))
 
-        for bigip in self.driver.get_bigips().values():
+        for bigip in self.driver.get_all_bigips():
             system_info = bigip.system.sys_info.get_system_information()
             if system_info.platform == 'Z101':
                 if self.get_vcmp_host(bigip):
@@ -186,8 +185,10 @@ class BigipL2Manager(object):
         return vlan_name
 
     # called for every bigip in every sync mode
-    def assure_device_network(self, network, bigip):
+    def assure_bigip_network(self, bigip, network):
         """ Ensure bigip has configured network object """
+        LOG.debug("assure_bigip_network network: %s" %
+                  str(network))
         if self.is_common_network(network):
             network_folder = 'Common'
         else:
@@ -429,10 +430,8 @@ class BigipL2Manager(object):
             LOG.error(('Exception deleting VLAN %s from vCMP Guest %s: %s' %
                       (full_path_vlan_name, vcmp_guest['mgmt_addr'], exc)))
 
-    # called for every bigip only in replication mode.
-    # otherwise called once
-    def delete_network(self, network, bigip):
-        """ Remove bigip configured network object """
+    def delete_bigip_network(self, bigip, network):
+        """ Delete network on bigip """
         if network['id'] in self.driver.conf.common_network_ids:
             LOG.debug(_('skipping delete of common network %s'
                         % network['id']))
@@ -441,25 +440,19 @@ class BigipL2Manager(object):
             network_folder = 'Common'
         else:
             network_folder = network['tenant_id']
-
-        if self.driver.conf.f5_sync_mode == 'replication':
-            bigips = [bigip]
+        if network['provider:network_type'] == 'vlan':
+            self._delete_device_vlan(bigip, network, network_folder)
+        elif network['provider:network_type'] == 'flat':
+            self._delete_device_flat(bigip, network, network_folder)
+        elif network['provider:network_type'] == 'vxlan':
+            self._delete_device_vxlan(bigip, network, network_folder)
+        elif network['provider:network_type'] == 'gre':
+            self._delete_device_gre(bigip, network, network_folder)
         else:
-            bigips = bigip.group_bigips
-        for set_bigip in bigips:
-            if network['provider:network_type'] == 'vlan':
-                self._delete_device_vlan(set_bigip, network, network_folder)
-            elif network['provider:network_type'] == 'flat':
-                self._delete_device_flat(set_bigip, network, network_folder)
-            elif network['provider:network_type'] == 'vxlan':
-                self._delete_device_vxlan(set_bigip, network, network_folder)
-            elif network['provider:network_type'] == 'gre':
-                self._delete_device_gre(set_bigip, network, network_folder)
-            else:
-                LOG.error(_('Unsupported network type %s. Can not delete.'
-                            % network['provider:network_type']))
-            if network['id'] in set_bigip.assured_networks:
-                set_bigip.assured_networks.remove(network['id'])
+            LOG.error(_('Unsupported network type %s. Can not delete.'
+                        % network['provider:network_type']))
+        if network['id'] in bigip.assured_networks:
+            bigip.assured_networks.remove(network['id'])
 
     def _delete_device_vlan(self, bigip, network, network_folder):
         """ Delete tagged vlan on specific bigip """
@@ -566,101 +559,166 @@ class BigipL2Manager(object):
             LOG.error(('Exception deleting VLAN %s from vCMP Host %s:%s' %
                       (vlan_name, vcmp_host['bigip'].icontrol.hostname, exc)))
 
-    def add_vxlan_fdbs(self, bigip, net_folder, network, vteps,
-                       ip_address, mac_address):
-        tunnel_name = _get_tunnel_name(network)
-        for vtep in vteps:
-            if mac_address:
-                mac_addr = mac_address
+    def update_bigip_member_l2(self, bigip, pool, member):
+        """ update pool member l2 records """
+        network = member['network']
+        if network:
+            if self.is_common_network(network):
+                net_folder = 'Common'
             else:
-                mac_addr = _get_tunnel_fake_mac(network, vtep)
-            # In autosync mode, assure_device_members
-            # is only called for one big-ip, because it is
-            # assumed everything will sync to the other
-            # big-ips.
-            # However, we add fdb entries for tunnels here
-            # and those do not sync. So, we have to loop
-            # through the big-ips for fdb entries and add
-            # them to each big-ip.
-            if self.driver.conf.f5_sync_mode == 'autosync':
-                bigips = bigip.group_bigips
-            else:
-                bigips = [bigip]
-            for fdb_bigip in bigips:
-                add_fdb = fdb_bigip.vxlan.add_fdb_entry
-                add_fdb(tunnel_name=tunnel_name,
-                        mac_address=mac_addr,
-                        vtep_ip_address=vtep,
-                        arp_ip_address=ip_address,
-                        folder=net_folder)
+                net_folder = pool['tenant_id']
+            ip_address = member['address']
+            if self.driver.conf.f5_global_routed_mode or not network \
+                    or self.is_common_network(network):
+                ip_address = ip_address + '%0'
+            fdb_info = {'network': network,
+                        'ip_address': ip_address,
+                        'mac_address': member['port']['mac_address']}
+            if network['provider:network_type'] == 'vxlan' \
+                    and 'vxlan_vteps' in member:
+                self.add_vxlan_fdbs(
+                    bigip, net_folder, member['vxlan_vteps'], fdb_info)
+            elif network['provider:network_type'] == 'gre' \
+                    and 'gre_vteps' in member:
+                self.add_gre_fdbs(
+                    bigip, net_folder, member['gre_vteps'], fdb_info)
 
-    def add_gre_fdbs(self, bigip, net_folder, network, vteps,
-                     ip_address, mac_address):
-        tunnel_name = _get_tunnel_name(network)
-        for vtep in vteps:
-            if mac_address:
-                mac_addr = mac_address
+    def delete_bigip_member_l2(self, bigip, pool, member):
+        """ Delete pool member l2 records """
+        network = member['network']
+        if network:
+            if member['port']:
+                if self.is_common_network(network):
+                    net_folder = 'Common'
+                else:
+                    net_folder = pool['tenant_id']
+                ip_address = member['address']
+                if self.driver.conf.f5_global_routed_mode or not network or \
+                        self.is_common_network(network):
+                    ip_address = ip_address + '%0'
+                fdb_info = {'network': network,
+                            'ip_address': ip_address,
+                            'mac_address': member['port']['mac_address']}
+                if network['provider:network_type'] == 'vxlan' \
+                        and 'vxlan_vteps' in member:
+                    self.delete_vxlan_fdbs(
+                        bigip, net_folder, member['vxlan_vteps'], fdb_info)
+                elif network['provider:network_type'] == 'gre' \
+                        and 'gre_vteps' in member:
+                    self.delete_gre_fdbs(
+                        bigip, net_folder, member['gre_vteps'], fdb_info)
             else:
-                mac_addr = _get_tunnel_fake_mac(network, vtep)
-            # See comment above about this loop.
-            if self.driver.conf.f5_sync_mode == 'autosync':
-                bigips = bigip.group_bigips
-            else:
-                bigips = [bigip]
-            for fdb_bigip in bigips:
-                add_fdb = fdb_bigip.l2gre.add_fdb_entry
-                add_fdb(tunnel_name=tunnel_name,
-                        mac_address=mac_addr,
-                        vtep_ip_address=vtep,
-                        arp_ip_address=ip_address,
-                        folder=net_folder)
+                LOG.error(_('Member on SDN has no port. Manual '
+                            'removal on the BIG-IP will be '
+                            'required. Was the vm instance '
+                            'deleted before the pool member '
+                            'was deleted?'))
 
-    def delete_vxlan_fdbs(self, bigip, net_folder, network, vteps,
-                          ip_address, mac_address):
-        tunnel_name = _get_tunnel_name(network)
-        for vtep in vteps:
-            if mac_address:
-                mac_addr = mac_address
+    def update_bigip_vip_l2(self, bigip, vip):
+        """ Update vip l2 records """
+        network = vip['network']
+        if network:
+            if self.is_common_network(network):
+                net_folder = 'Common'
             else:
-                mac_addr = _get_tunnel_fake_mac(network, vtep)
-            # In autosync mode, assure_device_members
-            # is only called for one big-ip, because it is
-            # assumed everything will sync to the other
-            # big-ips.
-            # However, we add fdb entries for tunnels here
-            # and those do not sync. So, we have to loop
-            # through the big-ips for fdb entries and add
-            # them to each big-ip.
-            if self.driver.conf.f5_sync_mode == 'autosync':
-                bigips = bigip.group_bigips
-            else:
-                bigips = [bigip]
-            for fdb_bigip in bigips:
-                delete_fdb = fdb_bigip.vxlan.delete_fdb_entry
-                delete_fdb(tunnel_name=tunnel_name,
-                           mac_address=mac_addr,
-                           arp_ip_address=ip_address,
-                           folder=net_folder)
+                net_folder = vip['tenant_id']
+            fdb_info = {'network': network,
+                        'ip_address': None,
+                        'mac_address': None}
+            if network['provider:network_type'] == 'vxlan' \
+                    and 'vxlan_vteps' in vip:
+                self.add_vxlan_fdbs(
+                    bigip, net_folder, vip['vxlan_vteps'], fdb_info)
+            if network['provider:network_type'] == 'gre' \
+                    and 'gre_vteps' in vip:
+                self.add_gre_fdbs(
+                    bigip, net_folder, vip['gre_vteps'], fdb_info)
 
-    def delete_gre_fdbs(self, bigip, net_folder, network, vteps,
-                        ip_address, mac_address):
+    def delete_bigip_vip_l2(self, bigip, vip):
+        """ Delete vip l2 records """
+        network = vip['network']
+        if network:
+            if self.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = vip['tenant_id']
+            fdb_info = {'network': network,
+                        'ip_address': None,
+                        'mac_address': None}
+            if network['provider:network_type'] == 'vxlan' \
+                    and 'vxlan_vteps' in vip:
+                self.delete_vxlan_fdbs(
+                    bigip, net_folder, vip['vxlan_vteps'], fdb_info)
+            if network['provider:network_type'] == 'gre' \
+                    and 'gre_vteps' in vip:
+                self.delete_gre_fdbs(
+                    bigip, net_folder, vip['gre_vteps'], fdb_info)
+
+    def add_vxlan_fdbs(self, bigip, net_folder, vteps, fdb_info):
+        """ Add vxlan fdb records """
+        network = fdb_info['network']
+        ip_address = fdb_info['ip_address']
+        mac_address = fdb_info['mac_address']
         tunnel_name = _get_tunnel_name(network)
         for vtep in vteps:
             if mac_address:
                 mac_addr = mac_address
             else:
                 mac_addr = _get_tunnel_fake_mac(network, vtep)
-            # See comment above about this loop.
-            if self.driver.conf.f5_sync_mode == 'autosync':
-                bigips = bigip.group_bigips
+            bigip.vxlan.add_fdb_entry(tunnel_name=tunnel_name,
+                                      mac_address=mac_addr,
+                                      vtep_ip_address=vtep,
+                                      arp_ip_address=ip_address,
+                                      folder=net_folder)
+
+    def add_gre_fdbs(self, bigip, net_folder, vteps, fdb_info):
+        """ Add gre fdb records """
+        network = fdb_info['network']
+        ip_address = fdb_info['ip_address']
+        mac_address = fdb_info['mac_address']
+        tunnel_name = _get_tunnel_name(network)
+        for vtep in vteps:
+            if mac_address:
+                mac_addr = mac_address
             else:
-                bigips = [bigip]
-            for fdb_bigip in bigips:
-                delete_fdb = fdb_bigip.l2gre.delete_fdb_entry
-                delete_fdb(tunnel_name=tunnel_name,
-                           mac_address=mac_addr,
-                           arp_ip_address=ip_address,
-                           folder=net_folder)
+                mac_addr = _get_tunnel_fake_mac(network, vtep)
+            bigip.l2gre.add_fdb_entry(tunnel_name=tunnel_name,
+                                      mac_address=mac_addr,
+                                      vtep_ip_address=vtep,
+                                      arp_ip_address=ip_address,
+                                      folder=net_folder)
+
+    def delete_vxlan_fdbs(self, bigip, net_folder, vteps, fdb_info):
+        """ delete vxlan fdb records """
+        network = fdb_info['network']
+        ip_address = fdb_info['ip_address']
+        mac_address = fdb_info['mac_address']
+        tunnel_name = _get_tunnel_name(network)
+        for vtep in vteps:
+            if mac_address:
+                mac_addr = mac_address
+            else:
+                mac_addr = _get_tunnel_fake_mac(network, vtep)
+            bigip.vxlan.delete_fdb_entry(tunnel_name=tunnel_name,
+                                         mac_address=mac_addr,
+                                         arp_ip_address=ip_address,
+                                         folder=net_folder)
+
+    def delete_gre_fdbs(self, bigip, net_folder, vteps, fdb_info):
+        """ delete gre fdb records """
+        network = fdb_info['network']
+        ip_address = fdb_info['ip_address']
+        mac_address = fdb_info['mac_address']
+        tunnel_name = _get_tunnel_name(network)
+        for vtep in vteps:
+            if mac_address:
+                mac_addr = mac_address
+            else:
+                mac_addr = _get_tunnel_fake_mac(network, vtep)
+            bigip.l2gre.delete_fdb_entry(tunnel_name=tunnel_name,
+                                         mac_address=mac_addr,
+                                         arp_ip_address=ip_address,
+                                         folder=net_folder)
 
     def fdb_add(self, fdb_entries):
         """ Add L2 records for MAC addresses behind tunnel endpoints """
@@ -682,17 +740,17 @@ class BigipL2Manager(object):
 
         if len(add_fdb) > 0:
             if net_entries['network_type'] == 'vxlan':
-                self.__bigip.vxlan.add_fdb_entries(tunnel_name=tunnel_name,
-                                                   fdb_entries=add_fdb)
+                for bigip in self.driver.get_all_bigips():
+                    bigip.vxlan.add_fdb_entries(tunnel_name=tunnel_name,
+                                                fdb_entries=add_fdb)
             if net_entries['network_type'] == 'gre':
-                self.__bigip.l2gre.add_fdb_entries(tunnel_name=tunnel_name,
-                                                   fdb_entries=add_fdb)
+                for bigip in self.driver.get_all_bigips():
+                    bigip.l2gre.add_fdb_entries(tunnel_name=tunnel_name,
+                                                fdb_entries=add_fdb)
 
     def _fdb_add_for_vtep(self, network, net_entries, vtep, add_fdb):
         """ Add L2 records for a specific network+vtep """
-        bigips = self.driver.get_bigips()
-        for host in bigips:
-            bigip = bigips[host]
+        for bigip in self.driver.get_all_bigips():
             _fdb_add_for_bigip(network, net_entries, vtep, bigip, add_fdb)
 
     def fdb_remove(self, fdb_entries):
@@ -715,20 +773,20 @@ class BigipL2Manager(object):
                                       vtep, remove_fdb)
         if len(remove_fdb) > 0:
             if net_entries['network_type'] == 'vxlan':
-                delete_fdb_entries = self.__bigip.vxlan.delete_fdb_entries
-                delete_fdb_entries(tunnel_name=tunnel_name,
-                                   fdb_entries=remove_fdb)
+                for bigip in self.driver.get_all_bigips():
+                    delete_fdb_entries = bigip.vxlan.delete_fdb_entries
+                    delete_fdb_entries(tunnel_name=tunnel_name,
+                                       fdb_entries=remove_fdb)
             if net_entries['network_type'] == 'gre':
-                delete_fdb_entries = self.__bigip.l2gre.delete_fdb_entries
-                delete_fdb_entries(tunnel_name=tunnel_name,
-                                   fdb_entries=remove_fdb)
+                for bigip in self.driver.get_all_bigips():
+                    delete_fdb_entries = bigip.l2gre.delete_fdb_entries
+                    delete_fdb_entries(tunnel_name=tunnel_name,
+                                       fdb_entries=remove_fdb)
 
     def _fdb_remove_for_vtep(self, network, net_entries,
                              vtep, remove_fdb):
         """ Figure out fdb entries to remove for a specific vtep """
-        bigips = self.driver.get_bigips()
-        for host in bigips:
-            bigip = bigips[host]
+        for bigip in self.driver.get_all_bigips():
             _fdb_remove_for_bigip(network, net_entries, vtep, bigip,
                                   remove_fdb)
 
@@ -752,18 +810,18 @@ class BigipL2Manager(object):
 
         if len(update_fdb) > 0:
             if net_entries['network_type'] == 'vxlan':
-                self.__bigip.vxlan.add_fdb_entries(tunnel_name=tunnel_name,
-                                                   fdb_entries=update_fdb)
+                for bigip in self.driver.get_all_bigips():
+                    bigip.vxlan.add_fdb_entries(tunnel_name=tunnel_name,
+                                                fdb_entries=update_fdb)
             if net_entries['network_type'] == 'gre':
-                self.__bigip.l2gre.add_fdb_entries(tunnel_name=tunnel_name,
-                                                   fdb_entries=update_fdb)
+                for bigip in self.driver.get_all_bigips():
+                    bigip.l2gre.add_fdb_entries(tunnel_name=tunnel_name,
+                                                fdb_entries=update_fdb)
 
     def _fdb_update_for_vtep(self, network, net_entries,
                              vtep, update_fdb):
         """ Update L2 records for a specific network+vtep """
-        bigips = self.driver.get_bigips()
-        for host in bigips:
-            bigip = bigips[host]
+        for bigip in self.driver.get_all_bigips():
             _fdb_update_for_bigip(network, net_entries, vtep, bigip,
                                   update_fdb)
 
@@ -801,7 +859,7 @@ def _fdb_add_for_bigip(network, net_entries, vtep, bigip, add_fdb):
            net_entries['segment_id']
            }
     tunnel_name = _get_tunnel_name(net)
-    if not (hasattr(bigip, 'local_ip') and vtep != bigip.local_ip):
+    if vtep == bigip.local_ip:
         return
     folder = None
     if net_entries['network_type'] == 'gre':
@@ -828,7 +886,7 @@ def _fdb_add_for_bigip(network, net_entries, vtep, bigip, add_fdb):
 
 def _fdb_remove_for_bigip(network, net_entries, vtep, bigip, remove_fdb):
     """ Figure out fdb entries to remove for a specific network+vtep+bigip """
-    if not (hasattr(bigip, 'local_ip') and vtep != bigip.local_ip):
+    if vtep == bigip.local_ip:
         return
 
     net = {'name': network,
@@ -863,7 +921,7 @@ def _fdb_remove_for_bigip(network, net_entries, vtep, bigip, remove_fdb):
 
 def _fdb_update_for_bigip(network, net_entries, vtep, bigip, update_fdb):
     """ Figure out fdb entries to update for a specific network+vtep+bigip """
-    if not (hasattr(bigip, 'local_ip') and vtep != bigip.local_ip):
+    if vtep == bigip.local_ip:
         return
 
     net = {'name': network,

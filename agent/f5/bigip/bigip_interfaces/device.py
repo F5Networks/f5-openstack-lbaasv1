@@ -44,8 +44,8 @@ class Device(object):
             request_filter = '/?$select=name,selfDevice'
             request_filter += '&filter partition eq Common'
             request_url += request_filter
-            response = self.bigip.icr_session.get(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'items' in response_obj:
@@ -63,8 +63,8 @@ class Device(object):
         request_url = self.bigip.icr_url + '/cm/device'
         request_filter = '/?$select=name&filter partition eq Common'
         request_url += request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -86,14 +86,14 @@ class Device(object):
         if current_lock:
             if (new_lock - current_lock) > const.CONNECTION_TIMEOUT:
                 Log.info('Device', 'Locking device %s with lock %s'
-                           % (self.get_device_name(), new_lock))
+                         % (self.get_device_name(), new_lock))
                 self._set_lock(new_lock)
                 return True
             else:
                 return False
         else:
             Log.info('Device', 'Locking device %s with lock %s'
-                       % (self.get_device_name(), new_lock))
+                     % (self.get_device_name(), new_lock))
             self._set_lock(int(time.time()))
             return True
 
@@ -103,20 +103,20 @@ class Device(object):
 
         if current_lock == self.lock:
             Log.info('Device', 'Releasing device lock for %s'
-                       % self.get_device_name())
+                     % self.get_device_name())
             self._set_lock(None)
             return True
         else:
             Log.info('Device', 'Device has foreign lock instance on %s '
-                       % self.get_device_name() + ' with lock %s '
-                       % current_lock)
+                     % self.get_device_name() + ' with lock %s '
+                     % current_lock)
             return False
 
     def _get_lock(self):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=selfDevice,comment'
-        response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         current_lock = ''
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -140,9 +140,9 @@ class Device(object):
         request_url += '~Common~' + dev_name
         payload = dict()
         payload['comment'] = lock_comment
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         return False
@@ -153,8 +153,8 @@ class Device(object):
         request_url += '~' + self.get_device_name()
         request_filter = '/?$select=managementIp'
         request_url += request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             return response_obj['managementIp']
@@ -167,8 +167,8 @@ class Device(object):
     def get_all_mgmt_addrs(self):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '/?$select=managementIp'
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -185,8 +185,8 @@ class Device(object):
     def get_mgmt_addr_by_device(self, devicename):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '/?$select=managementIp,name'
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -203,8 +203,8 @@ class Device(object):
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=configsyncIp'
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             return response_obj['configsyncIp']
@@ -224,9 +224,9 @@ class Device(object):
             payload['configsyncIp'] = None
         else:
             payload['configsyncIp'] = ip_address
-        response = self.bigip.icr_session.put(request_url,
-                                    data=json.dumps(payload),
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -239,8 +239,8 @@ class Device(object):
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=mirrorIp'
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             primary = response_obj['mirrorIp']
@@ -258,8 +258,8 @@ class Device(object):
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=mirrorSecondaryIp'
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             secondary = response_obj['mirrorSecondaryIp']
@@ -283,9 +283,9 @@ class Device(object):
             payload['mirrorIp'] = '::'
         else:
             payload['mirrorIp'] = ip_address
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -304,9 +304,9 @@ class Device(object):
             payload['mirrorSecondaryIp'] = '::'
         else:
             payload['mirrorSecondaryIp'] = ip_address
-        response = self.bigip.icr_session.put(request_url,
-                                              data=json.dumps(payload),
-                                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -319,8 +319,8 @@ class Device(object):
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=unicastAddress'
-        response = self.bigip.icr_session.get(request_url,
-                                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             return_addresses = []
@@ -354,9 +354,9 @@ class Device(object):
                                       'ip': ip_address,
                                       'port': 1026})
         payload['unicastAddress'] = unicast_addresses
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -373,8 +373,8 @@ class Device(object):
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=failoverState'
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             return response_obj['failoverState']
@@ -387,8 +387,8 @@ class Device(object):
     def get_device_group(self):
         request_url = self.bigip.icr_url + '/cm/device-group'
         request_url += '/?$select=name,type'
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -426,8 +426,8 @@ class Device(object):
                 Log.error('device', e.message)
                 raise exceptions.DeviceUpdateException(e.message)
         self.remove_metadata(None, {
-                              'root_device_name': None,
-                              'root_device_mgmt_address': None})
+                             'root_device_name': None,
+                             'root_device_mgmt_address': None})
 
     @log
     def reset_trust(self, new_name):
@@ -439,8 +439,8 @@ class Device(object):
             Log.error('device', e.message)
             raise exceptions.DeviceUpdateException(e.message)
         self.remove_metadata(None, {
-                              'root_device_name': None,
-                              'root_device_mgmt_address': None})
+                             'root_device_name': None,
+                             'root_device_mgmt_address': None})
         self.devicename = None
         self.get_device_name()
 
@@ -457,9 +457,9 @@ class Device(object):
         request_url += name
         payload = dict()
         payload['description'] = base64.encodestring(str_comment)
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -473,8 +473,8 @@ class Device(object):
             name = self.get_device_name()
         request_url = self.bigip.icr_url + '/cm/device/~Common~'
         request_url += name + '?$select=name,description'
-        response = self.bigip.icr_session.get(request_url,
-                                 timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         str_comment = None
         if response.status_code < 400:
             response_obj = json.loads(response.text)

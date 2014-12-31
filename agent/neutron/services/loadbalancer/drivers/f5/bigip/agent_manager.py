@@ -676,10 +676,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
 if preJuno:
     class LbaasAgentManager(LbaasAgentManagerBase):
+        RPC_API_VERSION = '1.1'
         def __init__(self, conf):
             LbaasAgentManagerBase.do_init(self, conf)
 else:
     class LbaasAgentManager(n_rpc.RpcCallback, LbaasAgentManagerBase):  # @UndefinedVariable
+        RPC_API_VERSION = '1.1'
         def __init__(self, conf):
             super(LbaasAgentManager, self).__init__()
             LbaasAgentManagerBase.do_init(self, conf)

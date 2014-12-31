@@ -113,15 +113,19 @@ pylint:
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/l2.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                f5/bigip/bigip_interfaces/system.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
                 f5/bigip/bigip_interfaces/vxlan.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
                 f5/bigip/bigip_interfaces/arp.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/l2.py | \
             more; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
@@ -141,5 +145,8 @@ pep8:
          pep8 f5/bigip/bigip_interfaces/__init__.py; \
          pep8 f5/bigip/bigip_interfaces/arp.py; \
          pep8 f5/bigip/bigip_interfaces/cluster.py; \
+         pep8 f5/bigip/bigip_interfaces/device.py; \
+         pep8 f5/bigip/bigip_interfaces/system.py; \
+         pep8 f5/bigip/bigip_interfaces/vxlan.py; \
         )
 

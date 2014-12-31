@@ -49,7 +49,6 @@ class Monitor(object):
                timeout=16, send_text=None, recv_text=None,
                folder='Common'):
         folder = str(folder).replace('/', '')
-        self.bigip.system.set_rest_folder(folder)
         mon_type = self._get_monitor_rest_type(mon_type)
         payload = dict()
         payload['name'] = name

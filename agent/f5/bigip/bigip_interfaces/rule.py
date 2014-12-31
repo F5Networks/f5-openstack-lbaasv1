@@ -31,7 +31,6 @@ class Rule(object):
     def create(self, name=None, rule_definition=None, folder='Common'):
         if name and rule_definition:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder

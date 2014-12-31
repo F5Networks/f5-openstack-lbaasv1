@@ -61,9 +61,8 @@ class BigIP(object):
             self.strict_route_isolation = False
         # interface instance cache
         self.interfaces = {}
-        self.group_bigips = []
-        self.sync_mode = const.DEFAULT_SYNC_MODE
         self.device_name = None
+        self.local_ip = None
 
     @property
     def system(self):
@@ -242,30 +241,11 @@ class BigIP(object):
     def set_folder(self, name, folder='/Common'):
         if not folder.startswith("/"):
             folder = "/" + folder
-        #if not hasattr(self, 'folder'):
-        #    self.system.set_folder(folder)
-        #    self.folder = folder
-        #else:
-        #    if not self.folder == folder:
-        #        self.system.set_folder(folder)
-        #        self.folder = folder
         self.system.set_folder(folder)
         if name:
             if not name.startswith(folder + "/"):
                 return folder + "/" + name
             else:
-                return name
-        else:
-            return None
-
-    def set_rest_folder(self, name, folder='/Common'):
-        folder = folder.replace('/', '')
-        folder = '~' + folder
-        if name:
-            if not name.startswith(folder + "/"):
-                return folder + '~' + name
-            else:
-                name = name.replace('/', '~')
                 return name
         else:
             return None

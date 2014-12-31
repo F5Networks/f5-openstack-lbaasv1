@@ -47,7 +47,6 @@ class VirtualServer(object):
 
         if name:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder
@@ -108,7 +107,6 @@ class VirtualServer(object):
                             preserve_vlan_name=False):
         if name:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder
@@ -165,7 +163,6 @@ class VirtualServer(object):
 
         if name:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder

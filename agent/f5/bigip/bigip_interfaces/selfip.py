@@ -46,7 +46,6 @@ class SelfIP(object):
                        const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
                 else:
                     traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder

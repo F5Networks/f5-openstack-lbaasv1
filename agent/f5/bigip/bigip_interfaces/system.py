@@ -58,16 +58,16 @@ class System(object):
             if folder in self.existing_folders:
                 now = time.time()
                 if self.existint_folders_updated:
-                    if ((now - self.existint_folders_updated) \
-                               < const.FOLDER_CACHE_TIMEOUT):
+                    if ((now - self.existint_folders_updated)
+                            < const.FOLDER_CACHE_TIMEOUT):
                         return True
                     else:
-                        del(self.existing_folders[folder])
+                        del self.existing_folders[folder]
             request_url = self.bigip.icr_url + '/sys/folder/'
             request_url += '~' + folder
             request_url += '?$select=name'
-            response = self.bigip.icr_session.get(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 self.existing_folders[folder] = 1
                 return True
@@ -91,9 +91,9 @@ class System(object):
             payload['inheritedDevicegroup'] = True
             payload['inheritedTrafficGroup'] = True
 
-            response = self.bigip.icr_session.post(request_url,
-                                     data=json.dumps(payload),
-                                     timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if change_to:
                     self.existing_folders[folder] = 1
@@ -105,7 +105,6 @@ class System(object):
                 Log.error('folder', response.text)
                 raise exceptions.SystemCreationException(response.text)
         return False
-
 
     # Force iControl SOAP context into root folder.
     # This is typically done before deleting a folder.
@@ -131,11 +130,11 @@ class System(object):
         if folder:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/sys/folder/~' + folder
-            response = self.bigip.icr_session.delete(request_url,
-                                   timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if folder in self.existing_folders:
-                    del(self.existing_folders[folder])
+                    del self.existing_folders[folder]
                 self.set_folder('/Common')
                 return True
             elif response.status_code == 404:
@@ -149,8 +148,8 @@ class System(object):
     def get_folders(self):
         request_url = self.bigip.icr_url + '/sys/folder/'
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         return_list = []
         if response.status_code < 400:
             return_obj = json.loads(response.text)
@@ -163,77 +162,30 @@ class System(object):
         return return_list
 
     @log
-    def set_rest_folder(self, folder):
-        if folder:
-            if not self.folder_exists(folder):
-                self.create_folder_and_domain(folder, self.bigip)
-            elif not self.bigip.route.domain_exists(folder):
-                self.bigip.route.create_domain(folder)
-
-    @log
     def set_folder(self, folder):
-        if folder:
-            if not self.folder_exists(folder):
-                self.create_folder_and_domain(folder, self.bigip)
-            else:
-                if not str(folder).startswith('/'):
-                    folder = '/' + folder
-                if self.current_folder and folder == self.current_folder:
-                    return
-                try:
-                    self.sys_session.set_active_folder(folder)
-                    self.current_folder = folder
-                except WebFault as wf:
-                    Log.error('System',
-                          'set_folder:set_active_folder failed: ' + \
-                          str(wf.message))
-                    raise exceptions.SystemUpdateException(wf.message)
+        if not folder:
+            msg = 'set_folder failed: No folder specified!'
+            Log.error('System', msg)
+            raise exceptions.SystemUpdateException(msg)
 
-    # TODO: this belongs in a higher level cluster abstraction
-    @log
-    def create_folder_and_domain(self, folder, bigip=None):
-        if not bigip:
-            bigip = self.bigip
-        if bigip.sync_mode == 'replication':
-            # presumably whatever is operating on the current bigip
-            # will do the same on every bigip, so no need to replicate
-            bigip.system.create_folder(folder, change_to=True)
-            if bigip.route_domain_required:
-                bigip.route.create_domain(folder)
-        else:
-            self.create_folder(folder, change_to=True)
-            if len(bigip.group_bigips) > 1:
-                # folder must sync before route domains are created.
-                dg = bigip.device.get_device_group()
-                bigip.cluster.sync(dg)
-                # get_device_group and sync will change the current
-                # folder.
-                if not str(folder).startswith('/'):
-                    folder = '/' + folder
-                self.sys_session.set_active_folder(folder)
-                self.current_folder = folder
-            if bigip.route_domain_required:
-                if len(bigip.group_bigips) > 1:
-                    for b in bigip.group_bigips:
-                        b.route.create_domain(folder)
-                else:
-                    bigip.route.create_domain(folder)
+        if not self.folder_exists(folder):
+            msg = 'set_folder:set_active_folder failed, ' + \
+                  'folder does not exist!'
+            Log.error('System', msg)
+            raise exceptions.SystemUpdateException(msg)
 
-    @log
-    def delete_folder_and_domain(self, folder, bigip=None):
-        if not bigip:
-            bigip = self.bigip
-        if bigip.route.delete_domain(folder):
-            self.delete_folder(folder)
-        if not bigip.sync_mode == 'replication':
-            if len(bigip.group_bigips) > 1:
-                # folder must sync before route domains are created.
-                dg = bigip.device.get_device_group()
-                bigip.cluster.sync(dg)
-                # get_device_group and sync will change the current
-                # folder.
-                self.sys_session.set_active_folder('/Common')
-                self.current_folder = '/Common'
+        if not str(folder).startswith('/'):
+            folder = '/' + folder
+        if self.current_folder and folder == self.current_folder:
+            return
+        try:
+            self.sys_session.set_active_folder(folder)
+            self.current_folder = folder
+        except WebFault as wf:
+            Log.error('System',
+                      'set_folder:set_active_folder failed: ' +
+                      str(wf.message))
+            raise exceptions.SystemUpdateException(wf.message)
 
     @log
     def purge_folder_contents(self, folder, bigip=None):
@@ -253,8 +205,8 @@ class System(object):
             bigip.l2gre.delete_all(folder=folder)
             bigip.route.delete_domain(folder=folder)
         else:
-            Log.error('folder', 'request to purge ' + \
-                                str(folder) + ' folder ignored')
+            Log.error('folder',
+                      'Request to purge exempt folder %s ignored.' % folder)
 
     @log
     def purge_folder(self, folder, bigip=None):
@@ -263,8 +215,8 @@ class System(object):
         if not folder in self.exempt_folders:
             bigip.system.delete_folder(bigip.decorate_folder(folder))
         else:
-            Log.error('folder', 'request to purge ' + \
-                                str(folder) + ' folder ignored')
+            Log.error('folder',
+                      'Request to purge exempt folder %s ignored.' % folder)
 
     @log
     def purge_orphaned_folders_contents(self, known_folders, bigip=None):
@@ -286,14 +238,13 @@ class System(object):
         # anything left should be purged
         if existing_folders:
             Log.debug('system',
-                      'purging orphaned folders contents: %s' 
+                      'purging orphaned folders contents: %s'
                       % existing_folders)
         for folder in existing_folders:
             try:
                 bigip.system.purge_folder_contents(folder, bigip)
             except Exception as e:
                 Log.error('purge_orphaned_folders_contents', e.message)
-
 
     @log
     def purge_orphaned_folders(self, known_folders, bigip=None):
@@ -334,9 +285,9 @@ class System(object):
     @log
     def get_hostname(self):
         request_url = self.bigip.icr_url + \
-                            '/sys/global-settings?$select=hostname'
-        response = self.bigip.icr_session.get(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            '/sys/global-settings?$select=hostname'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             return response_obj['hostname']
@@ -346,10 +297,9 @@ class System(object):
     @log
     def set_hostname(self, hostname):
         request_url = self.bigip.icr_url + '/sys/global-settings'
-        response = self.bigip.icr_session.put(request_url,
-                                     data=json.dumps({'hostname':
-                                                          hostname}),
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps({'hostname': hostname}),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -358,9 +308,9 @@ class System(object):
     @log
     def get_ntp_server(self):
         request_url = self.bigip.icr_url + \
-                            '/sys/ntp?$select=servers'
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+            '/sys/ntp?$select=servers'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'servers' in response_obj:
@@ -375,9 +325,9 @@ class System(object):
         request_url = self.bigip.icr_url + '/sys/ntp'
         if not isinstance(addr, list):
             addr = [addr]
-        response = self.bigip.icr_session.put(request_url,
-                                data=json.dumps({'servers': addr}),
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps({'servers': addr}),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -387,8 +337,8 @@ class System(object):
     def get_active_modules(self):
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=activeModules,selfDevice'
-        response = self.bigip.icr_session.get(request_url,
-                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -436,8 +386,8 @@ class System(object):
     @log
     def get_provision_extramb(self):
         request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
-        response = self.bigip.icr_session.get(request_url,
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
 
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -450,9 +400,9 @@ class System(object):
     @log
     def set_provision_extramb(self, extramdb=500):
         request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps({'value': extramdb}),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps({'value': extramdb}),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -461,8 +411,8 @@ class System(object):
     @log
     def get_tunnel_sync(self):
         request_url = self.bigip.icr_url + '/sys/db/iptunnel.configsync'
-        response = self.bigip.icr_session.get(request_url,
-                                       timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
 
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -476,13 +426,13 @@ class System(object):
     def set_tunnel_sync(self, enabled=False):
         request_url = self.bigip.icr_url + '/sys/db/iptunnel.configsync'
         if enabled:
-            response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps({'value': 'enable'}),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps({'value': 'enable'}),
+                timeout=const.CONNECTION_TIMEOUT)
         else:
-            response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps({'value': 'disable'}),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps({'value': 'disable'}),
+                timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'value' in response_obj:

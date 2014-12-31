@@ -36,7 +36,6 @@ class NAT(object):
                traffic_group=None, vlan_name=None, folder='Common'):
         folder = str(folder).replace('/', '')
         if not self.exists(name=name, folder=folder):
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder

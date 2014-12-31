@@ -34,7 +34,6 @@ class Vlan(object):
                folder='Common', description=None):
         if name:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder

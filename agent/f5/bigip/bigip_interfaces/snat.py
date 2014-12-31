@@ -39,7 +39,6 @@ class SNAT(object):
             traffic_group = const.SHARED_CONFIG_DEFAULT_TRAFFIC_GROUP
         if name:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             # create snat address
             payload = dict()
             payload['name'] = name

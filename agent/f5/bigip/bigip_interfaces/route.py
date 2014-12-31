@@ -36,7 +36,6 @@ class Route(object):
                gw_ip_address=None, folder='Common'):
         if dest_ip_address and dest_mask and gw_ip_address:
             folder = str(folder).replace('/', '')
-            self.bigip.system.set_rest_folder(folder)
             payload = dict()
             payload['name'] = name
             payload['partition'] = folder
