@@ -117,13 +117,33 @@ pylint:
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                f5/bigip/bigip_interfaces/system.py | \
+                neutron/services/loadbalancer/drivers/f5/bigip/selfips.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                f5/bigip/bigip_interfaces/vxlan.py | \
+                neutron/services/loadbalancer/drivers/f5/bigip/snats.py | \
             more; \
          pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/pools.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/vips.py | \
+            more; \
+         pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                neutron/services/loadbalancer/drivers/f5/bigip/utils.py | \
+            more; \
+         echo pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                f5/bigip/bigip_interfaces/system.py | \
+            more; \
+         echo pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                f5/bigip/bigip_interfaces/vxlan.py | \
+            more; \
+         echo pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
                 f5/bigip/bigip_interfaces/arp.py | \
             more; \
@@ -142,6 +162,11 @@ pep8:
 	(cd agent; \
          pep8 neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py; \
          pep8 neutron/services/loadbalancer/drivers/f5/bigip/l2.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/selfips.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/snats.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/pools.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/vips.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/bigip/utils.py; \
          pep8 f5/bigip/bigip_interfaces/__init__.py; \
          pep8 f5/bigip/bigip_interfaces/arp.py; \
          pep8 f5/bigip/bigip_interfaces/cluster.py; \

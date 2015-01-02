@@ -22,8 +22,18 @@ from neutron.common.exceptions import NeutronException, \
     InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
 
-from neutron.services.loadbalancer.drivers.f5.bigip.l2 import \
-    BigipL2Manager
+from neutron.services.loadbalancer.drivers.f5.bigip.l2 \
+    import BigipL2Manager
+from neutron.services.loadbalancer.drivers.f5.bigip.selfips \
+    import BigipSelfIpManager
+from neutron.services.loadbalancer.drivers.f5.bigip.snats \
+    import BigipSnatManager
+from neutron.services.loadbalancer.drivers.f5.bigip.pools \
+    import BigipPoolManager
+from neutron.services.loadbalancer.drivers.f5.bigip.vips \
+    import BigipVipManager
+from neutron.services.loadbalancer.drivers.f5.bigip.utils \
+    import serialized
 
 from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
@@ -31,7 +41,6 @@ from f5.bigip import exceptions as f5ex
 from f5.bigip import bigip_interfaces
 
 from eventlet import greenthread
-import os
 import uuid
 import urllib2
 import netaddr
@@ -43,9 +52,6 @@ import logging as std_logging
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qlbaas-'
-APP_COOKIE_RULE_PREFIX = 'app_cookie_'
-RPS_THROTTLE_RULE_PREFIX = 'rps_throttle_'
-
 __VERSION__ = '0.1.1'
 
 # configuration objects specific to iControl driver
@@ -167,102 +173,6 @@ def is_connected(method):
     return wrapper
 
 
-def serialized(method_name):
-    """Outer wrapper in order to specify method name"""
-    def real_serialized(method):
-        """Decorator to serialize calls to configure via iControl"""
-        def wrapper(*args, **kwargs):
-            """ Necessary wrapper """
-            # args[0] must be an instance of iControlDriver
-            service_queue = args[0].service_queue
-            my_request_id = uuid.uuid4()
-
-            service = None
-            if len(args) > 0:
-                last_arg = args[-1]
-                if isinstance(last_arg, dict) and ('pool' in last_arg):
-                    service = last_arg
-            if 'service' in kwargs:
-                service = kwargs['service']
-
-            # Consolidate create_member requests for the same pool.
-            #
-            # NOTE: The following block of code alters the state of
-            # a queue that other greenthreads are waiting behind.
-            # This code assumes it will not be preempted by another
-            # greenthread while running. It does not do I/O or call any
-            # other monkey-patched code which might cause a context switch.
-            # To avoid race conditions, DO NOT add logging to this code
-            # block.
-
-            #num_requests = len(service_queue)
-
-            # queue optimization
-
-            #if num_requests > 1 and method_name == 'create_member':
-            #    cur_pool_id = service['pool']['id']
-                #cur_index = num_requests - 1
-                # do not attempt to replace the first entry (index 0)
-                # because it may already be in process.
-                #while cur_index > 0:
-                #    (check_request, check_method, check_service) = \
-                #        service_queue[cur_index]
-                #    if check_service['pool']['id'] != cur_pool_id:
-                #        cur_index -= 1
-                #        continue
-                #    if check_method != 'create_member':
-                #        break
-                    # move this request up in the queue and return
-                    # so that existing thread can handle it
-                #    service_queue[cur_index] = \
-                #        (check_request, check_method, service)
-                #    return
-
-            # End of code block which assumes no preemption.
-
-            req = (my_request_id, method_name, service)
-            service_queue.append(req)
-            reqs_ahead_of_us = request_index(service_queue, my_request_id)
-            while reqs_ahead_of_us != 0:
-                if reqs_ahead_of_us == 1:
-                    # it is almost our turn. get ready
-                    waitsecs = .01
-                else:
-                    waitsecs = reqs_ahead_of_us * .5
-                if waitsecs > .01:
-                    LOG.debug('%s request %s is blocking'
-                              ' for %.2f secs - queue depth: %d'
-                              % (str(method_name), my_request_id,
-                                 waitsecs, len(service_queue)))
-                greenthread.sleep(waitsecs)
-                reqs_ahead_of_us = request_index(service_queue, my_request_id)
-            try:
-                LOG.debug('%s request %s is running with queue depth: %d'
-                          % (str(method_name), my_request_id,
-                             len(service_queue)))
-                start_time = time()
-                result = method(*args, **kwargs)
-                LOG.debug('%s request %s took %.5f secs'
-                          % (str(method_name), my_request_id,
-                             time() - start_time))
-            except:
-                LOG.error('%s request %s FAILED'
-                          % (str(method_name), my_request_id))
-                raise
-            finally:
-                service_queue.pop(0)
-            return result
-        return wrapper
-    return real_serialized
-
-
-def request_index(request_queue, request_id):
-    """ Get index of request in request queue """
-    for request in request_queue:
-        if request[0] == request_id:
-            return request_queue.index(request)
-
-
 class iControlDriver(object):
     """F5 LBaaS Driver for BIG-IP using iControl"""
 
@@ -332,10 +242,20 @@ class iControlDriver(object):
 
         if self.conf.f5_global_routed_mode:
             self.bigip_l2_manager = None
+            self.bigip_selfip_manager = None
+            self.bigip_snat_manager = None
         else:
             self.bigip_l2_manager = BigipL2Manager(self)
             self.agent_configurations['bridge_mappings'] = \
                 self.bigip_l2_manager.interface_mapping
+            self.bigip_selfip_manager = BigipSelfIpManager(
+                self, self.bigip_l2_manager)
+            self.bigip_snat_manager = BigipSnatManager(
+                self, self.bigip_l2_manager)
+            self.bigip_pool_manager = BigipPoolManager(
+                self, self.bigip_l2_manager)
+            self.bigip_vip_manager = BigipVipManager(
+                self, self.bigip_l2_manager)
 
         LOG.info(_('iControlDriver initialized to %d bigips with username:%s'
                    % (len(self.__bigips), self.conf.icontrol_username)))
@@ -915,8 +835,10 @@ class iControlDriver(object):
         subnetsinfo = _get_subnets_to_assure(service)
         for (assure_bigip, subnetinfo) in \
                 itertools.product(self.get_all_bigips(), subnetsinfo):
-            self._assure_bigip_network(assure_bigip, subnetinfo.network)
-            self._assure_bigip_selfip(assure_bigip, service, subnetinfo)
+            self.bigip_l2_manager.assure_bigip_network(
+                assure_bigip, subnetinfo['network'])
+            self.bigip_selfip_manager.assure_bigip_selfip(
+                assure_bigip, service, subnetinfo)
 
         # L3 Shared Config
         assure_bigips = self._get_config_bigips()
@@ -924,12 +846,13 @@ class iControlDriver(object):
             if self.conf.f5_snat_addresses_per_subnet > 0:
                 self._assure_subnet_snats(assure_bigips, service, subnetinfo)
 
-            if subnetinfo.is_for_member and not self.conf.f5_snat_mode:
+            if subnetinfo['is_for_member'] and not self.conf.f5_snat_mode:
                 self._allocate_gw_addr(subnetinfo)
                 for assure_bigip in assure_bigips:
                     # if we are not using SNATS, attempt to become
                     # the subnet's default gateway.
-                    self._assure_gateway_on_subnet(assure_bigip, subnetinfo)
+                    self.bigip_selfip_manager.assure_gateway_on_subnet(
+                        assure_bigip, subnetinfo)
 
         if time() - start_time > .001:
             LOG.debug("    assure_service_networks took %.5f secs" %
@@ -937,285 +860,28 @@ class iControlDriver(object):
 
     def _assure_subnet_snats(self, assure_bigips, service, subnetinfo):
         """ Ensure snat for subnet exists on bigips """
-        subnet = subnetinfo.subnet
+        tenant_id = service['pool']['tenant_id']
+        subnet = subnetinfo['subnet']
         assure_bigips = [bigip for bigip in assure_bigips
                          if subnet['id'] not in bigip.assured_snat_subnets]
         if len(assure_bigips):
-            snat_addrs = self._get_snat_addrs(service, subnetinfo)
+            snat_addrs = self.bigip_snat_manager.get_snat_addrs(
+                subnetinfo, tenant_id)
             for assure_bigip in assure_bigips:
-                self._assure_bigip_snats(assure_bigip, service, subnetinfo,
-                                         snat_addrs)
-
-    def _assure_bigip_network(self, bigip, network):
-        """ Ensure the bigip has connectivity to the network """
-        start_time = time()
-        if not network:
-            LOG.error(_('Attempted to assure a network with no id..skipping.'))
-            return
-
-        if network['id'] in bigip.assured_networks:
-            return
-
-        if network['id'] in self.conf.common_network_ids:
-            LOG.debug(_('Network is a common global network... skipping.'))
-            return
-
-        self.bigip_l2_manager.assure_bigip_network(bigip, network)
-        bigip.assured_networks.append(network['id'])
-        if time() - start_time > .001:
-            LOG.debug("        assure bigip network took %.5f secs" %
-                      (time() - start_time))
-
-    def _assure_bigip_selfip(self, bigip, service, subnetinfo):
-        """ Create selfip on the BIG-IP """
-        network = subnetinfo.network
-        if not network:
-            LOG.error(_('Attempted to create selfip and snats'
-                        ' for network with no id... skipping.'))
-            return
-        subnet = subnetinfo.subnet
-        if subnet['id'] in bigip.assured_snat_subnets:
-            return
-
-        pool = service['pool']
-        if self.bigip_l2_manager.is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = pool['tenant_id']
-
-        (network_name, preserve_network_name) = \
-            self.bigip_l2_manager.get_network_name(bigip, network)
-
-        selfip_info = {'network_folder': network_folder,
-                       'network_name': network_name,
-                       'preserve_network_name': preserve_network_name}
-
-        self._create_bigip_selfip(bigip, subnet, selfip_info)
-
-    def _create_bigip_selfip(self, bigip, subnet, selfip_info):
-        """ Create selfip on BIG-IP """
-        local_selfip_name = "local-" + bigip.device_name + "-" + subnet['id']
-
-        ports = self.plugin_rpc.get_port_by_name(port_name=local_selfip_name)
-        if len(ports) > 0:
-            ip_address = ports[0]['fixed_ips'][0]['ip_address']
-        else:
-            new_port = self.plugin_rpc.create_port_on_subnet(
-                subnet_id=subnet['id'],
-                mac_address=None,
-                name=local_selfip_name,
-                fixed_address_count=1)
-            ip_address = new_port['fixed_ips'][0]['ip_address']
-
-        netmask = netaddr.IPNetwork(subnet['cidr']).netmask
-        network_folder = selfip_info['network_folder']
-        network_name = selfip_info['network_name']
-        preserve_network_name = selfip_info['preserve_network_name']
-        bigip.selfip.create(name=local_selfip_name,
-                            ip_address=ip_address,
-                            netmask=netmask,
-                            vlan_name=network_name,
-                            floating=False,
-                            folder=network_folder,
-                            preserve_vlan_name=preserve_network_name)
-
-    def _get_snat_addrs(self, service, subnetinfo):
-        """ Get the ip addresses for snat depending on HA mode """
-        if self.conf.f5_ha_type == 'standalone':
-            return self._get_snat_addrs_standalone(subnetinfo)
-        elif self.conf.f5_ha_type == 'pair':
-            return self._get_snat_addrs_pair(subnetinfo)
-        elif self.conf.f5_ha_type == 'scalen':
-            return self._get_snat_addrs_scalen(service, subnetinfo)
-
-    def _get_snat_addrs_standalone(self, subnetinfo):
-        """ Get the ip addresses for snat in standalone HA mode """
-        subnet = subnetinfo.subnet
-        snat_addrs = []
-
-        snat_name = 'snat-traffic-group-local-only-' + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            ip_address = None
-            index_snat_name = snat_name + "_" + str(i)
-            ports = self.plugin_rpc.get_port_by_name(
-                port_name=index_snat_name)
-            if len(ports) > 0:
-                ip_address = ports[0]['fixed_ips'][0]['ip_address']
-            else:
-                new_port = self.plugin_rpc.create_port_on_subnet(
-                    subnet_id=subnet['id'],
-                    mac_address=None,
-                    name=index_snat_name,
-                    fixed_address_count=1)
-                ip_address = new_port['fixed_ips'][0]['ip_address']
-            snat_addrs.append(ip_address)
-        return snat_addrs
-
-    def _get_snat_addrs_pair(self, subnetinfo):
-        """ Get the ip addresses for snat in pair HA mode """
-        subnet = subnetinfo.subnet
-
-        snat_addrs = []
-        snat_name = 'snat-traffic-group-1' + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            ip_address = None
-            index_snat_name = snat_name + "_" + str(i)
-            start_time = time()
-            ports = self.plugin_rpc.get_port_by_name(
-                port_name=index_snat_name)
-            LOG.debug("        assure_snat:"
-                      "get_port_by_name took %.5f secs" %
-                      (time() - start_time))
-            if len(ports) > 0:
-                ip_address = ports[0]['fixed_ips'][0]['ip_address']
-            else:
-                new_port = self.plugin_rpc.create_port_on_subnet(
-                    subnet_id=subnet['id'],
-                    mac_address=None,
-                    name=index_snat_name,
-                    fixed_address_count=1)
-                ip_address = new_port['fixed_ips'][0]['ip_address']
-            snat_addrs.append(ip_address)
-        return snat_addrs
-
-    def _get_snat_addrs_scalen(self, service, subnetinfo):
-        """ Get the ip addresses for snat in scalen HA mode """
-        subnet = subnetinfo.subnet
-        snat_addrs = []
-
-        traffic_group = self._service_to_traffic_group(service)
-        base_traffic_group = os.path.basename(traffic_group)
-        snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            ip_address = None
-            index_snat_name = snat_name + "_" + str(i)
-
-            ports = self.plugin_rpc.get_port_by_name(
-                port_name=index_snat_name)
-            if len(ports) > 0:
-                ip_address = ports[0]['fixed_ips'][0]['ip_address']
-            else:
-                new_port = self.plugin_rpc.create_port_on_subnet(
-                    subnet_id=subnet['id'],
-                    mac_address=None,
-                    name=index_snat_name,
-                    fixed_address_count=1)
-                ip_address = new_port['fixed_ips'][0]['ip_address']
-            snat_addrs.append(ip_address)
-        return snat_addrs
-
-    def _assure_bigip_snats(self, bigip, service, subnetinfo, snat_addrs):
-        """ Ensure Snat Addresses are configured on a bigip.
-            Called for every bigip only in replication mode.
-            otherwise called once and synced. """
-        network = subnetinfo.network
-        pool = service['pool']
-
-        snat_info = {}
-        if self.bigip_l2_manager.is_common_network(network):
-            snat_info['network_folder'] = 'Common'
-        else:
-            snat_info['network_folder'] = pool['tenant_id']
-        snat_info['pool_name'] = pool['tenant_id']
-        snat_info['pool_folder'] = pool['tenant_id']
-        snat_info['addrs'] = snat_addrs
-
-        if self.conf.f5_ha_type == 'standalone':
-            self._assure_snats_standalone(bigip, subnetinfo, snat_info)
-        elif self.conf.f5_ha_type == 'pair':
-            self._assure_snats_pair(bigip, subnetinfo, snat_info)
-        elif self.conf.f5_ha_type == 'scalen':
-            self._assure_snats_scalen(bigip, service, subnetinfo, snat_info)
-
-    def _assure_snats_standalone(self, bigip, subnetinfo, snat_info):
-        """ Configure the ip addresses for snat in standalone HA mode """
-        network = subnetinfo.network
-        subnet = subnetinfo.subnet
-        if subnet['id'] in bigip.assured_snat_subnets:
-            return
-
-        # Create SNATs on traffic-group-local-only
-        snat_name = 'snat-traffic-group-local-only-' + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            ip_address = snat_info['addrs'][i]
-            index_snat_name = snat_name + "_" + str(i)
-            if self.bigip_l2_manager.is_common_network(network):
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-
-            tglo = '/Common/traffic-group-local-only'
-            bigip.snat.create(name=index_snat_name,
-                              ip_address=ip_address,
-                              traffic_group=tglo,
-                              snat_pool_name=snat_info['pool_name'],
-                              folder=snat_info['network_folder'],
-                              snat_pool_folder=snat_info['pool_folder'])
-
-        bigip.assured_snat_subnets.append(subnet['id'])
-
-    def _assure_snats_pair(self, bigip, subnetinfo, snat_info):
-        """ Configure the ip addresses for snat in pair HA mode """
-        network = subnetinfo.network
-        subnet = subnetinfo.subnet
-        if subnet['id'] in bigip.assured_snat_subnets:
-            return
-
-        snat_name = 'snat-traffic-group-1' + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            index_snat_name = snat_name + "_" + str(i)
-            ip_address = snat_info['addrs'][i]
-            if self.bigip_l2_manager.is_common_network(network):
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-
-            bigip.snat.create(name=index_snat_name,
-                              ip_address=ip_address,
-                              traffic_group='traffic-group-1',
-                              snat_pool_name=snat_info['pool_name'],
-                              folder=snat_info['network_folder'],
-                              snat_pool_folder=snat_info['pool_folder'])
-
-        bigip.assured_snat_subnets.append(subnet['id'])
-
-    def _assure_snats_scalen(self, bigip, service, subnetinfo, snat_info):
-        """ Configure the ip addresses for snat in scalen HA mode """
-        network = subnetinfo.network
-        subnet = subnetinfo.subnet
-        if subnet['id'] in bigip.assured_snat_subnets:
-            return
-
-        traffic_group = self._service_to_traffic_group(service)
-        base_traffic_group = os.path.basename(traffic_group)
-        snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            ip_address = snat_info['addrs'][i]
-            index_snat_name = snat_name + "_" + str(i)
-
-            if self.bigip_l2_manager.is_common_network(network):
-                ip_address = ip_address + '%0'
-                index_snat_name = '/Common/' + index_snat_name
-
-            bigip.snat.create(
-                name=index_snat_name,
-                ip_address=ip_address,
-                traffic_group=traffic_group,
-                snat_pool_name=snat_info['pool_name'],
-                folder=snat_info['network_folder'],
-                snat_pool_folder=snat_info['pool_folder'])
-
-        bigip.assured_snat_subnets.append(subnet['id'])
+                self.bigip_snat_manager.assure_bigip_snats(
+                    assure_bigip, subnetinfo, snat_addrs, tenant_id)
 
     def _allocate_gw_addr(self, subnetinfo):
         """ Create a name for the port and for the IP Forwarding
             Virtual Server as well as the floating Self IP which
             will answer ARP for the members """
-        network = subnetinfo.network
+        network = subnetinfo['network']
         if not network:
             LOG.error(_('Attempted to create default gateway'
                         ' for network with no id.. skipping.'))
             return
 
-        subnet = subnetinfo.subnet
+        subnet = subnetinfo['subnet']
         gw_name = "gw-" + subnet['id']
         ports = self.plugin_rpc.get_port_by_name(port_name=gw_name)
         if len(ports) < 1:
@@ -1241,57 +907,6 @@ class iControlDriver(object):
                 ermsg += " support will likely fail. Enable f5_snat_mode."
                 LOG.error(_(ermsg))
         return True
-
-    def _assure_gateway_on_subnet(self, bigip, subnetinfo):
-        """ called for every bigip only in replication mode.
-            otherwise called once """
-        subnet = subnetinfo.subnet
-        if subnet['id'] in bigip.assured_gateway_subnets:
-            return
-
-        network = subnetinfo.network
-        (network_name, preserve_network_name) = \
-            self.bigip_l2_manager.get_network_name(bigip, network)
-
-        if self.bigip_l2_manager.is_common_network(network):
-            network_folder = 'Common'
-            network_name = '/Common/' + network_name
-        else:
-            network_folder = subnet['tenant_id']
-
-        # Select a traffic group for the floating SelfIP
-        floating_selfip_name = "gw-" + subnet['id']
-        netmask = netaddr.IPNetwork(subnet['cidr']).netmask
-        vip_tg = self._get_least_gw_traffic_group()
-
-        bigip.selfip.create(name=floating_selfip_name,
-                            ip_address=subnet['gateway_ip'],
-                            netmask=netmask,
-                            vlan_name=network_name,
-                            floating=True,
-                            traffic_group=vip_tg,
-                            folder=network_folder,
-                            preserve_vlan_name=preserve_network_name)
-
-        # Get the actual traffic group if the Self IP already existed
-        vip_tg = bigip.self.get_traffic_group(name=floating_selfip_name,
-                                              folder=subnet['tenant_id'])
-
-        # Setup a wild card ip forwarding virtual service for this subnet
-        gw_name = "gw-" + subnet['id']
-        bigip.virtual_server.create_ip_forwarder(
-            name=gw_name, ip_address='0.0.0.0',
-            mask='0.0.0.0',
-            vlan_name=network_name,
-            traffic_group=vip_tg,
-            folder=network_folder,
-            preserve_vlan_name=preserve_network_name)
-
-        # Setup the IP forwarding virtual server to use the Self IPs
-        # as the forwarding SNAT addresses
-        bigip.virtual_server.set_snat_automap(name=gw_name,
-                                              folder=network_folder)
-        bigip.assured_gateway_subnets.append(subnet['id'])
 
     def _assure_service(self, service):
         """ Assure that the service is configured """
@@ -1345,7 +960,7 @@ class iControlDriver(object):
         """
         # Service Layer (Shared Config)
         for bigip in self._get_config_bigips():
-            self._assure_bigip_pool_create(pool, bigip)
+            self.bigip_pool_manager.assure_bigip_pool_create(bigip, pool)
 
         # OpenStack Updates
         if pool['status'] == plugin_const.PENDING_UPDATE:
@@ -1359,24 +974,6 @@ class iControlDriver(object):
                 status=plugin_const.ACTIVE,
                 status_description='pool created')
 
-    def _assure_bigip_pool_create(self, pool, bigip):
-        """ called for every bigip only in replication mode.
-            otherwise called once """
-        if not pool['status'] == plugin_const.PENDING_DELETE:
-            desc = pool['name'] + ':' + pool['description']
-            bigip.pool.create(name=pool['id'],
-                              lb_method=pool['lb_method'],
-                              description=desc,
-                              folder=pool['tenant_id'])
-            if pool['status'] == plugin_const.PENDING_UPDATE:
-                # make sure pool attributes are correct
-                bigip.pool.set_lb_method(name=pool['id'],
-                                         lb_method=pool['lb_method'],
-                                         folder=pool['tenant_id'])
-                bigip.pool.set_description(name=pool['id'],
-                                           description=desc,
-                                           folder=pool['tenant_id'])
-
     def _assure_pool_monitors(self, service):
         """
             Provision Health Monitors - Create/Update
@@ -1384,114 +981,14 @@ class iControlDriver(object):
         # Service Layer (Shared Config)
         for bigip in self._get_config_bigips():
             monitors_destroyed, monitors_updated = \
-                self._assure_bigip_pool_monitors(service, bigip)
+                self.bigip_pool_manager.assure_bigip_pool_monitors(
+                    bigip, service)
         for monitor_destroyed in monitors_destroyed:
             self.plugin_rpc.health_monitor_destroyed(
                 **monitor_destroyed)
         for monitor_updated in monitors_updated:
             self.plugin_rpc.update_health_monitor_status(
                 **monitor_updated)
-
-    def _assure_bigip_pool_monitors(self, service, bigip):
-        """ called for every bigip only in replication mode.
-            otherwise called once """
-        monitors_destroyed = []
-        monitors_updated = []
-        pool = service['pool']
-        # Current monitors on the pool according to BigIP
-        existing_monitors = bigip.pool.get_monitors(name=pool['id'],
-                                                    folder=pool['tenant_id'])
-
-        health_monitors_status = {}
-        for monitor in pool['health_monitors_status']:
-            health_monitors_status[monitor['monitor_id']] = \
-                monitor['status']
-
-        # Current monitor associations according to Neutron
-        for monitor in service['health_monitors']:
-            found_existing_monitor = monitor['id'] in existing_monitors
-            if monitor['id'] in health_monitors_status and \
-                health_monitors_status[monitor['id']] == \
-                    plugin_const.PENDING_DELETE:
-                bigip.pool.remove_monitor(name=pool['id'],
-                                          monitor_name=monitor['id'],
-                                          folder=pool['tenant_id'])
-                monitors_destroyed.append({'health_monitor_id': monitor['id'],
-                                           'pool_id': pool['id']})
-                # not sure if the monitor might be in use
-                try:
-                    LOG.debug(_('Deleting %s monitor /%s/%s'
-                                % (monitor['type'],
-                                   pool['tenant_id'],
-                                   monitor['id'])))
-                    bigip.monitor.delete(name=monitor['id'],
-                                         mon_type=monitor['type'],
-                                         folder=pool['tenant_id'])
-                # pylint: disable=bare-except
-                except:
-                    pass
-                # pylint: enable=bare-except
-            else:
-                update_status = False
-                if not found_existing_monitor:
-                    timeout = int(monitor['max_retries']) * \
-                        int(monitor['timeout'])
-                    bigip.monitor.create(name=monitor['id'],
-                                         mon_type=monitor['type'],
-                                         interval=monitor['delay'],
-                                         timeout=timeout,
-                                         send_text=None,
-                                         recv_text=None,
-                                         folder=monitor['tenant_id'])
-                    self._update_monitor(bigip, monitor, set_times=False)
-                    update_status = True
-                else:
-                    if health_monitors_status[monitor['id']] == \
-                            plugin_const.PENDING_UPDATE:
-                        self._update_monitor(bigip, monitor)
-                        update_status = True
-
-                if not found_existing_monitor:
-                    bigip.pool.add_monitor(name=pool['id'],
-                                           monitor_name=monitor['id'],
-                                           folder=pool['tenant_id'])
-                    update_status = True
-                if update_status:
-                    monitors_updated.append(
-                        {'pool_id': pool['id'],
-                         'health_monitor_id': monitor['id'],
-                         'status': plugin_const.ACTIVE,
-                         'status_description': 'monitor active'})
-
-            if found_existing_monitor:
-                existing_monitors.remove(monitor['id'])
-
-        LOG.debug(_("Pool: %s removing monitors %s"
-                    % (pool['id'], existing_monitors)))
-        # get rid of monitors no longer in service definition
-        for monitor in existing_monitors:
-            bigip.monitor.delete(name=monitor,
-                                 mon_type=None,
-                                 folder=pool['tenant_id'])
-        return monitors_destroyed, monitors_updated
-
-    def _update_monitor(self, bigip, monitor, set_times=True):
-        """ Update monitor on BIG-IP """
-        if set_times:
-            timeout = int(monitor['max_retries']) * \
-                int(monitor['timeout'])
-            # make sure monitor attributes are correct
-            bigip.monitor.set_interval(name=monitor['id'],
-                                       mon_type=monitor['type'],
-                                       interval=monitor['delay'],
-                                       folder=monitor['tenant_id'])
-            bigip.monitor.set_timeout(name=monitor['id'],
-                                      mon_type=monitor['type'],
-                                      timeout=timeout,
-                                      folder=monitor['tenant_id'])
-
-        if monitor['type'] == 'HTTP' or monitor['type'] == 'HTTPS':
-            _update_http_monitor(bigip, monitor)
 
     def _assure_members(self, service, all_subnet_hints):
         """
@@ -1500,7 +997,13 @@ class iControlDriver(object):
         # Service Layer (Shared Config)
         for bigip in self._get_config_bigips():
             subnet_hints = all_subnet_hints[bigip.device_name]
-            self._assure_bigip_members(service, bigip, subnet_hints)
+            self.bigip_pool_manager.assure_bigip_members(
+                bigip, service, subnet_hints)
+
+        # avoids race condition:
+        # deletion of pool member objects must sync before we
+        # remove the selfip from the peer bigips.
+        self._sync_if_clustered()
 
         # L2toL3 networking layer
         # Non Shared Config -  Local Per BIG-IP
@@ -1508,10 +1011,10 @@ class iControlDriver(object):
             for member in service['members']:
                 if member['status'] == plugin_const.PENDING_CREATE or \
                         member['status'] == plugin_const.PENDING_UPDATE:
-                    self.bigip_l2_manager.update_bigip_member_l2(
+                    self.bigip_pool_manager.update_bigip_member_l2(
                         bigip, service['pool'], member)
                 if member['status'] == plugin_const.PENDING_DELETE:
-                    self.bigip_l2_manager.delete_bigip_member_l2(
+                    self.bigip_pool_manager.delete_bigip_member_l2(
                         bigip, service['pool'], member)
 
         # OpenStack Updates
@@ -1539,177 +1042,6 @@ class iControlDriver(object):
                     LOG.error(_("Plugin delete member %s error: %s"
                                 % (member['id'], exc.message)))
 
-    def _assure_bigip_members(self, service, bigip, subnet_hints):
-        """ Ensure pool members are on BIG-IP """
-        pool = service['pool']
-        start_time = time()
-        # Current members on the BigIP
-        pool['existing_members'] = bigip.pool.get_members(
-            name=pool['id'], folder=pool['tenant_id'])
-        # Flag if we need to change the pool's LB method to
-        # include weighting by the ratio attribute
-        any_using_ratio = False
-        # Members according to Neutron
-        for member in service['members']:
-            member_hints = \
-                self._assure_bigip_member(bigip, subnet_hints, pool, member)
-            if member_hints['using_ratio']:
-                any_using_ratio = True
-
-            # Remove member from the list of members big-ip needs to remove
-            if member_hints['found_existing']:
-                pool['existing_members'].remove(member_hints['found_existing'])
-
-        LOG.debug(_("Pool: %s removing members %s"
-                    % (pool['id'], pool['existing_members'])))
-        # remove any members which are no longer in the service
-        for need_to_delete in pool['existing_members']:
-            bigip.pool.remove_member(name=pool['id'],
-                                     ip_address=need_to_delete['addr'],
-                                     port=int(need_to_delete['port']),
-                                     folder=pool['tenant_id'])
-
-        # if members are using weights, change the LB to RATIO
-        start_time = time()
-        if any_using_ratio:
-            #LOG.debug(_("Pool: %s changing to ratio based lb"
-            #        % pool['id']))
-            if pool['lb_method'] == lb_const.LB_METHOD_LEAST_CONNECTIONS:
-                bigip.pool.set_lb_method(name=pool['id'],
-                                         lb_method='RATIO_LEAST_CONNECTIONS',
-                                         folder=pool['tenant_id'])
-            else:
-                bigip.pool.set_lb_method(name=pool['id'],
-                                         lb_method='RATIO',
-                                         folder=pool['tenant_id'])
-        else:
-            # We must update the pool lb_method for the case where
-            # the pool object was not updated, but the member
-            # used to have a weight (setting ration) and now does
-            # not.
-            bigip.pool.set_lb_method(name=pool['id'],
-                                     lb_method=pool['lb_method'],
-                                     folder=pool['tenant_id'])
-        if time() - start_time > .001:
-            LOG.debug("        _assure_members setting pool lb method" +
-                      " took %.5f secs" % (time() - start_time))
-
-    def _assure_bigip_member(self, bigip, subnet_hints, pool, member):
-        """ Ensure pool member is on BIG-IP """
-        start_time = time()
-
-        network = member['network']
-        subnet = member['subnet']
-        member_hints = {'found_existing': None,
-                        'using_ratio': False}
-
-        ip_address = member['address']
-        if self.conf.f5_global_routed_mode or not network or \
-                self.bigip_l2_manager.is_common_network(network):
-            ip_address = ip_address + '%0'
-
-        for existing_member in pool['existing_members']:
-            if ip_address.startswith(existing_member['addr']) and \
-               (member['protocol_port'] == existing_member['port']):
-                member_hints['found_existing'] = existing_member
-                break
-
-        # Delete those pending delete
-        if member['status'] == plugin_const.PENDING_DELETE:
-            self._assure_bigip_delete_member(bigip, pool, member, ip_address)
-            if subnet and \
-               subnet['id'] not in subnet_hints['do_not_delete_subnets']:
-                subnet_hints['check_for_delete_subnets'][subnet['id']] = \
-                    SubnetInfo(network, subnet, is_for_member=True)
-        else:
-            just_added = False
-            if not member_hints['found_existing']:
-                add_start_time = time()
-                port = int(member['protocol_port'])
-                if bigip.pool.add_member(name=pool['id'],
-                                         ip_address=ip_address,
-                                         port=port,
-                                         folder=pool['tenant_id'],
-                                         no_checks=True):
-                    just_added = True
-                LOG.debug("           bigip.pool.add_member %s took %.5f" %
-                          (ip_address, time() - add_start_time))
-            if just_added or member['status'] == plugin_const.PENDING_UPDATE:
-                member_info = {'pool': pool, 'member': member,
-                               'ip_address': ip_address,
-                               'just_added': just_added}
-                member_hints['using_ratio'] = \
-                    self._assure_update_member(bigip, member_info)
-            if subnet and \
-               subnet['id'] in subnet_hints['check_for_delete_subnets']:
-                del subnet_hints['check_for_delete_subnets'][subnet['id']]
-            if subnet and \
-               subnet['id'] not in subnet_hints['do_not_delete_subnets']:
-                subnet_hints['do_not_delete_subnets'].append(subnet['id'])
-
-        if time() - start_time > .001:
-            LOG.debug("        assuring member %s took %.5f secs" %
-                      (member['address'], time() - start_time))
-        return member_hints
-
-    def _assure_update_member(self, bigip, member_info):
-        """ Update properties of pool member on BIG-IP """
-        pool = member_info['pool']
-        member = member_info['member']
-        ip_address = member_info['ip_address']
-        just_added = member_info['just_added']
-
-        using_ratio = False
-        # Is it enabled or disabled?
-        # no_checks because we add the member above if not found
-        start_time = time()
-        member_port = int(member['protocol_port'])
-        if member['admin_state_up']:
-            bigip.pool.enable_member(name=pool['id'],
-                                     ip_address=ip_address,
-                                     port=member_port,
-                                     folder=pool['tenant_id'],
-                                     no_checks=True)
-        else:
-            bigip.pool.disable_member(name=pool['id'],
-                                      ip_address=ip_address,
-                                      port=member_port,
-                                      folder=pool['tenant_id'],
-                                      no_checks=True)
-        LOG.debug("            member enable/disable took %.5f secs" %
-                  (time() - start_time))
-        # Do we have weights for ratios?
-        if member['weight'] > 1:
-            if not just_added:
-                start_time = time()
-                set_ratio = bigip.pool.set_member_ratio
-                set_ratio(name=pool['id'],
-                          ip_address=ip_address,
-                          port=member_port,
-                          ratio=int(member['weight']),
-                          folder=pool['tenant_id'],
-                          no_checks=True)
-                if time() - start_time > .0001:
-                    LOG.debug("            member set ratio took %.5f secs" %
-                              (time() - start_time))
-            using_ratio = True
-
-        return using_ratio
-
-    def _assure_bigip_delete_member(self, bigip,
-                                    pool, member, ip_address):
-        """ Ensure pool member is deleted from BIG-IP """
-        member_port = int(member['protocol_port'])
-        bigip.pool.remove_member(name=pool['id'],
-                                 ip_address=ip_address,
-                                 port=member_port,
-                                 folder=pool['tenant_id'])
-
-        # avoids race condition:
-        # deletion of pool member objects must sync before we
-        # remove the selfip from the peer bigips.
-        self._sync_if_clustered()
-
     def _assure_vip(self, service, all_subnet_hints):
         """ Ensure the vip is on all bigips. """
         vip = service['vip']
@@ -1722,18 +1054,29 @@ class iControlDriver(object):
         for bigip in bigips:
             if vip['status'] == plugin_const.PENDING_CREATE or \
                vip['status'] == plugin_const.PENDING_UPDATE:
-                self._assure_bigip_create_vip(bigip, service)
+                just_added_vip, vip_tg = \
+                    self.bigip_vip_manager.assure_bigip_create_vip(
+                        bigip, service)
+                if just_added_vip:
+                    self.__vips_to_traffic_group[vip['id']] = vip_tg
+                    self.__vips_on_traffic_groups[vip_tg] += 1
+
             elif vip['status'] == plugin_const.PENDING_DELETE:
-                self._assure_bigip_delete_vip(bigip, service)
+                self.bigip_vip_manager.assure_bigip_delete_vip(bigip, service)
+
+        # avoids race condition:
+        # deletion of vip address must sync before we
+        # remove the selfip from the peer bigips.
+        self._sync_if_clustered()
 
         # L2toL3 networking layer
         # (Non Shared - Config Per BIG-IP)
         for bigip in self.get_all_bigips():
             if vip['status'] == plugin_const.PENDING_CREATE or \
                vip['status'] == plugin_const.PENDING_UPDATE:
-                self.bigip_l2_manager.update_bigip_vip_l2(bigip, vip)
+                self.bigip_vip_manager.update_bigip_vip_l2(bigip, vip)
             if vip['status'] == plugin_const.PENDING_DELETE:
-                self.bigip_l2_manager.delete_bigip_vip_l2(bigip, vip)
+                self.bigip_vip_manager.delete_bigip_vip_l2(bigip, vip)
 
         # OpenStack Layer Updates
         if vip['status'] == plugin_const.PENDING_CREATE:
@@ -1770,7 +1113,9 @@ class iControlDriver(object):
                 if subnet and subnet['id'] not in \
                         subnet_hints['do_not_delete_subnets']:
                     subnet_hints['check_for_delete_subnets'][subnet['id']] = \
-                        SubnetInfo(network, subnet)
+                        {'network': network,
+                         'subnet': subnet,
+                         'is_for_member': False}
             else:
                 if subnet and subnet['id'] in \
                         subnet_hints['check_for_delete_subnets']:
@@ -1779,373 +1124,6 @@ class iControlDriver(object):
                         subnet_hints['do_not_delete_subnets']:
                     subnet_hints['do_not_delete_subnets'].append(subnet['id'])
 
-    def _assure_bigip_create_vip(self, bigip, service):
-        """ Called for every bigip only in replication mode,
-            otherwise called once for autosync mode. """
-        vip = service['vip']
-        pool = service['pool']
-        ip_address = vip['address']
-        snat_pool_name = None
-        network = vip['network']
-        preserve_network_name = False
-
-        if self.conf.f5_global_routed_mode:
-            network_name = None
-            ip_address = ip_address + '%0'
-        else:
-            (network_name, preserve_network_name) = \
-                self.bigip_l2_manager.get_network_name(bigip, network)
-
-            if self.bigip_l2_manager.is_common_network(network):
-                network_name = '/Common/' + network_name
-                ip_address = ip_address + '%0'
-
-            if self.conf.f5_snat_mode and \
-               self.conf.f5_snat_addresses_per_subnet > 0:
-                tenant_id = pool['tenant_id']
-                snat_pool_name = bigip_interfaces.decorate_name(tenant_id,
-                                                                tenant_id)
-
-        vip_info = {'network_name': network_name,
-                    'preserve_network_name': preserve_network_name,
-                    'ip_address': ip_address,
-                    'snat_pool_name': snat_pool_name}
-
-        just_added_vip = self._create_bigip_vip(bigip, service, vip_info)
-
-        if vip['status'] == plugin_const.PENDING_CREATE or \
-           vip['status'] == plugin_const.PENDING_UPDATE or \
-           just_added_vip:
-            self._update_bigip_vip(bigip, service)
-
-    def _assure_bigip_delete_vip(self, bigip, service):
-        """ Remove vip from big-ip """
-        vip = service['vip']
-        bigip_vs = bigip.virtual_server
-
-        LOG.debug(_('Vip: deleting VIP %s' % vip['id']))
-        bigip_vs.remove_and_delete_persist_profile(
-            name=vip['id'],
-            folder=vip['tenant_id'])
-        bigip_vs.delete(name=vip['id'], folder=vip['tenant_id'])
-
-        bigip.rule.delete(name=RPS_THROTTLE_RULE_PREFIX +
-                          vip['id'],
-                          folder=vip['tenant_id'])
-
-        bigip_vs.delete_uie_persist_profile(
-            name=APP_COOKIE_RULE_PREFIX + vip['id'],
-            folder=vip['tenant_id'])
-
-        bigip.rule.delete(name=APP_COOKIE_RULE_PREFIX +
-                          vip['id'],
-                          folder=vip['tenant_id'])
-
-        # avoids race condition:
-        # deletion of vip address must sync before we
-        # remove the selfip from the peer bigips.
-        self._sync_if_clustered()
-
-    def _create_bigip_vip(self, bigip, service, vip_info):
-        """ Create vip on big-ip """
-        vip = service['vip']
-        pool = service['pool']
-
-        network_name = vip_info['network_name']
-        preserve_network_name = vip_info['preserve_network_name']
-        ip_address = vip_info['ip_address']
-        snat_pool_name = vip_info['snat_pool_name']
-
-        bigip_vs = bigip.virtual_server
-        vip_tg = self._service_to_traffic_group(service)
-
-        # This is where you could decide to use a fastl4
-        # or a standard virtual server.  The problem
-        # is making sure that if someone updates the
-        # vip protocol or a session persistence that
-        # required you change virtual service types
-        # would have to make sure a virtual of the
-        # wrong type does not already exist or else
-        # delete it first. That would cause a service
-        # disruption. It would be better if the
-        # specification did not allow you to update
-        # L7 attributes if you already created a
-        # L4 service.  You should have to delete the
-        # vip and then create a new one.  That way
-        # the end user expects the service outage.
-
-        #virtual_type = 'fastl4'
-        #if 'protocol' in vip:
-        #    if vip['protocol'] == 'HTTP' or \
-        #       vip['protocol'] == 'HTTPS':
-        #        virtual_type = 'standard'
-        #if 'session_persistence' in vip:
-        #    if vip['session_persistence'] == \
-        #       'APP_COOKIE':
-        #        virtual_type = 'standard'
-
-        # Hard code to standard until we decide if we
-        # want to handle the check/delete before create
-        # and document the service outage associated
-        # with deleting a virtual service. We'll leave
-        # the steering logic for create in place.
-        # Be aware the check/delete before create
-        # is not in the logic below because it means
-        # another set of interactions with the device
-        # we don't need unless we decided to handle
-        # shifting from L4 to L7 or from L7 to L4
-
-        virtual_type = 'standard'
-
-        folder = vip['tenant_id']
-        if virtual_type == 'standard':
-            if bigip_vs.create(name=vip['id'],
-                               ip_address=ip_address,
-                               mask='255.255.255.255',
-                               port=int(vip['protocol_port']),
-                               protocol=vip['protocol'],
-                               vlan_name=network_name,
-                               traffic_group=vip_tg,
-                               use_snat=self.conf.f5_snat_mode,
-                               snat_pool=snat_pool_name,
-                               folder=folder,
-                               preserve_vlan_name=preserve_network_name):
-                # update driver traffic group mapping
-                vip_tg = bigip_vs.get_traffic_group(
-                    name=vip['id'],
-                    folder=pool['tenant_id'])
-                self.__vips_to_traffic_group[vip['id']] = vip_tg
-                self.__vips_on_traffic_groups[vip_tg] += 1
-                return True
-        else:
-            preserve_name = preserve_network_name
-            if bigip_vs.create_fastl4(name=vip['id'],
-                                      ip_address=ip_address,
-                                      mask='255.255.255.255',
-                                      port=int(vip['protocol_port']),
-                                      protocol=vip['protocol'],
-                                      vlan_name=network_name,
-                                      traffic_group=vip_tg,
-                                      use_snat=self.conf.f5_snat_mode,
-                                      snat_pool=snat_pool_name,
-                                      folder=folder,
-                                      preserve_vlan_name=preserve_name):
-                # created update driver traffic group mapping
-                vip_tg = bigip_vs.get_traffic_group(
-                    name=vip['id'],
-                    folder=pool['tenant_id'])
-                self.__vips_to_traffic_group[vip['ip']] = vip_tg
-                self.__vips_on_traffic_groups[vip_tg] += 1
-                return True
-
-    def _update_bigip_vip(self, bigip, service):
-        """ Update vip on big-ip """
-        vip = service['vip']
-        pool = service['pool']
-        bigip_vs = bigip.virtual_server
-
-        desc = vip['name'] + ':' + vip['description']
-        bigip_vs.set_description(name=vip['id'],
-                                 description=desc,
-                                 folder=pool['tenant_id'])
-
-        bigip_vs.set_pool(name=vip['id'],
-                          pool_name=pool['id'],
-                          folder=pool['tenant_id'])
-        if vip['admin_state_up']:
-            bigip_vs.enable_virtual_server(name=vip['id'],
-                                           folder=pool['tenant_id'])
-        else:
-            bigip_vs.disable_virtual_server(name=vip['id'],
-                                            folder=pool['tenant_id'])
-
-        if 'session_persistence' in vip and vip['session_persistence']:
-            # branch on persistence type
-            persistence_type = vip['session_persistence']['type']
-            set_persist = bigip_vs.set_persist_profile
-            set_fallback_persist = bigip_vs.set_fallback_persist_profile
-
-            if persistence_type == 'SOURCE_IP':
-                # add source_addr persistence profile
-                LOG.debug('adding source_addr primary persistence')
-                set_persist(name=vip['id'],
-                            profile_name='/Common/source_addr',
-                            folder=vip['tenant_id'])
-            elif persistence_type == 'HTTP_COOKIE':
-                # HTTP cookie persistence requires an HTTP profile
-                LOG.debug('adding http profile and' +
-                          ' primary cookie persistence')
-                bigip_vs.add_profile(name=vip['id'],
-                                     profile_name='/Common/http',
-                                     folder=vip['tenant_id'])
-                # add standard cookie persistence profile
-                set_persist(name=vip['id'],
-                            profile_name='/Common/cookie',
-                            folder=vip['tenant_id'])
-                if pool['lb_method'] == 'SOURCE_IP':
-                    set_fallback_persist(name=vip['id'],
-                                         profile_name='/Common/source_addr',
-                                         folder=vip['tenant_id'])
-            elif persistence_type == 'APP_COOKIE':
-                self._set_bigip_vip_cookie_persist(bigip, service)
-        else:
-            bigip_vs.remove_all_persist_profiles(name=vip['id'],
-                                                 folder=vip['tenant_id'])
-
-        if vip['connection_limit'] > 0 and 'protocol' in vip:
-            # spec says you need to do this for HTTP
-            # and HTTPS, but unless you can decrypt
-            # you can't measure HTTP rps for HTTPs
-            conn_limit = int(vip['connection_limit'])
-            if vip['protocol'] == 'HTTP':
-                LOG.debug('adding http profile and RPS throttle rule')
-                # add an http profile
-                bigip_vs.add_profile(
-                    name=vip['id'],
-                    profile_name='/Common/http',
-                    folder=vip['tenant_id'])
-                # create the rps irule
-                rule_definition = \
-                    self._create_http_rps_throttle_rule(conn_limit)
-                # try to create the irule
-                bigip.rule.create(name=RPS_THROTTLE_RULE_PREFIX + vip['id'],
-                                  rule_definition=rule_definition,
-                                  folder=vip['tenant_id'])
-                # for the rule text to update becuase
-                # connection limit may have changed
-                bigip.rule.update(name=RPS_THROTTLE_RULE_PREFIX + vip['id'],
-                                  rule_definition=rule_definition,
-                                  folder=vip['tenant_id'])
-                # add the throttle to the vip
-                rule_name = RPS_THROTTLE_RULE_PREFIX + vip['id']
-                bigip_vs.add_rule(name=vip['id'], rule_name=rule_name,
-                                  priority=500, folder=vip['tenant_id'])
-            else:
-                LOG.debug('setting connection limit')
-                # if not HTTP.. use connection limits
-                bigip_vs.set_connection_limit(name=vip['id'],
-                                              connection_limit=conn_limit,
-                                              folder=pool['tenant_id'])
-        else:
-            # clear throttle rule
-            LOG.debug('removing RPS throttle rule if present')
-            rule_name = RPS_THROTTLE_RULE_PREFIX + vip['id']
-            bigip_vs.remove_rule(name=vip['id'],
-                                 rule_name=rule_name,
-                                 priority=500,
-                                 folder=vip['tenant_id'])
-            # clear the connection limits
-            LOG.debug('removing connection limits')
-            bigip_vs.set_connection_limit(name=vip['id'],
-                                          connection_limit=0,
-                                          folder=pool['tenant_id'])
-
-    def _set_bigip_vip_cookie_persist(self, bigip, service):
-        """ Setup VIP Cookie Persistence """
-        vip = service['vip']
-        pool = service['pool']
-        bigip_vs = bigip.virtual_server
-
-        set_persist = bigip_vs.set_persist_profile
-        set_fallback_persist = bigip_vs.set_fallback_persist_profile
-
-        # application cookie persistence requires
-        # an HTTP profile
-        LOG.debug('adding http profile'
-                  ' and primary universal persistence')
-        bigip_vs.add_profile(name=vip['id'],
-                             profile_name='/Common/http',
-                             folder=vip['tenant_id'])
-        # make sure they gave us a cookie_name
-        if 'cookie_name' in vip['session_persistence']:
-            cookie_name = vip['session_persistence']['cookie_name']
-            # create and add irule to capture cookie
-            # from the service response.
-            rule_definition = self._create_app_cookie_persist_rule(cookie_name)
-            # try to create the irule
-            rule_name = APP_COOKIE_RULE_PREFIX + vip['id']
-            if bigip.rule.create(name=rule_name,
-                                 rule_definition=rule_definition,
-                                 folder=vip['tenant_id']):
-                # create universal persistence profile
-                bigip_vs.create_uie_profile(
-                    name=APP_COOKIE_RULE_PREFIX + vip['id'],
-                    rule_name=APP_COOKIE_RULE_PREFIX + vip['id'],
-                    folder=vip['tenant_id'])
-            # set persistence profile
-            profile_name = APP_COOKIE_RULE_PREFIX + vip['id']
-            set_persist(name=vip['id'],
-                        profile_name=profile_name,
-                        folder=vip['tenant_id'])
-            if pool['lb_method'] == 'SOURCE_IP':
-                profile_name = '/Common/source_addr'
-                set_fallback_persist(name=vip['id'],
-                                     profile_name=profile_name,
-                                     folder=vip['tenant_id'])
-        else:
-            # if they did not supply a cookie_name
-            # just default to regualar cookie peristence
-            set_persist(name=vip['id'],
-                        profile_name='/Common/cookie',
-                        folder=vip['tenant_id'])
-            if pool['lb_method'] == 'SOURCE_IP':
-                profile_name = '/Common/source_addr'
-                set_fallback_persist(name=vip['id'],
-                                     profile_name=profile_name,
-                                     folder=vip['tenant_id'])
-
-    def _create_app_cookie_persist_rule(self, cookiename):
-        """ Create rule for cookie persistence """
-        rule_text = "when HTTP_REQUEST {\n"
-        rule_text += " if { [HTTP::cookie " + str(cookiename)
-        rule_text += "] ne \"\" }{\n"
-        rule_text += "     persist uie [string tolower [HTTP::cookie \""
-        rule_text += cookiename + "\"]] 3600\n"
-        rule_text += " }\n"
-        rule_text += "}\n\n"
-        rule_text += "when HTTP_RESPONSE {\n"
-        rule_text += " if { [HTTP::cookie \"" + str(cookiename)
-        rule_text += "\"] ne \"\" }{\n"
-        rule_text += "     persist add uie [string tolower [HTTP::cookie \""
-        rule_text += cookiename + "\"]] 3600\n"
-        rule_text += " }\n"
-        rule_text += "}\n\n"
-        return rule_text
-
-    def _create_http_rps_throttle_rule(self, req_limit):
-        """ Create http throttle rule """
-        rule_text = "when HTTP_REQUEST {\n"
-        rule_text += " set expiration_time 300\n"
-        rule_text += " set client_ip [IP::client_addr]\n"
-        rule_text += " set req_limit " + str(req_limit) + "\n"
-        rule_text += " set curr_time [clock seconds]\n"
-        rule_text += " set timekey starttime\n"
-        rule_text += " set reqkey reqcount\n"
-        rule_text += " set request_count [session lookup uie $reqkey]\n"
-        rule_text += " if { $request_count eq \"\" } {\n"
-        rule_text += "   set request_count 1\n"
-        rule_text += "   session add uie $reqkey $request_count "
-        rule_text += " $expiration_time\n"
-        rule_text += "   session add uie $timekey [expr {$curr_time - 2}]"
-        rule_text += " [expr {$expiration_time + 2}]\n"
-        rule_text += " } else {\n"
-        rule_text += "   set start_time [session lookup uie $timekey]\n"
-        rule_text += "   incr request_count\n"
-        rule_text += "   session add uie $reqkey $request_count"
-        rule_text += " $expiration_time\n"
-        rule_text += "   set elapsed_time [expr {$curr_time - $start_time}]\n"
-        rule_text += "   if {$elapsed_time < 60} {\n"
-        rule_text += "     set elapsed_time 60\n"
-        rule_text += "   }\n"
-        rule_text += "   set curr_rate [expr {$request_count /"
-        rule_text += "($elapsed_time/60)}]\n"
-        rule_text += "   if {$curr_rate > $req_limit}{\n"
-        rule_text += "     HTTP::respond 503 throttled \"Retry-After\" 60\n"
-        rule_text += "   }\n"
-        rule_text += " }\n"
-        rule_text += "}\n"
-        return rule_text
-
     def _assure_pool_delete(self, service):
         """ Assure pool is deleted from big-ip """
         if service['pool']['status'] != plugin_const.PENDING_DELETE:
@@ -2153,7 +1131,7 @@ class iControlDriver(object):
 
         # Service Layer (Shared Config)
         for bigip in self._get_config_bigips():
-            self._assure_bigip_pool_delete(bigip, service)
+            self.bigip_pool_manager.assure_bigip_pool_delete(bigip, service)
 
         # OpenStack Updates
         try:
@@ -2161,15 +1139,6 @@ class iControlDriver(object):
         except Exception as exc:
             LOG.error(_("Plugin destroy pool %s error: %s"
                         % (service['pool']['id'], exc.message)))
-
-    # called for every bigip only in replication mode.
-    # otherwise called once
-    def _assure_bigip_pool_delete(self, bigip, service):
-        """ Assure pool is deleted from big-ip """
-        # Remove the pool if it is pending delete
-        LOG.debug(_('Deleting Pool %s' % service['pool']['id']))
-        bigip.pool.delete(name=service['pool']['id'],
-                          folder=service['pool']['tenant_id'])
 
     def _assure_delete_networks(self, service, all_subnet_hints):
         """ Assure networks is deleted from big-ips """
@@ -2184,14 +1153,13 @@ class iControlDriver(object):
                       % (bigip.device_name, all_subnet_hints))
             subnet_hints = all_subnet_hints[bigip.device_name]
             deleted_names = deleted_names.union(
-                self._assure_delete_nets_shared(service,
-                                                bigip,
+                self._assure_delete_nets_shared(bigip, service,
                                                 subnet_hints))
 
-        LOG.debug('_assure_delete_networks before sync')
         # avoids race condition:
         # deletion of shared ip objects must sync before we
         # remove the selfips or vlans from the peer bigips.
+        LOG.debug('_assure_delete_networks before sync')
         self._sync_if_clustered()
 
         # Delete non shared config objects
@@ -2207,7 +1175,7 @@ class iControlDriver(object):
                 subnet_hints = all_subnet_hints[self.get_bigip().device_name]
             deleted_names = deleted_names.union(
                 self._assure_delete_nets_nonshared(
-                    service, bigip, subnet_hints))
+                    bigip, service, subnet_hints))
 
         for port_name in deleted_names:
             LOG.debug('_assure_delete_networks del port %s'
@@ -2215,197 +1183,37 @@ class iControlDriver(object):
             self.plugin_rpc.delete_port_by_name(
                 port_name=port_name)
 
-    def _assure_delete_nets_shared(self, service, bigip, subnet_hints):
+    def _assure_delete_nets_shared(self, bigip, service, subnet_hints):
         """ Assure shared configuration (which syncs) is deleted """
         deleted_names = set()
+        tenant_id = service['pool']['tenant_id']
         for subnetinfo in _get_subnets_to_delete(bigip, service, subnet_hints):
             if not self.conf.f5_snat_mode:
-                gw_name = self._delete_gateway_on_subnet(subnetinfo, bigip)
+                gw_name = self.bigip_selfip_manager.delete_gateway_on_subnet(
+                    bigip, subnetinfo)
                 deleted_names.add(gw_name)
             deleted_names = deleted_names.union(
-                self._delete_bigip_snats(bigip, service, subnetinfo))
+                self.bigip_snat_manager.delete_bigip_snats(
+                    bigip, subnetinfo, tenant_id))
         return deleted_names
 
-    def _delete_bigip_snats(self, bigip, service, subnetinfo):
-        """ Assure shared snat configuration (which syncs) is deleted
-            Called for every bigip only in replication mode,
-            otherwise called once.
-        """
-        if not subnetinfo.network:
-            LOG.error(_('Attempted to delete selfip and snats'
-                        ' for missing network ... skipping.'))
-            return set()
-
-        deleted_names = set()
-        # Setup required SNAT addresses on this subnet
-        # based on the HA requirements
-        if self.conf.f5_snat_addresses_per_subnet > 0:
-            # failover mode dictates SNAT placement on traffic-groups
-            if self.conf.f5_ha_type == 'standalone':
-                deleted_names = self._delete_bigip_snats_standalone(
-                    bigip, service, subnetinfo)
-            elif self.conf.f5_ha_type == 'pair':
-                deleted_names = self._delete_bigip_snats_pair(
-                    bigip, service, subnetinfo)
-            elif self.conf.f5_ha_type == 'scalen':
-                deleted_names = self._delete_bigip_snats_scalen(
-                    bigip, service, subnetinfo)
-
-        subnet = subnetinfo.subnet
-        if subnet['id'] in bigip.assured_snat_subnets:
-            bigip.assured_snat_subnets.remove(subnet['id'])
-
-        return deleted_names
-
-    def _delete_bigip_snats_standalone(self, bigip, service, subnetinfo):
-        """ Assure snats deleted in standalone mode """
-        network = subnetinfo.network
-        subnet = subnetinfo.subnet
-        if self.bigip_l2_manager.is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = service['pool']['tenant_id']
-        snat_pool_name = service['pool']['tenant_id']
-
-        deleted_names = set()
-        # Delete SNATs on traffic-group-local-only
-        snat_name = 'snat-traffic-group-local-only-' + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            index_snat_name = snat_name + "_" + str(i)
-            if self.bigip_l2_manager.is_common_network(network):
-                tmos_snat_name = '/Common/' + index_snat_name
-            else:
-                tmos_snat_name = index_snat_name
-            bigip.snat.remove_from_pool(
-                name=snat_pool_name,
-                member_name=tmos_snat_name,
-                folder=service['pool']['tenant_id'])
-            if bigip.snat.delete(
-                    name=tmos_snat_name,
-                    folder=network_folder,
-                    snat_pool_folder=service['pool']['tenant_id']):
-                # Only if it still exists and can be
-                # deleted because it is not in use can
-                # we safely delete the neutron port
-                deleted_names.add(index_snat_name)
-        return deleted_names
-
-    def _delete_bigip_snats_pair(self, bigip, service, subnetinfo):
-        """ Assure snats deleted in HA Pair mode """
-        network = subnetinfo.network
-        subnet = subnetinfo.subnet
-        if self.bigip_l2_manager.is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = service['pool']['tenant_id']
-        snat_pool_name = service['pool']['tenant_id']
-
-        deleted_names = set()
-        # Delete SNATs on traffic-group-1
-        snat_name = 'snat-traffic-group-1' + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            index_snat_name = snat_name + "_" + str(i)
-            if self.bigip_l2_manager.is_common_network(network):
-                tmos_snat_name = '/Common/' + index_snat_name
-            else:
-                tmos_snat_name = index_snat_name
-            bigip.snat.remove_from_pool(
-                name=snat_pool_name,
-                member_name=tmos_snat_name,
-                folder=service['pool']['tenant_id'])
-            if bigip.snat.delete(
-                    name=tmos_snat_name,
-                    folder=network_folder,
-                    snat_pool_folder=service['pool']['tenant_id']):
-                # Only if it still exists and can be
-                # deleted because it is not in use can
-                # we safely delete the neutron port
-                deleted_names.add(index_snat_name)
-        return deleted_names
-
-    def _delete_bigip_snats_scalen(self, bigip, service, subnetinfo):
-        """ Assure snats deleted in scalen mode """
-        network = subnetinfo.network
-        subnet = subnetinfo.subnet
-        if self.bigip_l2_manager.is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = service['pool']['tenant_id']
-        snat_pool_name = service['pool']['tenant_id']
-
-        deleted_names = set()
-
-        # Delete SNATs on all provider defined traffic groups
-        traffic_group = self._service_to_traffic_group(service)
-        base_traffic_group = os.path.basename(traffic_group)
-        snat_name = "snat-" + base_traffic_group + "-" + subnet['id']
-        for i in range(self.conf.f5_snat_addresses_per_subnet):
-            index_snat_name = snat_name + "_" + str(i)
-            if self.bigip_l2_manager.is_common_network(network):
-                tmos_snat_name = "/Common/" + index_snat_name
-            else:
-                tmos_snat_name = index_snat_name
-            bigip.snat.remove_from_pool(
-                name=snat_pool_name,
-                member_name=tmos_snat_name,
-                folder=service['pool']['tenant_id'])
-            if bigip.snat.delete(
-                    name=tmos_snat_name,
-                    folder=network_folder,
-                    snat_pool_folder=service['pool']['tenant_id']):
-                # Only if it still exists and can be
-                # deleted because it is not in use can
-                # we safely delete the neutron port
-                deleted_names.add(index_snat_name)
-        return deleted_names
-
-    def _delete_gateway_on_subnet(self, subnetinfo, bigip):
-        """ called for every bigip only in replication mode.
-            otherwise called once """
-        network = subnetinfo.network
-        if not network:
-            LOG.error(_('Attempted to delete default gateway'
-                        ' for network with no id... skipping.'))
-            return
-        subnet = subnetinfo.subnet
-        if self.bigip_l2_manager.is_common_network(network):
-            network_folder = 'Common'
-        else:
-            network_folder = subnet['tenant_id']
-
-        floating_selfip_name = "gw-" + subnet['id']
-        if self.conf.f5_populate_static_arp:
-            bigip.arp.delete_by_subnet(subnet=subnetinfo.subnet['cidr'],
-                                       mask=None,
-                                       folder=network_folder)
-        bigip.selfip.delete(name=floating_selfip_name,
-                            folder=network_folder)
-
-        gw_name = "gw-" + subnet['id']
-        bigip.virtual_server.delete(name=gw_name,
-                                    folder=network_folder)
-
-        if subnet['id'] in bigip.assured_gateway_subnets:
-            bigip.assured_gateway_subnets.remove(subnet['id'])
-        return gw_name
-
-    def _assure_delete_nets_nonshared(self, service, bigip, subnet_hints):
+    def _assure_delete_nets_nonshared(self, bigip, service, subnet_hints):
         """ Delete non shared base objects for networks """
         deleted_names = set()
         for subnetinfo in _get_subnets_to_delete(bigip, service, subnet_hints):
-            network = subnetinfo.network
+            network = subnetinfo['network']
             if self.bigip_l2_manager.is_common_network(network):
                 network_folder = 'Common'
             else:
                 network_folder = service['pool']['tenant_id']
 
-            subnet = subnetinfo.subnet
-            local_selfip_name = "local-" + bigip.device_name + \
-                                "-" + subnet['id']
+            subnet = subnetinfo['subnet']
             if self.conf.f5_populate_static_arp:
                 bigip.arp.delete_by_subnet(subnet=subnet['cidr'],
                                            mask=None,
                                            folder=network_folder)
+            local_selfip_name = "local-" + bigip.device_name + \
+                                "-" + subnet['id']
             bigip.selfip.delete(name=local_selfip_name,
                                 folder=network_folder)
             deleted_names.add(local_selfip_name)
@@ -2441,24 +1249,22 @@ class iControlDriver(object):
 
             if not (existing_monitors or existing_pools or existing_vips):
                 if self.conf.f5_sync_mode == 'replication':
-                    self._remove_tenant_replication_mode(service, bigip)
+                    self._remove_tenant_replication_mode(bigip, tenant_id)
                 else:
-                    self._remove_tenant_autosync_mode(service, bigip)
+                    self._remove_tenant_autosync_mode(bigip, tenant_id)
 
-    def _remove_tenant_replication_mode(self, service, bigip):
+    def _remove_tenant_replication_mode(self, bigip, tenant_id):
         """ Remove tenant in replication sync-mode """
-        tenant_id = service['pool']['tenant_id']
         bigip.route.delete_domain(folder=tenant_id)
         bigip.system.force_root_folder()
         bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
 
-    def _remove_tenant_autosync_mode(self, service, bigip):
+    def _remove_tenant_autosync_mode(self, bigip, tenant_id):
         """ Remove tenant in autosync sync-mode """
         # all domains must be gone before we attempt to delete
         # the folder or it won't delete due to not being empty
-        folder = service['pool']['tenant_id']
         for set_bigip in self.get_all_bigips():
-            set_bigip.route.delete_domain(folder=folder)
+            set_bigip.route.delete_domain(folder=tenant_id)
             set_bigip.system.force_root_folder()
 
         # we need to ensure that the following folder deletion
@@ -2466,16 +1272,20 @@ class iControlDriver(object):
         self._sync_if_clustered()
         greenthread.sleep(5)
         bigip.system.delete_folder(
-            folder=bigip.decorate_folder(folder))
+            folder=bigip.decorate_folder(tenant_id))
 
         # Need to make sure this folder delete syncs before
         # something else runs and changes the current folder to
         # the folder being deleted which will cause big problems.
         self._sync_if_clustered()
 
-    def _service_to_traffic_group(self, service):
+    def service_to_traffic_group(self, service):
         """ Hash service tenant id to index of traffic group """
-        hexhash = hashlib.md5(service['pool']['tenant_id']).hexdigest()
+        return self.tenant_to_traffic_group(service['pool']['tenant_id'])
+
+    def tenant_to_traffic_group(self, tenant_id):
+        """ Hash tenant id to index of traffic group """
+        hexhash = hashlib.md5(tenant_id).hexdigest()
         tg_index = int(hexhash, 16) % len(self.__traffic_groups)
         return self.__traffic_groups[tg_index]
 
@@ -2594,14 +1404,17 @@ def _get_subnets_to_assure(service):
             not service['vip']['status'] == plugin_const.PENDING_DELETE:
         network = service['vip']['network']
         subnet = service['vip']['subnet']
-        networks[network['id']] = SubnetInfo(network, subnet)
+        networks[network['id']] = {'network': network,
+                                   'subnet': subnet,
+                                   'is_for_member': False}
 
     for member in service['members']:
         if not member['status'] == plugin_const.PENDING_DELETE:
             network = member['network']
             subnet = member['subnet']
-            networks[network['id']] = \
-                SubnetInfo(network, subnet, is_for_member=True)
+            networks[network['id']] = {'network': network,
+                                       'subnet': subnet,
+                                       'is_for_member': True}
     return networks.values()
 
 
@@ -2622,7 +1435,7 @@ def _get_subnets_to_delete(bigip, service, subnet_hints):
         services items that we deleted. """
     subnets_to_delete = []
     for subnetinfo in subnet_hints['check_for_delete_subnets'].values():
-        subnet = subnetinfo.subnet
+        subnet = subnetinfo['subnet']
         if not subnet:
             continue
         if not _ips_exist_on_subnet(bigip, service, subnet):
@@ -2653,15 +1466,6 @@ def _ips_exist_on_subnet(bigip, service, subnet):
     return False
 
 
-class SubnetInfo(object):
-    """ A structure used to store a network-subnet combo """
-    def __init__(self, network=None, subnet=None,
-                 is_for_member=False):
-        self.network = network
-        self.subnet = subnet
-        self.is_for_member = is_for_member
-
-
 def _validate_bigip_version(bigip, hostname):
     """ Ensure the BIG-IP has sufficient version """
     major_version = bigip.system.get_major_version()
@@ -2677,53 +1481,3 @@ def _validate_bigip_version(bigip, hostname):
             % (hostname, f5const.MIN_TMOS_MAJOR_VERSION,
                f5const.MIN_TMOS_MINOR_VERSION))
     return major_version, minor_version
-
-
-def _update_http_monitor(bigip, monitor):
-    """ Update pool monitor on bigip """
-    if 'url_path' in monitor:
-        send_text = "GET " + monitor['url_path'] + \
-            " HTTP/1.0\\r\\n\\r\\n"
-    else:
-        send_text = "GET / HTTP/1.0\\r\\n\\r\\n"
-
-    if 'expected_codes' in monitor:
-        try:
-            if monitor['expected_codes'].find(",") > 0:
-                status_codes = monitor['expected_codes'].split(',')
-                recv_text = "HTTP/1.(0|1) ("
-                for status in status_codes:
-                    int(status)
-                    recv_text += status + "|"
-                recv_text = recv_text[:-1]
-                recv_text += ")"
-            elif monitor['expected_codes'].find("-") > 0:
-                status_range = monitor['expected_codes'].split('-')
-                start_range = status_range[0]
-                int(start_range)
-                stop_range = status_range[1]
-                int(stop_range)
-                recv_text = "HTTP/1.(0|1) [" + \
-                    start_range + "-" + \
-                    stop_range + "]"
-            else:
-                int(monitor['expected_codes'])
-                recv_text = "HTTP/1.(0|1) " + monitor['expected_codes']
-        except Exception as exp:
-            LOG.error(_(
-                "invalid monitor: %s, expected_codes %s, setting to 200"
-                % (exp, monitor['expected_codes'])))
-            recv_text = "HTTP/1.(0|1) 200"
-    else:
-        recv_text = "HTTP/1.(0|1) 200"
-
-    LOG.debug('setting monitor send: %s, receive: %s' % (send_text, recv_text))
-
-    bigip.monitor.set_send_string(name=monitor['id'],
-                                  mon_type=monitor['type'],
-                                  send_text=send_text,
-                                  folder=monitor['tenant_id'])
-    bigip.monitor.set_recv_string(name=monitor['id'],
-                                  mon_type=monitor['type'],
-                                  recv_text=recv_text,
-                                  folder=monitor['tenant_id'])

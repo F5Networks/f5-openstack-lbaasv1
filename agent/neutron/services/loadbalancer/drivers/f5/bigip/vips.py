@@ -375,3 +375,31 @@ class BigipVipManager(object):
         rule_text += " }\n"
         rule_text += "}\n"
         return rule_text
+
+    def update_bigip_vip_l2(self, bigip, vip):
+        """ Update vip l2 records """
+        network = vip['network']
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = vip['tenant_id']
+            fdb_info = {'network': network,
+                        'ip_address': None,
+                        'mac_address': None}
+            self.bigip_l2_manager.add_bigip_fdbs(
+                bigip, net_folder, fdb_info, vip)
+
+    def delete_bigip_vip_l2(self, bigip, vip):
+        """ Delete vip l2 records """
+        network = vip['network']
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = vip['tenant_id']
+            fdb_info = {'network': network,
+                        'ip_address': None,
+                        'mac_address': None}
+            self.bigip_l2_manager.delete_bigip_fdbs(
+                bigip, net_folder, fdb_info, vip)

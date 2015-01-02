@@ -357,3 +357,46 @@ class BigipPoolManager(object):
                                  ip_address=ip_address,
                                  port=member_port,
                                  folder=pool['tenant_id'])
+
+    def update_bigip_member_l2(self, bigip, pool, member):
+        """ update pool member l2 records """
+        network = member['network']
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = pool['tenant_id']
+            ip_address = member['address']
+            if self.driver.conf.f5_global_routed_mode or not network \
+                    or self.bigip_l2_manager.is_common_network(network):
+                ip_address = ip_address + '%0'
+            fdb_info = {'network': network,
+                        'ip_address': ip_address,
+                        'mac_address': member['port']['mac_address']}
+            self.bigip_l2_manager.add_bigip_fdbs(
+                bigip, net_folder, fdb_info, member)
+
+    def delete_bigip_member_l2(self, bigip, pool, member):
+        """ Delete pool member l2 records """
+        network = member['network']
+        if network:
+            if member['port']:
+                if self.bigip_l2_manager.is_common_network(network):
+                    net_folder = 'Common'
+                else:
+                    net_folder = pool['tenant_id']
+                ip_address = member['address']
+                if self.driver.conf.f5_global_routed_mode or not network or \
+                        self.bigip_l2_manager.is_common_network(network):
+                    ip_address = ip_address + '%0'
+                fdb_info = {'network': network,
+                            'ip_address': ip_address,
+                            'mac_address': member['port']['mac_address']}
+                self.bigip_l2_manager.delete_bigip_fdbs(
+                    bigip, net_folder, fdb_info, member)
+            else:
+                LOG.error(_('Member on SDN has no port. Manual '
+                            'removal on the BIG-IP will be '
+                            'required. Was the vm instance '
+                            'deleted before the pool member '
+                            'was deleted?'))
