@@ -2,7 +2,7 @@
 # pylint: disable=no-self-use
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
-from f5.bigip import bigip_interfaces
+from f5.bigip import interfaces as bigip_interfaces
 
 LOG = logging.getLogger(__name__)
 APP_COOKIE_RULE_PREFIX = 'app_cookie_'

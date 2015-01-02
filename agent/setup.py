@@ -68,7 +68,7 @@ setup(name='f5-bigip-lbaas-agent',
          'f5',
          'f5.common',
          'f5.bigip',
-         'f5.bigip.bigip_interfaces',
+         'f5.bigip.interfaces',
          'f5.bigip.pycontrol'],
          data_files=data_files
      )

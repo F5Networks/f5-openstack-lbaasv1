@@ -15,11 +15,11 @@
 
 from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip.bigip_interfaces import icontrol_rest_folder
-from f5.bigip.bigip_interfaces import icontrol_folder
-from f5.bigip.bigip_interfaces import strip_domain_address
-from f5.bigip.bigip_interfaces import domain_address
-from f5.bigip.bigip_interfaces import log
+from f5.bigip.interfaces import icontrol_rest_folder
+from f5.bigip.interfaces import icontrol_folder
+from f5.bigip.interfaces import strip_domain_address
+from f5.bigip.interfaces import domain_address
+from f5.bigip.interfaces import log
 
 from f5.bigip import exceptions
 

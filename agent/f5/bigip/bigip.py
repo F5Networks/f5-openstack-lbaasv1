@@ -20,24 +20,24 @@ import socket
 
 from f5.bigip.pycontrol import pycontrol as pc
 from f5.common import constants as const
-from f5.bigip import bigip_interfaces
+from f5.bigip import interfaces as bigip_interfaces
 
-from f5.bigip.bigip_interfaces.cluster import Cluster
-from f5.bigip.bigip_interfaces.device import Device
-from f5.bigip.bigip_interfaces.monitor import Monitor
-from f5.bigip.bigip_interfaces.pool import Pool
-from f5.bigip.bigip_interfaces.route import Route
-from f5.bigip.bigip_interfaces.rule import Rule
-from f5.bigip.bigip_interfaces.selfip import SelfIP
-from f5.bigip.bigip_interfaces.snat import SNAT
-from f5.bigip.bigip_interfaces.nat import NAT
-from f5.bigip.bigip_interfaces.stat import Stat
-from f5.bigip.bigip_interfaces.system import System
-from f5.bigip.bigip_interfaces.virtual_server import VirtualServer
-from f5.bigip.bigip_interfaces.vlan import Vlan
-from f5.bigip.bigip_interfaces.vxlan import VXLAN
-from f5.bigip.bigip_interfaces.l2gre import L2GRE
-from f5.bigip.bigip_interfaces.arp import ARP
+from f5.bigip.interfaces.cluster import Cluster
+from f5.bigip.interfaces.device import Device
+from f5.bigip.interfaces.monitor import Monitor
+from f5.bigip.interfaces.pool import Pool
+from f5.bigip.interfaces.route import Route
+from f5.bigip.interfaces.rule import Rule
+from f5.bigip.interfaces.selfip import SelfIP
+from f5.bigip.interfaces.snat import SNAT
+from f5.bigip.interfaces.nat import NAT
+from f5.bigip.interfaces.stat import Stat
+from f5.bigip.interfaces.system import System
+from f5.bigip.interfaces.virtual_server import VirtualServer
+from f5.bigip.interfaces.vlan import Vlan
+from f5.bigip.interfaces.vxlan import VXLAN
+from f5.bigip.interfaces.l2gre import L2GRE
+from f5.bigip.interfaces.arp import ARP
 
 LOG = logging.getLogger(__name__)
 

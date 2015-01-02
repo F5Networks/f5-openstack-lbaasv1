@@ -5,7 +5,7 @@ from neutron.openstack.common import log as logging
 from neutron.common import constants as q_const
 
 from f5.bigip import exceptions as f5ex
-from f5.bigip.bigip_interfaces import prefixed
+from f5.bigip.interfaces import prefixed
 from f5.bigip import bigip as f5_bigip
 from f5.bigip.exceptions import \
     VLANCreationException, VLANDeleteException

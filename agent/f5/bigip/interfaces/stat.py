@@ -14,7 +14,7 @@
 #
 
 from f5.common import constants as const
-from f5.bigip.bigip_interfaces import log
+from f5.bigip.interfaces import log
 
 import time
 

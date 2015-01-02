@@ -38,7 +38,7 @@ from neutron.services.loadbalancer.drivers.f5.bigip.utils \
 from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
-from f5.bigip import bigip_interfaces
+from f5.bigip import interfaces as bigip_interfaces
 
 from eventlet import greenthread
 import uuid
