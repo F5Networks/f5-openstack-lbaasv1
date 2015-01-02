@@ -33,6 +33,7 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def create_multipoint_profile(self, name=None, folder='Common'):
+        """ Create multipoint tunnel profile """
         folder = str(folder).replace('/', '')
         if not self.profile_exists(name=name, folder=folder):
             payload = dict()
@@ -42,9 +43,9 @@ class L2GRE(object):
             payload['floodingType'] = 'multipoint'
             payload['encapsulation'] = 'transparent-ethernet-bridging'
             request_url = self.bigip.icr_url + '/net/tunnels/gre/'
-            response = self.bigip.icr_session.post(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.staus_code == 409:
@@ -57,12 +58,13 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def delete_profile(self, name=None, folder='Common'):
+        """ Delete tunnel profile """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/tunnels/gre/'
         request_url += '~' + folder + '~' + name
 
-        response = self.bigip.icr_session.delete(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.delete(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
 
         if response.status_code < 400:
             return True
@@ -81,6 +83,7 @@ class L2GRE(object):
                                  greid=0,
                                  description=None,
                                  folder='Common'):
+        """ Create multipoint tunnel """
         if not self.tunnel_exists(name=name, folder=folder):
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -94,14 +97,13 @@ class L2GRE(object):
                 payload['description'] = description
             request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
             Log.info('L2GRE', 'creating tunnel with %s' % json.dumps(payload))
-            response = self.bigip.icr_session.post(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if not folder == 'Common':
                     self.bigip.route.add_vlan_to_domain(
-                                    name=name,
-                                    folder=folder)
+                        name=name, folder=folder)
                 return True
             else:
                 Log.error('L2GRE', response.text)
@@ -111,26 +113,26 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def delete_tunnel(self, name=None, folder='Common'):
+        """ Delete tunnel """
         folder = str(folder).replace('/', '')
         # delete arp and fdb records for this tunnel first
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + name
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if const.FDB_POPULATE_STATIC_ARP:
                 if 'records' in response_obj:
                     for record in response_obj['records']:
                         self.bigip.arp.delete_by_mac(
-                                                mac_address=record['name'],
-                                                folder=folder)
+                            mac_address=record['name'], folder=folder)
             payload = dict()
             payload['records'] = []
             tunnel_link = self.bigip.icr_link(response_obj['selfLink'])
-            response = self.bigip.icr_session.put(tunnel_link,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                tunnel_link, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             response = self.bigip.icr_session.delete(tunnel_link)
             if response.status_code > 399:
                 Log.error('fdb', response.text)
@@ -141,8 +143,8 @@ class L2GRE(object):
 
         request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
         request_url += '~' + folder + '~' + name
-        response = self.bigip.icr_session.delete(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.delete(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -155,13 +157,14 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def delete_all(self, folder='Common'):
+        """ Delete all fdb entries """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
         request_url += '?$select=name,selfLink'
         request_filter = 'partition eq ' + folder
         request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -169,13 +172,13 @@ class L2GRE(object):
                     if item['name'].startswith(self.OBJ_PREFIX):
                         self.delete_all_fdb_entries(item['name'], folder)
                         response = self.bigip.icr_session.delete(
-                                       self.bigip.icr_link(item['selfLink']),
-                                       timeout=const.CONNECTION_TIMEOUT)
+                            self.bigip.icr_link(item['selfLink']),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code > 400 and \
                            response.status_code != 404:
                             Log.error('L2GRE', response.text)
                             raise exceptions.VXLANDeleteException(
-                                                               response.text)
+                                response.text)
             return True
         else:
             Log.error('self', response.text)
@@ -187,11 +190,12 @@ class L2GRE(object):
                       tunnel_name=None,
                       mac=None,
                       folder='Common'):
+        """ Add fdb entry for a tunnel """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + tunnel_name
-        response = self.bigip.icr_session.get(request_url,
-                                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'records' in response_obj:
@@ -205,7 +209,7 @@ class L2GRE(object):
                     for record in response_obj['records']:
                         if record['name'] == mac:
                             record['endpoint'] = strip_domain_address(
-                                                            record['endpoint'])
+                                record['endpoint'])
                             return record
         elif response.status_code != 404:
             Log.error('L2GRE', response.text)
@@ -239,9 +243,9 @@ class L2GRE(object):
 
         payload = dict()
         payload['records'] = records
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             if const.FDB_POPULATE_STATIC_ARP:
                 if arp_ip_address:
@@ -265,16 +269,14 @@ class L2GRE(object):
 
     @icontrol_rest_folder
     @log
-    def add_fdb_entries(self,
-                      tunnel_name=None,
-                      fdb_entries=None):
+    def add_fdb_entries(self, tunnel_name=None, fdb_entries=None):
+        """ Add fdb entries for a tunnel """
         for tunnel_name in fdb_entries:
             folder = fdb_entries[tunnel_name]['folder']
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
-            existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
-                                         mac=None,
-                                         folder=folder)
+            existing_records = self.get_fdb_entry(
+                tunnel_name=tunnel_name, mac=None, folder=folder)
             new_records = []
             new_mac_addresses = []
             new_arp_addresses = {}
@@ -292,21 +294,20 @@ class L2GRE(object):
                     new_records.append(record)
                 else:
                     if record['name'] in new_arp_addresses:
-                        del(new_arp_addresses[record['name']])
+                        del new_arp_addresses[record['name']]
 
             payload = dict()
             payload['records'] = new_records
-            response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if const.FDB_POPULATE_STATIC_ARP:
                     for mac in new_arp_addresses:
                         try:
                             self.bigip.arp.create(
                                 ip_address=new_arp_addresses[mac],
-                                mac_address=mac,
-                                folder=folder)
+                                mac_address=mac, folder=folder)
                         except Exception as e:
                             Log.error('L2GRE',
                                       'could not create static arp: %s'
@@ -324,6 +325,7 @@ class L2GRE(object):
                          mac_address=None,
                          arp_ip_address=None,
                          folder='Common'):
+        """ Delete fdb entry for a tunnel """
         folder = str(folder).replace('/', '')
         if const.FDB_POPULATE_STATIC_ARP:
             if arp_ip_address:
@@ -337,16 +339,16 @@ class L2GRE(object):
         if not records:
             return False
         original_len = len(records)
-        records = [record for record in records \
-                         if record.get('name') != mac_address]
+        records = [record for record in records
+                   if record.get('name') != mac_address]
         if original_len != len(records):
             if len(records) == 0:
                 records = None
             payload = dict()
             payload['records'] = records
-            response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -359,16 +361,14 @@ class L2GRE(object):
 
     @icontrol_rest_folder
     @log
-    def delete_fdb_entries(self,
-                           tunnel_name=None,
-                           fdb_entries=None):
+    def delete_fdb_entries(self, tunnel_name=None, fdb_entries=None):
+        """ Delete fdb entries for a tunnel """
         for tunnel_name in fdb_entries:
             folder = fdb_entries[tunnel_name]['folder']
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
-            existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
-                                         mac=None,
-                                         folder=folder)
+            existing_records = self.get_fdb_entry(
+                tunnel_name=tunnel_name, mac=None, folder=folder)
             arps_to_delete = {}
             new_records = []
 
@@ -384,15 +384,15 @@ class L2GRE(object):
                 new_records = None
             payload = dict()
             payload['records'] = new_records
-            response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if const.FDB_POPULATE_STATIC_ARP:
                     for mac in arps_to_delete:
                         self.bigip.arp.delete(
-                                      ip_address=arps_to_delete[mac],
-                                      folder='Common')
+                            ip_address=arps_to_delete[mac],
+                            folder='Common')
             return True
         else:
             Log.error('L2GRE', response.text)
@@ -401,15 +401,14 @@ class L2GRE(object):
 
     @icontrol_rest_folder
     @log
-    def delete_all_fdb_entries(self,
-                         tunnel_name=None,
-                         folder='Common'):
+    def delete_all_fdb_entries(self, tunnel_name=None, folder='Common'):
+        """ Delete all fdb entries for a tunnel """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + tunnel_name
-        response = self.bigip.icr_session.put(request_url,
-                                        data=json.dumps({'records': None}),
-                                        timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps({'records': None}),
+            timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         else:
@@ -420,20 +419,21 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def get_profiles(self, folder='Common'):
+        """ Get gre tunnel profiles """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/tunnels/gre'
         if folder:
             request_filter = 'partition eq ' + folder
             request_url += '?$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             profile_list = []
             if 'items' in return_obj:
                 for profile in return_obj['items']:
                     profile_list.append(
-                             strip_folder_and_prefix(profile['name']))
+                        strip_folder_and_prefix(profile['name']))
                 return profile_list
             else:
                 return None
@@ -449,8 +449,8 @@ class L2GRE(object):
         request_url = self.bigip.icr_url + '/net/tunnels/gre/'
         request_url += '~' + folder + '~' + name
 
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code != 404:
@@ -461,13 +461,14 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def get_tunnels(self, folder='Common'):
+        """ Get tunnels """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/tunnels/tunnel'
         if folder:
             request_filter = 'partition eq ' + folder
             request_url += '?$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             tunnel_list = []
             return_obj = json.loads(response.text)
@@ -475,7 +476,7 @@ class L2GRE(object):
                 for tunnel in return_obj['items']:
                     if tunnel['profile'].find('gre') > 0:
                         tunnel_list.append(
-                          strip_folder_and_prefix(tunnel['name']))
+                            strip_folder_and_prefix(tunnel['name']))
                 return tunnel_list
             else:
                 return None
@@ -487,14 +488,15 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def get_tunnel_by_description(self, description=None, folder='Common'):
+        """ Get tunnel by description """
         folder = str(folder).replace('/', '')
         if description:
             request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
             if folder:
                 request_filter = 'partition eq ' + folder
                 request_url += '?$filter=' + request_filter
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
@@ -510,10 +512,11 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def get_tunnel_folder(self, tunnel_name=None):
+        """ Get an existing tunnels folder """
         if tunnel_name:
             request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
@@ -529,12 +532,13 @@ class L2GRE(object):
     @icontrol_rest_folder
     @log
     def tunnel_exists(self, name=None, folder='Common'):
+        """ Return whether a tunnel exists """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
         request_url += '~' + folder + '~' + name
 
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code != 404:
@@ -544,6 +548,7 @@ class L2GRE(object):
 
     @icontrol_rest_folder
     def _in_use(self, name=None, folder=None):
+        """ Is a self ip using the vlan/tunnel ? """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/self?$select=vlan'
@@ -552,8 +557,8 @@ class L2GRE(object):
                 request_url += '&$filter=' + request_filter
             else:
                 folder = 'Common'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:

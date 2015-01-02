@@ -96,56 +96,82 @@ clean-rpms:
 	rm -rf build/bdist.linux-x86_64; \
         )
 
+BDIR := neutron/services/loadbalancer/drivers/f5/bigip
+IDIR := f5/bigip/interfaces
+NDIR := /usr/lib/python2.7/dist-packages/neutron
+pep8:
+	(cd agent; \
+         pep8 $(BDIR)/icontrol_driver.py; \
+         pep8 $(BDIR)/l2.py; \
+         pep8 $(BDIR)/selfips.py; \
+         pep8 $(BDIR)/snats.py; \
+         pep8 $(BDIR)/pools.py; \
+         pep8 $(BDIR)/vips.py; \
+         pep8 $(BDIR)/utils.py; \
+         pep8 $(IDIR)/__init__.py; \
+         pep8 $(IDIR)/arp.py; \
+         pep8 $(IDIR)/cluster.py; \
+         pep8 $(IDIR)/device.py; \
+         pep8 $(IDIR)/l2gre.py; \
+         pep8 $(IDIR)/system.py; \
+         pep8 $(IDIR)/vxlan.py; \
+        )
+
 pylint:
 	(cd agent; \
          > neutron/__init__.py; \
          > neutron/services/__init__.py; \
          > neutron/services/loadbalancer/__init__.py; \
          > neutron/services/loadbalancer/drivers/__init__.py; \
-         ln -s /usr/lib/python2.7/dist-packages/neutron/common neutron/common; \
-         ln -s /usr/lib/python2.7/dist-packages/neutron/openstack neutron/openstack; \
-         ln -s /usr/lib/python2.7/dist-packages/neutron/plugins neutron/plugins; \
-         ln -s /usr/lib/python2.7/dist-packages/neutron/services/constants neutron/services/constants; \
-         ln -s /usr/lib/python2.7/dist-packages/neutron/services/loadbalancer/constants.py neutron/services/loadbalancer/constants.py; \
+         ln -s $(NDIR)/common neutron/common; \
+         ln -s $(NDIR)/openstack neutron/openstack; \
+         ln -s $(NDIR)/plugins neutron/plugins; \
+         ln -s $(NDIR)/services/constants neutron/services/constants; \
+         ln -s $(NDIR)/services/loadbalancer/constants.py \
+               neutron/services/loadbalancer/constants.py; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py | \
+                $(BDIR)/icontrol_driver.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/l2.py | \
+                $(BDIR)/l2.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/selfips.py | \
+                $(BDIR)/selfips.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/snats.py | \
+                $(BDIR)/snats.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/pools.py | \
+                $(BDIR)/pools.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/vips.py | \
+                $(BDIR)/vips.py | \
             more; \
          pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                neutron/services/loadbalancer/drivers/f5/bigip/utils.py | \
+                $(BDIR)/utils.py | \
             more; \
          echo pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                f5/bigip/bigip_interfaces/system.py | \
+                $(IDIR)/__init__.py | \
             more; \
          echo pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                f5/bigip/bigip_interfaces/vxlan.py | \
+                $(IDIR)/arp.py | \
             more; \
          echo pylint --additional-builtins=_ \
                 --init-hook='import sys;sys.path.insert(1,".")' \
-                f5/bigip/bigip_interfaces/arp.py | \
+                $(IDIR)/system.py | \
+            more; \
+         echo pylint --additional-builtins=_ \
+                --init-hook='import sys;sys.path.insert(1,".")' \
+                $(IDIR)/vxlan.py | \
             more; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
@@ -156,22 +182,5 @@ pylint:
          rm -v neutron/services/loadbalancer/__init__.py; \
          rm -v neutron/services/__init__.py; \
          rm -v neutron/__init__.py; \
-        )
-
-pep8:
-	(cd agent; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/icontrol_driver.py; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/l2.py; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/selfips.py; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/snats.py; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/pools.py; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/vips.py; \
-         pep8 neutron/services/loadbalancer/drivers/f5/bigip/utils.py; \
-         pep8 f5/bigip/bigip_interfaces/__init__.py; \
-         pep8 f5/bigip/bigip_interfaces/arp.py; \
-         pep8 f5/bigip/bigip_interfaces/cluster.py; \
-         pep8 f5/bigip/bigip_interfaces/device.py; \
-         pep8 f5/bigip/bigip_interfaces/system.py; \
-         pep8 f5/bigip/bigip_interfaces/vxlan.py; \
         )
 
