@@ -44,6 +44,7 @@ class VirtualServer(object):
                port=None, protocol=None, vlan_name=None,
                traffic_group=None, use_snat=True,
                snat_pool=None, folder='Common', preserve_vlan_name=False):
+        """ Create vip """
 
         if name:
             folder = str(folder).replace('/', '')
@@ -73,26 +74,26 @@ class VirtualServer(object):
                     payload['sourceAddressTranslation']['type'] = 'automap'
             if not traffic_group:
                 traffic_group = \
-                      const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+                    const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
 
             request_url = self.bigip.icr_url + '/ltm/virtual/'
-            response = self.bigip.icr_session.post(request_url,
-                                          data=json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400 or response.status_code == 409:
                 request_url = self.bigip.icr_url + '/ltm/virtual-address/'
                 request_url += '~' + folder + '~' + urllib.quote(ip_address)
                 payload = dict()
                 payload['trafficGroup'] = traffic_group
-                response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                response = self.bigip.icr_session.put(
+                    request_url, data=json.dumps(payload),
+                    timeout=const.CONNECTION_TIMEOUT)
                 if response.status_code < 400:
                     return True
                 else:
                     Log.error('virtual-address', response.text)
                     raise exceptions.VirtualServerUpdateException(
-                                                                response.text)
+                        response.text)
             else:
                 Log.error('virtual', response.text)
                 raise exceptions.VirtualServerCreationException(response.text)
@@ -105,6 +106,7 @@ class VirtualServer(object):
                             traffic_group=None, use_snat=True,
                             snat_pool=None, folder='Common',
                             preserve_vlan_name=False):
+        """ Create ip forwarding vip """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -127,27 +129,27 @@ class VirtualServer(object):
                     payload['sourceAddressTranslation']['type'] = 'automap'
             if not traffic_group:
                 traffic_group = \
-                      const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+                    const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
             payload['ipForward'] = True
 
             request_url = self.bigip.icr_url + '/ltm/virtual/'
-            response = self.bigip.icr_session.post(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400 or response.status_code == 409:
                 request_url = self.bigip.icr_url + '/ltm/virtual-address/'
                 request_url += '~' + folder + '~' + urllib.quote(ip_address)
                 payload = dict()
                 payload['trafficGroup'] = traffic_group
-                response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                response = self.bigip.icr_session.put(
+                    request_url, data=json.dumps(payload),
+                    timeout=const.CONNECTION_TIMEOUT)
                 if response.status_code < 400:
                     return True
                 else:
                     Log.error('virtual-address', response.text)
                     raise exceptions.VirtualServerUpdateException(
-                                                                 response.text)
+                        response.text)
             else:
                 Log.error('virtual', response.text)
                 raise exceptions.VirtualServerCreationException(response.text)
@@ -156,10 +158,11 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def create_fastl4(self, name=None, ip_address=None, mask=None,
-               port=None, protocol=None, vlan_name=None,
-               traffic_group=None, use_snat=True,
-               snat_pool=None, folder='Common',
-               preserve_vlan_name=False):
+                      port=None, protocol=None, vlan_name=None,
+                      traffic_group=None, use_snat=True,
+                      snat_pool=None, folder='Common',
+                      preserve_vlan_name=False):
+        """ Create fast L4 vip """
 
         if name:
             folder = str(folder).replace('/', '')
@@ -189,27 +192,27 @@ class VirtualServer(object):
                     payload['sourceAddressTranslation']['type'] = 'automap'
             if not traffic_group:
                 traffic_group = \
-                      const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
+                    const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
             payload['profiles'] = ['fastL4']
 
             request_url = self.bigip.icr_url + '/ltm/virtual/'
-            response = self.bigip.icr_session.post(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400 or response.status_code == 409:
                 request_url = self.bigip.icr_url + '/ltm/virtual-address/'
                 request_url += '~' + folder + '~' + urllib.quote(ip_address)
                 payload = dict()
                 payload['trafficGroup'] = traffic_group
-                response = self.bigip.icr_session.put(request_url,
-                                         data=json.dumps(payload),
-                                         timeout=const.CONNECTION_TIMEOUT)
+                response = self.bigip.icr_session.put(
+                    request_url, data=json.dumps(payload),
+                    timeout=const.CONNECTION_TIMEOUT)
                 if response.status_code < 400:
                     return True
                 else:
                     Log.error('virtual-address', response.text)
                     raise exceptions.VirtualServerUpdateException(
-                                                                response.text)
+                        response.text)
             else:
                 Log.error('virtual', response.text)
                 raise exceptions.VirtualServerCreationException(response.text)
@@ -220,6 +223,7 @@ class VirtualServer(object):
     def add_profile(self, name=None, profile_name=None,
                     client_context=True, server_context=True,
                     folder='Common'):
+        """ Add vip profile """
         if name and profile_name:
             folder = str(folder).replace('/', '')
             found_profile = self._which_profile(profile_name, folder)
@@ -241,9 +245,9 @@ class VirtualServer(object):
                     request_url = self.bigip.icr_url + '/ltm/virtual/'
                     request_url += '~' + folder + '~' + name
                     request_url += '/profiles'
-                    response = self.bigip.icr_session.post(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                    response = self.bigip.icr_session.post(
+                        request_url, data=json.dumps(payload),
+                        timeout=const.CONNECTION_TIMEOUT)
                     if response.status_code < 400:
                         return True
                     elif response.status_code == 409:
@@ -251,7 +255,7 @@ class VirtualServer(object):
                     else:
                         Log.error('profile', response.text)
                         raise exceptions.VirtualServerCreationException(
-                                                                response.text)
+                            response.text)
         return False
 
     @icontrol_rest_folder
@@ -259,6 +263,7 @@ class VirtualServer(object):
     def remove_profile(self, name=None, profile_name=None,
                        client_context=True, server_context=True,
                        folder='Common'):
+        """ Remove vip profile """
         if name and profile_name:
             folder = str(folder).replace('/', '')
             found_profile = self._which_profile(profile_name, folder)
@@ -267,37 +272,35 @@ class VirtualServer(object):
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '/profiles?$select=name,selfLink,context'
-            response = self.bigip.icr_session.get(request_url,
-                                   timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'items' in response_obj:
                     for profile in response_obj['items']:
                         if profile_name == profile['name'] or \
-                           profile_name == strip_folder_and_prefix(
-                                                        profile['name']):
-                            if (profile['context'] == 'clientside' and \
-                                 client_context) \
-                                or \
-                               (profile['context'] == 'serverside' and \
-                                 server_context) \
-                                or \
-                               (profile['context'] == 'all' and \
-                                 client_context and server_context):
+                                profile_name == strip_folder_and_prefix(
+                                profile['name']):
+                            if (profile['context'] == 'clientside' and
+                                    client_context) or \
+                                    (profile['context'] == 'serverside' and
+                                     server_context) or \
+                                    (profile['context'] == 'all' and
+                                     client_context and server_context):
                                 profile['selfLink'] = \
-                                          profile['selfLink'].split('?')[0]
-                                del_req = self.bigip.icr_link(\
-                                                        profile['selfLink'])
+                                    profile['selfLink'].split('?')[0]
+                                del_req = self.bigip.icr_link(
+                                    profile['selfLink'])
                                 del_res = self.bigip.icr_session.delete(
-                                             del_req,
-                                             timeout=const.CONNECTION_TIMEOUT)
+                                    del_req, timeout=const.CONNECTION_TIMEOUT)
                                 if del_res.status_code < 400:
                                     return True
                                 else:
                                     Log.error('profile', del_res.text)
-                                    raise \
-                                     exceptions.VirtualServerDeleteException(
-                                                                response.text)
+                                    exps = exceptions
+                                    exp = exps.VirtualServerDeleteException
+                                    raise exp(del_res.text)
+
                 elif response.status_code == 404:
                     return True
                 else:
@@ -308,9 +311,9 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def virtual_server_has_profile(self, name=None, profile_name=None,
-                       client_context=True,
-                       server_context=True,
-                       folder='Common'):
+                                   client_context=True, server_context=True,
+                                   folder='Common'):
+        """ Does vip have profile? """
         if name and profile_name:
             folder = str(folder).replace('/', '')
             found_profile = self._which_profile(profile_name, folder)
@@ -321,30 +324,31 @@ class VirtualServer(object):
             for profile in profiles:
                 if (profile_name in profile):
                     if client_context and \
-                             profile.get(profile_name)['client_context']:
+                            profile.get(profile_name)['client_context']:
                         return True
                     if server_context and \
-                             profile.get(profile_name)['server_context']:
+                            profile.get(profile_name)['server_context']:
                         return True
                 if (common_name in profile):
                     if client_context and \
-                             profile.get(common_name)['client_context']:
+                            profile.get(common_name)['client_context']:
                         return True
                     if server_context and \
-                             profile.get(common_name)['server_context']:
+                            profile.get(common_name)['server_context']:
                         return True
         return False
 
     @icontrol_rest_folder
     @log
     def http_profile_exists(self, name=None, folder='Common'):
+        """ Does http profile exist? """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/profile/http/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=name'
-            response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -357,21 +361,22 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_profiles(self, name=None, folder='Common'):
+        """ Get profiles """
         return_profiles = []
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '/profiles'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'items' in response_obj:
                     for profile in response_obj['items']:
                         p = dict()
                         profile_name = strip_folder_and_prefix(
-                                                        profile['name'])
+                            profile['name'])
                         p[profile_name] = dict()
                         if profile['context'] == 'all':
                             p[profile_name]['client_context'] = True
@@ -391,21 +396,22 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_all_profiles(self, folder='Common'):
+        """ Get profiles """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/profile'
-        response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         return_profiles = []
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for p in response_obj['items']:
                     type_link = self.bigip.icr_link(
-                         p['reference']['link']
+                        p['reference']['link']
                         ) + '&$select=name,partition&$filter=partition eq ' \
                           + folder
-                    pr_res = self.bigip.icr_session.get(type_link,
-                                          timeout=const.CONNECTION_TIMEOUT)
+                    pr_res = self.bigip.icr_session.get(
+                        type_link, timeout=const.CONNECTION_TIMEOUT)
                     if pr_res.status_code < 400:
                         pr_res_obj = json.loads(pr_res.text)
                         if 'items' in pr_res_obj:
@@ -414,12 +420,12 @@ class VirtualServer(object):
                                     self.common_profiles[profile['name']] = 1
                                 else:
                                     self.folder_profiles[profile['name']] = \
-                                                        profile['partition']
+                                        profile['partition']
                                 return_profiles.append(profile['name'])
                     else:
                         Log.error('profile', pr_res.text)
                         raise exceptions.VirtualServerQueryException(
-                                                                pr_res.text)
+                            pr_res.text)
         elif response.status_code == 404:
             return []
         else:
@@ -432,44 +438,45 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_all_profiles(self, folder='Common'):
+        """ Delete profiles """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/profile'
-        response = self.bigip.icr_session.get(request_url,
-                                           timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for p in response_obj['items']:
                     type_link = self.bigip.icr_link(
-                         p['reference']['link']
+                        p['reference']['link']
                         ) + '&$select=name,selfLink&$filter=partition eq ' + \
                             folder
-                    pr_res = self.bigip.icr_session.get(type_link,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                    pr_res = self.bigip.icr_session.get(
+                        type_link, timeout=const.CONNECTION_TIMEOUT)
                     if pr_res.status_code < 400:
                         pr_res_obj = json.loads(pr_res.text)
                         if 'items' in pr_res_obj:
                             for profile in pr_res_obj['items']:
                                 if profile['name'].startswith(self.OBJ_PREFIX):
                                     profile['selfLink'] = \
-                                    profile['selfLink'].spit('?')[0]
+                                        profile['selfLink'].spit('?')[0]
                                     del_resp = self.bigip.icr_session.delete(
-                                            self.bigip.icr_link(
-                                                         profile['selfLink']),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                                        self.bigip.icr_link(
+                                            profile['selfLink']),
+                                        timeout=const.CONNECTION_TIMEOUT)
                                     if del_resp.status_code > 399 and \
-                                       del_resp.status_code != 404:
+                                            del_resp.status_code != 404:
                                         Log.error('profile', del_resp.text)
-                                        raise \
-                                    exceptions.VirtualServerDeleteException(
-                                                                 del_resp.text)
+                                        exps = exceptions
+                                        exp = exps.VirtualServerDeleteException
+                                        raise exp(del_resp.text)
                                     else:
                                         self.folder_profiles = {}
                                         self.common_profiles = {}
                     else:
                         Log.error('profile', pr_res.text)
                         raise exceptions.VirtualServerQueryException(
-                                                                pr_res.text)
+                            pr_res.text)
         elif response.status_code == 404:
             True
         else:
@@ -479,46 +486,47 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_all_profiles_like(self, match=None, folder='Common'):
+        """ Delete profiles that match by name """
         if not match:
             return False
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/profile'
-        response = self.bigip.icr_session.get(request_url,
-                                           timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for p in response_obj['items']:
                     type_link = self.bigip.icr_link(
-                         p['reference']['link']
+                        p['reference']['link']
                         ) + '&$select=name,selfLink&$filter=partition eq ' + \
                             folder
-                    pr_res = self.bigip.icr_session.get(type_link,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                    pr_res = self.bigip.icr_session.get(
+                        type_link, timeout=const.CONNECTION_TIMEOUT)
                     if pr_res.status_code < 400:
                         pr_res_obj = json.loads(pr_res.text)
                         if 'items' in pr_res_obj:
                             for profile in pr_res_obj['items']:
                                 if profile['name'].find(match) > -1:
                                     profile['selfLink'] = \
-                                    profile['selfLink'].spit('?')[0]
+                                        profile['selfLink'].spit('?')[0]
                                     del_resp = self.bigip.icr_session.delete(
-                                            self.bigip.icr_link(
-                                                         profile['selfLink']),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                                        self.bigip.icr_link(
+                                            profile['selfLink']),
+                                        timeout=const.CONNECTION_TIMEOUT)
                                     if del_resp.status_code > 399 and \
                                        del_resp.status_code != 404:
                                         Log.error('profile', del_resp.text)
-                                        raise \
-                                    exceptions.VirtualServerDeleteException(
-                                                                 del_resp.text)
+                                        exps = exceptions
+                                        exp = exps.VirtualServerDeleteException
+                                        raise exp(del_resp.text)
                                     else:
                                         self.folder_profiles = {}
                                         self.common_profiles = {}
                     else:
                         Log.error('profile', pr_res.text)
                         raise exceptions.VirtualServerQueryException(
-                                                                pr_res.text)
+                            pr_res.text)
         elif response.status_code == 404:
             True
         else:
@@ -530,6 +538,7 @@ class VirtualServer(object):
     def create_http_profile(self, name=None, xff=True, pipelining=False,
                             unknown_verbs=False, server_agent=None,
                             folder='Common'):
+        """ Create http profile """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -549,9 +558,9 @@ class VirtualServer(object):
             else:
                 enforcement['unknownMethod'] = 'reject'
             request_url = self.bigip.icr_url + '/ltm/profile/http'
-            response = self.bigip.icr_session.post(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 self.folder_profiles[name] = folder
                 return True
@@ -565,20 +574,21 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_all_http_profiles(self, folder='Common'):
+        """ Get all http profiles """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/profile/http'
         request_url += '?$select=name'
         request_url += '&$filter=partition eq ' + folder
 
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         return_profiles = []
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for profile in response_obj['items']:
                     return_profiles.append(
-                             strip_folder_and_prefix(profile['name']))
+                        strip_folder_and_prefix(profile['name']))
         elif response.status_code == 404:
             return []
         else:
@@ -588,13 +598,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_all_http_profiles(self, folder='Common'):
+        """ Delete all http profiles """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/profile/http'
         request_url += '?$select=name,selfLink'
         request_url += '&$filter=partition eq ' + folder
 
-        response = self.bigip.icr_session.get(request_url,
-                                          timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -602,13 +613,13 @@ class VirtualServer(object):
                     if profile['name'].startswith(self.OBJ_PREFIX):
                         profile['selfLink'] = profile['selfLink'].split('?')[0]
                         response = self.bigip.icr_session.delete(
-                                  self.bigip.icr_link(profile['selfLink']),
-                                  timeout=const.CONNECTION_TIMEOUT)
+                            self.bigip.icr_link(profile['selfLink']),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code > 399 and \
                            response.status_code != 404:
                             Log.error('persistence', response.text)
                             raise exceptions.VirtualServerDeleteException(
-                                                              response.text)
+                                response.text)
                         else:
                             self.common_profiles = {}
                             self.folder_profiles = {}
@@ -621,6 +632,7 @@ class VirtualServer(object):
     @log
     def create_cookie_profile(self, name=None,
                               cookie_name=None, folder='Common'):
+        """ Create cookie profile """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -629,9 +641,9 @@ class VirtualServer(object):
                 payload['cookieName'] = cookie_name
             payload['partition'] = folder
             request_url = self.bigip.icr_url + '/ltm/persistence/cookie'
-            response = self.bigip.icr_session.post(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 self.folder_persistence_profiles[name] = folder
                 return True
@@ -645,37 +657,38 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_all_persistence_profiles(self, folder='Common'):
+        """ Get all persistence profiles """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence'
-        response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         return_profiles = []
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for p in response_obj['items']:
                     type_link = self.bigip.icr_link(
-                         p['reference']['link']
+                        p['reference']['link']
                         ) + '&$select=name,partition&$filter=partition eq ' \
                           + folder
-                    pr_res = self.bigip.icr_session.get(type_link,
-                                          timeout=const.CONNECTION_TIMEOUT)
+                    pr_res = self.bigip.icr_session.get(
+                        type_link, timeout=const.CONNECTION_TIMEOUT)
                     if pr_res.status_code < 400:
                         pr_res_obj = json.loads(pr_res.text)
                         if 'items' in pr_res_obj:
                             for profile in pr_res_obj['items']:
                                 if profile['partition'] == 'Common':
                                     self.common_persistence_profiles[
-                                                        profile['name']] = 1
+                                        profile['name']] = 1
                                 else:
                                     self.folder_persistence_profiles[
-                                                        profile['name']] = \
-                                                        profile['partition']
+                                        profile['name']] = \
+                                        profile['partition']
                                 return_profiles.append(profile['name'])
                     else:
                         Log.error('persistence', pr_res.text)
                         raise exceptions.VirtualServerQueryException(
-                                                                pr_res.text)
+                            pr_res.text)
         elif response.status_code == 404:
             return []
         else:
@@ -688,44 +701,46 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_all_presistence_profiles(self, folder='Common'):
+        """ Delete all persistence profiles """
+        timeout = const.CONNECTION_TIMEOUT
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence'
-        response = self.bigip.icr_session.get(request_url,
-                                           timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=timeout)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for p in response_obj['items']:
                     type_link = self.bigip.icr_link(
-                         p['reference']['link']
+                        p['reference']['link']
                         ) + '&$select=name,selfLink&$filter=partition eq ' + \
                             folder
-                    pr_res = self.bigip.icr_session.get(type_link,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                    pr_res = self.bigip.icr_session.get(
+                        type_link, timeout=timeout)
                     if pr_res.status_code < 400:
                         pr_res_obj = json.loads(pr_res.text)
                         if 'items' in pr_res_obj:
                             for profile in pr_res_obj['items']:
                                 if profile['name'].startswith(self.OBJ_PREFIX):
                                     profile['selfLink'] = \
-                                              profile['selfLink'].split('?')[0]
+                                        profile['selfLink'].split('?')[0]
                                     del_resp = self.bigip.icr_session.delete(
-                                            self.bigip.icr_link(
-                                                         profile['selfLink']),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                                        self.bigip.icr_link(
+                                            profile['selfLink']),
+                                        timeout=timeout)
                                     if del_resp.status_code > 399 and \
                                        del_resp.status_code != 404:
                                         Log.error('persistence', del_resp.text)
-                                        raise \
-                                    exceptions.VirtualServerDeleteException(
-                                                                 del_resp.text)
+                                        exps = exceptions
+                                        exp = exps.VirtualServerDeleteException
+                                        raise exp(del_resp.text)
                                     else:
                                         self.folder_persistence_profiles = {}
                                         self.common_persistence_profiles = {}
                     else:
                         Log.error('persistence', pr_res.text)
                         raise exceptions.VirtualServerQueryException(
-                                                                pr_res.text)
+                            pr_res.text)
         elif response.status_code == 404:
             True
         else:
@@ -735,12 +750,13 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def cookie_persist_profile_exists(self, name=None, folder='Common'):
+        """ Does cookie persistence profile exist? """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence/cookie/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -752,20 +768,21 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_cookie_persist_profile(self, name=None, folder='Common'):
+        """ Delete cookie persistence profile """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence/cookie/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name,selfLink'
-        response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if response_obj['name'] == name:
                 response_obj['selfLink'] = \
-                                  response_obj['selfLink'].split('?')[0]
+                    response_obj['selfLink'].split('?')[0]
                 del_req = self.bigip.icr_link(response_obj['selfLink'])
-                del_res = self.bigip.icr_session.delete(del_req,
-                                      timeout=const.CONNECTION_TIMEOUT)
+                del_res = self.bigip.icr_session.delete(
+                    del_req, timeout=const.CONNECTION_TIMEOUT)
                 if del_res.status_code < 400:
                     if name in self.folder_persistence_profiles:
                         del(self.folder_persistence_profiles[name])
@@ -783,6 +800,7 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def create_uie_profile(self, name=None, rule_name=None, folder='Common'):
+        """ Create uie profile """
         if name and rule_name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -790,9 +808,9 @@ class VirtualServer(object):
             payload['rule'] = rule_name
             payload['partition'] = folder
             request_url = self.bigip.icr_url + '/ltm/persistence/universal'
-            response = self.bigip.icr_session.post(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 self.folder_persistence_profiles[name] = folder
                 return True
@@ -806,12 +824,13 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def uie_persist_profile_exists(self, name=None, folder='Common'):
+        """ Does uie profile exist? """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence/universal/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -823,20 +842,21 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_uie_persist_profile(self, name=None, folder='Common'):
+        """ Delete uie profile """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence/universal/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name,selfLink'
-        response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if response_obj['name'] == name:
                 response_obj['selfLink'] = \
-                        response_obj['selfLink'].split('?')[0]
+                    response_obj['selfLink'].split('?')[0]
                 del_req = self.bigip.icr_link(response_obj['selfLink'])
-                del_res = self.bigip.icr_session.delete(del_req,
-                                      timeout=const.CONNECTION_TIMEOUT)
+                del_res = self.bigip.icr_session.delete(
+                    del_req, timeout=const.CONNECTION_TIMEOUT)
                 if del_res.status_code < 400:
                     if name in self.folder_persistence_profiles:
                         del(self.folder_persistence_profiles[name])
@@ -854,12 +874,13 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_persist_profile(self, name=None, folder='Common'):
+        """ Delete persist profile """
         folder = str(folder).replace('/', '')
         link = self.get_persistence_link(name, folder)
         if link:
             link = link.split('?')[0]
-            response = self.bigip.icr_session.delete(link,
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                link, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if name in self.folder_persistence_profiles:
                     del(self.folder_persistence_profiles[name])
@@ -875,46 +896,47 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_persist_profile_like(self, match=None, folder='Common'):
+        """ Delete persist profile """
         if not match:
             return False
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/persistence'
-        response = self.bigip.icr_session.get(request_url,
-                                           timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for p in response_obj['items']:
                     type_link = self.bigip.icr_link(
-                         p['reference']['link']
+                        p['reference']['link']
                         ) + '&$select=name,selfLink&$filter=partition eq ' + \
                             folder
-                    pr_res = self.bigip.icr_session.get(type_link,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                    pr_res = self.bigip.icr_session.get(
+                        type_link, timeout=const.CONNECTION_TIMEOUT)
                     if pr_res.status_code < 400:
                         pr_res_obj = json.loads(pr_res.text)
                         if 'items' in pr_res_obj:
                             for profile in pr_res_obj['items']:
                                 if profile['name'].find(match) > -1:
                                     profile['selfLink'] = \
-                                              profile['selfLink'].split('?')[0]
+                                        profile['selfLink'].split('?')[0]
                                     del_resp = self.bigip.icr_session.delete(
-                                            self.bigip.icr_link(
-                                                         profile['selfLink']),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                                        self.bigip.icr_link(
+                                            profile['selfLink']),
+                                        timeout=const.CONNECTION_TIMEOUT)
                                     if del_resp.status_code > 399 and \
-                                       del_resp.status_code != 404:
+                                            del_resp.status_code != 404:
                                         Log.error('persistence', del_resp.text)
-                                        raise \
-                                    exceptions.VirtualServerDeleteException(
-                                                                 del_resp.text)
+                                        exps = exceptions
+                                        exp = exps.VirtualServerDeleteException
+                                        raise exp(del_resp.text)
                                     else:
                                         self.folder_persistence_profiles = {}
                                         self.common_persistence_profiles = {}
                     else:
                         Log.error('persistence', pr_res.text)
                         raise exceptions.VirtualServerQueryException(
-                                                                pr_res.text)
+                            pr_res.text)
         elif response.status_code == 404:
             True
         else:
@@ -924,24 +946,25 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_profile_link(self, name=None, folder='Common'):
+        """ Get profile link """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/profile/'
-        response = self.bigip.icr_session.get(request_url,
-                                           timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             for refs in response_obj['items']:
                 link = self.bigip.icr_link(refs['reference']['link'])
                 link += '&$select=name,fullPath,selfLink'
-                profile_resp = self.bigip.icr_session.get(link,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                profile_resp = self.bigip.icr_session.get(
+                    link, timeout=const.CONNECTION_TIMEOUT)
                 if profile_resp.status_code < 400:
                     profile_obj = json.loads(profile_resp.text)
                     if 'items' in profile_obj:
                         for profile in profile_obj['items']:
                             if profile['name'] == name:
                                 return self.bigip.icr_link(
-                                                    profile['selfLink'])
+                                    profile['selfLink'])
         elif response.status_code == 404:
             return None
         else:
@@ -950,24 +973,25 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_persistence_link(self, name=None):
+        """ Get persistence link """
         if name:
             request_url = self.bigip.icr_url + '/ltm/persistence/'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 for refs in response_obj['items']:
                     link = self.bigip.icr_link(refs['reference']['link'])
                     link += '&$select=name,partition,fullPath,selfLink'
-                    profile_resp = self.bigip.icr_session.get(link,
-                                        timeout=const.CONNECTION_TIMEOUT)
+                    profile_resp = self.bigip.icr_session.get(
+                        link, timeout=const.CONNECTION_TIMEOUT)
                     if profile_resp.status_code < 400:
                         profile_obj = json.loads(profile_resp.text)
                         if 'items' in profile_obj:
                             for profile in profile_obj['items']:
                                 if profile['name'] == name:
                                     return self.bigip.icr_link(
-                                                        profile['selfLink'])
+                                        profile['selfLink'])
         elif response.status_code == 404:
             return None
         else:
@@ -977,13 +1001,14 @@ class VirtualServer(object):
     @log
     def virtual_server_has_rule(self, name=None,
                                 rule_name=None, folder='Common'):
+        """ Does vip have rule? """
         if name and rule_name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=rules'
-            response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'rules' in response_obj:
@@ -1001,14 +1026,15 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def add_rule(self, name=None, rule_name=None,
-                     priority=500, folder='Common'):
+                 priority=500, folder='Common'):
+        """ Add rule to vip """
         if name and rule_name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=rules'
-            response = self.bigip.icr_session.get(request_url,
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'rules' in response_obj:
@@ -1023,15 +1049,15 @@ class VirtualServer(object):
                         Log.debug('virtual-server', 'add rule body: %s'
                                   % response_obj)
 
-                        response = self.bigip.icr_session.put(request_url,
-                                           data=json.dumps(rules),
-                                           timeout=const.CONNECTION_TIMEOUT)
+                        response = self.bigip.icr_session.put(
+                            request_url, data=json.dumps(rules),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code < 400:
                             return True
                         else:
                             Log.error('virtual', response.text)
                             raise exceptions.VirtualServerUpdateException(
-                                                                response.text)
+                                response.text)
                     else:
                         # rule was already assigned to this virtual server
                         return True
@@ -1040,15 +1066,15 @@ class VirtualServer(object):
                     rules = {'rules': ['/' + folder + '/' + rule_name]}
                     request_url = self.bigip.icr_url + '/ltm/virtual/'
                     request_url += '~' + folder + '~' + name
-                    response = self.bigip.icr_session.put(request_url,
-                                              data=json.dumps(rules),
-                                              timeout=const.CONNECTION_TIMEOUT)
+                    response = self.bigip.icr_session.put(
+                        request_url, data=json.dumps(rules),
+                        timeout=const.CONNECTION_TIMEOUT)
                     if response.status_code < 400:
                         return True
                     else:
                         Log.error('virtual', response.text)
                         raise exceptions.VirtualServerUpdateException(
-                                                              response.text)
+                            response.text)
 
             elif response.status_code == 404:
                 return False
@@ -1061,13 +1087,14 @@ class VirtualServer(object):
     @log
     def remove_rule(self, name=None, rule_name=None,
                     priority=500, folder='Common'):
+        """ Remove rule from vip """
         if name and rule_name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=rules'
-            response = self.bigip.icr_session.get(request_url,
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'rules' in response_obj:
@@ -1078,15 +1105,15 @@ class VirtualServer(object):
                         rules = {'rules': rules_list}
                         request_url = self.bigip.icr_url + '/ltm/virtual/'
                         request_url += '~' + folder + '~' + name
-                        response = self.bigip.icr_session.put(request_url,
-                                             data=json.dumps(rules),
-                                             timeout=const.CONNECTION_TIMEOUT)
+                        response = self.bigip.icr_session.put(
+                            request_url, data=json.dumps(rules),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code < 400:
                             return True
                         else:
                             Log.error('virtual', response.text)
                             raise exceptions.VirtualServerUpdateException(
-                                                                response.text)
+                                response.text)
                     else:
                         # rule not assigned
                         return True
@@ -1103,7 +1130,8 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def set_persist_profile(self, name=None, profile_name=None,
-                                folder='Common'):
+                            folder='Common'):
+        """ Set persist profile on vip """
         if name and profile_name:
             folder = str(folder).replace('/', '')
             found_profile = self._which_persistence_profile(profile_name,
@@ -1114,9 +1142,9 @@ class VirtualServer(object):
             payload['persist'] = [{'name': profile_name}]
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                          json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1128,6 +1156,7 @@ class VirtualServer(object):
     @log
     def set_fallback_persist_profile(self, name=None, profile_name=None,
                                      folder='Common'):
+        """ Set fallback persist profile on vip """
         if name and profile_name:
             folder = str(folder).replace('/', '')
             found_profile = self._which_persistence_profile(profile_name,
@@ -1136,12 +1165,12 @@ class VirtualServer(object):
                 profile_name = found_profile
             payload = dict()
             payload['fallbackPersistence'] = \
-                                strip_folder_and_prefix(profile_name)
+                strip_folder_and_prefix(profile_name)
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                          json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1152,6 +1181,7 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def remove_all_persist_profiles(self, name=None, folder='Common'):
+        """ Remove persist profiles from vip """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -1159,9 +1189,9 @@ class VirtualServer(object):
             payload['persist'] = []
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1173,6 +1203,7 @@ class VirtualServer(object):
     @log
     def remove_and_delete_persist_profile(self, name=None,
                                           profile_name=None, folder='Common'):
+        """ Remove and delete persist profiles """
         if name and profile_name:
             folder = str(folder).replace('/', '')
             self.remove_all_persist_profiles(name, folder)
@@ -1182,15 +1213,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def enable_virtual_server(self, name=None, folder='Common'):
+        """ Enable vip """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['enabled'] = True
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                          json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1201,15 +1233,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def disable_virtual_server(self, name=None, folder='Common'):
+        """ Disable vip """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['disabled'] = True
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                          json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1220,12 +1253,13 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete(self, name=None, folder='Common'):
+        """ Delete vip """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.delete(request_url,
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -1238,20 +1272,20 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_virtual_servers(self, folder='Common'):
+        """ Get vips """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/virtual'
         request_url += '?$select=name'
         request_url += '&$filter=partition eq ' + folder
 
-        response = self.bigip.icr_session.get(request_url,
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         vs_names = []
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for vs in return_obj['items']:
-                    vs_names.append(
-                                strip_folder_and_prefix(vs['name']))
+                    vs_names.append(strip_folder_and_prefix(vs['name']))
         elif response.status_code != 404:
             Log.error('virtual', response.text)
             raise exceptions.VirtualServerQueryException(response.text)
@@ -1262,22 +1296,22 @@ class VirtualServer(object):
     def get_virtual_servers_by_pool_name(self,
                                          pool_name=None,
                                          folder='Common'):
+        """ Get vips by pool name """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/virtual'
         request_url += '?$select=name,pool'
         request_url += '&$filter=partition eq ' + folder
 
-        response = self.bigip.icr_session.get(request_url,
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         vs_names = []
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for vs in return_obj['items']:
-                    if 'pool' in vs and os.path.basename(vs['pool']) \
-                                                           == pool_name:
-                        vs_names.append(
-                                strip_folder_and_prefix(vs['name']))
+                    if 'pool' in vs and \
+                            os.path.basename(vs['pool']) == pool_name:
+                        vs_names.append(strip_folder_and_prefix(vs['name']))
         elif response.status_code != 404:
             Log.error('virtual', response.text)
             raise exceptions.VirtualServerQueryException(response.text)
@@ -1286,13 +1320,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def delete_all(self, folder='Common'):
+        """ Delete vips """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/virtual/'
         request_url += '?$select=name,selfLink'
         request_filter = 'partition eq ' + folder
         request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                            timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -1300,13 +1335,13 @@ class VirtualServer(object):
                     if item['name'].startswith(self.OBJ_PREFIX):
                         item['selfLink'] = item['selfLink'].split('?')[0]
                         response = self.bigip.icr_session.delete(
-                                       self.bigip.icr_link(item['selfLink']),
-                                       timeout=const.CONNECTION_TIMEOUT)
+                            self.bigip.icr_link(item['selfLink']),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code > 400 and \
                            response.status_code != 404:
                             Log.error('virtual', response.text)
                             raise exceptions.VirtualServerDeleteException(
-                                                              response.text)
+                                response.text)
             return True
         elif response.status_code != 404:
             Log.error('rule', response.text)
@@ -1316,13 +1351,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_pool(self, name=None, folder='Common'):
+        """ Get pool """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=pool'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'pool' in response_obj:
@@ -1339,15 +1375,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def set_pool(self, name=None, pool_name=None, folder='Common'):
+        """ Set pool on vip """
         if name and pool_name:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['pool'] = pool_name
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                          json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1360,6 +1397,7 @@ class VirtualServer(object):
     @log
     def set_addr_port(self, name=None, ip_address=None,
                       port=None, folder='Common'):
+        """ Set vip addr and port """
         if name and ip_address:
             if not port:
                 port = 0
@@ -1374,9 +1412,9 @@ class VirtualServer(object):
             payload['destination'] = ip_address + ":" + port
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1387,18 +1425,19 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_addr(self, name=None, folder='Common'):
+        """ Get vip addr """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=destination'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
                     dest = os.path.basename(
-                                response_obj['destination']).split(':')
+                        response_obj['destination']).split(':')
                     return strip_domain_address(dest[0])
                 else:
                     return None
@@ -1412,18 +1451,19 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_port(self, name=None, folder='Common'):
+        """ Get vip port """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=destination'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
                     dest = os.path.basename(
-                                response_obj['destination']).split(':')
+                        response_obj['destination']).split(':')
                     return dest[1]
                 else:
                     return -1
@@ -1438,15 +1478,16 @@ class VirtualServer(object):
     @domain_address
     @log
     def set_mask(self, name=None, netmask=None, folder='Common'):
+        """ Set vip mask """
         if name and netmask:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['mask'] = netmask
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                          json.dumps(payload),
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1457,13 +1498,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_mask(self, name=None, folder='Common'):
+        """ Get vip mask """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=mask'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'mask' in response_obj:
@@ -1480,15 +1522,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def set_protocol(self, name=None, protocol=None, folder='Common'):
+        """ Set vip protocol """
         if name and protocol:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['ipProtocol'] = protocol.lower()
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1499,13 +1542,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_protocol(self, name=None, folder='Common'):
+        """ Get vip protocol """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=ipProtocol'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'ipProtocol' in response_obj:
@@ -1522,15 +1566,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def set_description(self, name=None, description=None, folder='Common'):
+        """ Set vip description """
         if name and description:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['description'] = description
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1541,13 +1586,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_description(self, name=None, folder='Common'):
+        """ Get vip description """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=description'
-            response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'description' in response_obj:
@@ -1565,13 +1611,14 @@ class VirtualServer(object):
     @log
     def set_traffic_group(self, name=None, traffic_group=None,
                           folder='Common'):
+        """ Set vip traffic group """
         if name and traffic_group:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=destination'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
@@ -1580,15 +1627,15 @@ class VirtualServer(object):
                     va_req += urllib.quote(address_port[0]).replace('/', '~')
                     payload = dict()
                     payload['trafficGroup'] = traffic_group
-                    va_response = self.bigip.icr_session.put(va_req,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                    va_response = self.bigip.icr_session.put(
+                        va_req, data=json.dumps(payload),
+                        timeout=const.CONNECTION_TIMEOUT)
                     if va_response.status_code < 400:
                         return True
                     else:
                         Log.error('virtual-address', va_response.text)
                         raise exceptions.VirtualServerUpdateException(
-                                                            va_response.text)
+                            va_response.text)
             else:
                 Log.error('virtual', response.text)
                 raise exceptions.VirtualServerQueryException(response.text)
@@ -1597,13 +1644,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_traffic_group(self, name=None, folder='Common'):
+        """ Get vip traffic group """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=destination'
-            response = self.bigip.icr_session.get(request_url,
-                                       timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
@@ -1611,16 +1659,16 @@ class VirtualServer(object):
                     va_req = self.bigip.icr_url + '/ltm/virtual-address/'
                     va_req += urllib.quote(address_port[0]).replace('/', '~')
                     va_req += '?$select=trafficGroup'
-                    va_response = self.bigip.icr_session.get(va_req,
-                                           timeout=const.CONNECTION_TIMEOUT)
+                    va_response = self.bigip.icr_session.get(
+                        va_req, timeout=const.CONNECTION_TIMEOUT)
                     if va_response.status_code < 400:
                         va_response_obj = json.loads(va_response.text)
                         return os.path.basename(
-                                            va_response_obj['trafficGroup'])
+                            va_response_obj['trafficGroup'])
                     else:
                         Log.error('virtual-address', va_response.text)
                         raise exceptions.VirtualServerQueryException(
-                                                            va_response.text)
+                            va_response.text)
             else:
                 Log.error('virtual', response.text)
                 raise exceptions.VirtualServerQueryException(response.text)
@@ -1630,15 +1678,16 @@ class VirtualServer(object):
     @log
     def set_connection_limit(self, name=None, connection_limit=0,
                              folder='Common'):
+        """ Set vip connection limit """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['connectionLimit'] = connection_limit
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1650,13 +1699,14 @@ class VirtualServer(object):
     @log
     def get_connection_limit(self, name=None,
                              folder='Common'):
+        """ Get vip connection limit """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=connectionLimit'
-            response = self.bigip.icr_session.get(request_url,
-                                         timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'connectionLimit' in response_obj:
@@ -1673,15 +1723,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def set_snat_automap(self, name=None, folder='Common'):
+        """ Set vip snat automap """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['sourceAddressTranslation'] = {"type": "automap"}
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           data=json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1692,6 +1743,7 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def set_snat_pool(self, name=None, pool_name=None, folder='Common'):
+        """ Set vip snat pool """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -1699,9 +1751,9 @@ class VirtualServer(object):
                                                    "pool": pool_name}
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           data=json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1712,15 +1764,16 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def remove_snat(self, name=None, folder='Common'):
+        """ Set vip snat """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
             payload['sourceAddressTranslation'] = {"type": "none"}
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(request_url,
-                                           data=json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -1733,13 +1786,14 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_statistics(self, name=None, folder='Common'):
+        """ Get vip statistics """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             request_url += '/stats'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             return_stats = {}
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
@@ -1760,6 +1814,7 @@ class VirtualServer(object):
         return None
 
     def _get_rest_protocol(self, protocol):
+        """ Get vip protocol """
         if str(protocol).lower() == 'tcp':
             return 'tcp'
         elif str(protocol).lower() == 'udp':
@@ -1778,6 +1833,7 @@ class VirtualServer(object):
             return 'tcp'
 
     def _get_icontrol_stat(self, name, value):
+        """ Get vip stats """
         if name == "clientside.bitsIn":
             return ('STATISTIC_CLIENT_SIDE_BYTES_IN', (value * 8))
         elif name == "clientside.bitsOut":
@@ -1845,6 +1901,7 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def get_virtual_service_insertion(self, folder='Common'):
+        """ Get vips """
         folder = str(folder).replace('/', '')
         virtual_services = []
         request_url = self.bigip.icr_url + '/ltm/virtual'
@@ -1852,8 +1909,8 @@ class VirtualServer(object):
         if folder:
             request_filter = 'partition eq ' + folder
             request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                          timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -1877,13 +1934,14 @@ class VirtualServer(object):
     @log
     def _get_virtual_address_traffic_group(self, named_address=None,
                                            folder='Common'):
+        """ Get vip address traffic group """
         if named_address:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/virtual-address/'
             request_url += '~' + folder + '~' + urllib.quote(named_address)
             request_url += '?$select=trafficGroup'
-            response = self.bigip.icr_session.get(request_url,
-                                          timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'trafficGroup' in response_obj:
@@ -1897,6 +1955,7 @@ class VirtualServer(object):
     def _set_virtual_address_traffic_group(self, named_address=None,
                                            traffic_group=None,
                                            folder='Common'):
+        """ Set vip address traffic group """
         if named_address:
             folder = str(folder).replace('/', '')
             if not traffic_group:
@@ -1905,9 +1964,9 @@ class VirtualServer(object):
             payload['trafficGroup'] = traffic_group
             request_url = self.bigip.icr_url + '/ltm/virtual-address/'
             request_url += '~' + folder + '~' + urllib.quote(named_address)
-            response = self.bigip.icr_session.put(request_url,
-                                           data=json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -1918,12 +1977,13 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def exists(self, name=None, folder='Common'):
+        """ Does vip exist? """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/virtual/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                                     timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -1935,12 +1995,13 @@ class VirtualServer(object):
     @icontrol_rest_folder
     @log
     def virtual_address_exists(self, named_address=None, folder='Common'):
+        """ Does vip address exist? """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/virtual-address/'
         request_url += '~' + folder + '~' + urllib.quote(named_address)
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code == 404:
@@ -1950,6 +2011,7 @@ class VirtualServer(object):
             raise exceptions.VirtualServerQueryException(response.text)
 
     def _which_profile(self, profile_name=None, folder='Common'):
+        """ which profile """
         if not self.common_profiles:
             Log.debug('profiles', 'getting common profile cache')
             self.get_all_profiles(folder='Common')
@@ -1980,6 +2042,7 @@ class VirtualServer(object):
         return None
 
     def _which_persistence_profile(self, profile_name=None, folder='Common'):
+        """ which persistence profile """
         if not self.common_persistence_profiles:
             self.get_all_persistence_profiles(folder='Common')
             Log.debug('persistence',
@@ -1988,7 +2051,7 @@ class VirtualServer(object):
             if not folder in self.folder_persistence_profiles.values():
                 self.get_all_persistence_profiles(folder=folder)
                 Log.debug('persistence',
-                      'getting persistence profile cache for %s' % folder)
+                          'getting persistence profile cache for %s' % folder)
 
         if profile_name in self.folder_persistence_profiles:
             return profile_name

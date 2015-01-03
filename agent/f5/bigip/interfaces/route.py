@@ -34,6 +34,7 @@ class Route(object):
     @log
     def create(self, name=None, dest_ip_address=None, dest_mask=None,
                gw_ip_address=None, folder='Common'):
+        """ Create Route Entry """
         if dest_ip_address and dest_mask and gw_ip_address:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -42,9 +43,9 @@ class Route(object):
             payload['gw'] = gw_ip_address
             payload['network'] = dest_ip_address + "/" + dest_mask
             request_url = self.bigip.icr_url + '/net/route/'
-            response = self.bigip.icr_session.post(request_url,
-                            data=json.dumps(payload),
-                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 409:
@@ -57,12 +58,13 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def delete(self, name=None, folder='Common'):
+        """ Delete Route Entry """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/route/'
         request_url += '~' + folder + '~' + name
 
-        response = self.bigip.icr_session.delete(request_url,
-                               timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.delete(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
 
         if response.status_code < 400:
             return True
@@ -76,26 +78,27 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def delete_all(self, folder='Common'):
+        """ Delete Route Entries """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/route/'
         request_url += '?$select=name,selfLink'
         request_filter = 'partition eq ' + folder
         request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                             timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for item in response_obj['items']:
                     if item['name'].startswith(self.OBJ_PREFIX):
                         response = self.bigip.icr_session.delete(
-                                       self.bigip.icr_link(item['selfLink']),
-                                       timeout=const.CONNECTION_TIMEOUT)
+                            self.bigip.icr_link(item['selfLink']),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code > 400 and \
                            response.status_code != 404:
                             Log.error('route', response.text)
                             raise exceptions.RouteDeleteException(
-                                                                response.text)
+                                response.text)
             return True
         else:
             Log.error('route', response.text)
@@ -105,14 +108,15 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def _get_vlans_in_domain(self, folder='Common'):
+        """ Get VLANs in Domain """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + \
-                      '/net/route-domain?$select=name,partition,vlans'
+            '/net/route-domain?$select=name,partition,vlans'
         if folder:
             request_filter = 'partition eq ' + folder
             request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
 
         if response.status_code < 400:
             response_obj = json.loads(response.text)
@@ -135,6 +139,7 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def add_vlan_to_domain(self, name=None, folder='Common'):
+        """ Add VLANs to Domain """
         folder = str(folder).replace('/', '')
         existing_vlans = self._get_vlans_in_domain(folder)
         if not name in existing_vlans:
@@ -143,9 +148,9 @@ class Route(object):
             vlans['vlans'] = existing_vlans
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + folder
-            response = self.bigip.icr_session.put(request_url,
-                                   data=json.dumps(vlans),
-                                   timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(vlans),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -156,6 +161,7 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def remove_vlan_from_domain(self, name=None, folder='Common'):
+        """ Remove VLANs from Domain """
         folder = str(folder).replace('/', '')
         existing_vlans = self._get_vlans_in_domain(folder)
         if name in existing_vlans:
@@ -164,9 +170,9 @@ class Route(object):
             vlans['vlans'] = existing_vlans
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + folder
-            response = self.bigip.icr_session.put(request_url,
-                                   data=json.dumps(vlans),
-                                   timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(vlans),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -177,6 +183,7 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def create_domain(self, folder='Common'):
+        """ Create route domain """
         folder = str(folder).replace('/', '')
         if not folder == 'Common':
             payload = dict()
@@ -189,9 +196,9 @@ class Route(object):
                 payload['strict'] = 'disabled'
                 payload['parent'] = '/Common/0'
             request_url = self.bigip.icr_url + '/net/route-domain/'
-            response = self.bigip.icr_session.post(request_url,
-                                    data=json.dumps(payload),
-                                    timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 409:
@@ -205,12 +212,13 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def delete_domain(self, folder='Common'):
+        """ Delete route domain """
         folder = str(folder).replace('/', '')
         if not folder == 'Common':
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + folder
-            response = self.bigip.icr_session.delete(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code != 404:
@@ -221,6 +229,7 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def domain_exists(self, folder='Common'):
+        """ Does route domain exist? """
         folder = str(folder).replace('/', '')
         if folder == 'Common':
             return True
@@ -228,8 +237,8 @@ class Route(object):
         request_url += '~' + folder + '~' + folder
         request_url += '?$select=name'
 
-        response = self.bigip.icr_session.get(request_url,
-                             timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code != 404:
@@ -240,6 +249,7 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def get_domain(self, folder='Common'):
+        """ Get route domain """
         folder = str(folder).replace('/', '')
         if folder == 'Common':
             return 0
@@ -249,8 +259,8 @@ class Route(object):
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + folder
             request_url += '?$select=id'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'id' in response_obj:
@@ -264,13 +274,14 @@ class Route(object):
     @icontrol_rest_folder
     @log
     def exists(self, name=None, folder='Common'):
+        """ Does route domain exist? """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/route/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
 
-        response = self.bigip.icr_session.get(request_url,
-                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code != 404:
@@ -279,9 +290,10 @@ class Route(object):
         return False
 
     def _get_next_domain_id(self):
+        """ Get next route domain id """
         request_url = self.bigip.icr_url + '/net/route-domain?$select=id'
-        response = self.bigip.icr_session.get(request_url,
-                              timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         all_identifiers = []
         if response.status_code < 400:
             response_obj = json.loads(response.text)

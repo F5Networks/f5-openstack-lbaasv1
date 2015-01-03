@@ -1,3 +1,4 @@
+""" Classes and functions for configuring vlans on BIG-IP """
 # Copyright 2014 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +26,7 @@ import json
 
 
 class Vlan(object):
+    """ Class for configuring vlans on bigip """
     def __init__(self, bigip):
         self.bigip = bigip
 
@@ -32,6 +34,7 @@ class Vlan(object):
     @log
     def create(self, name=None, vlanid=None, interface=None,
                folder='Common', description=None):
+        """ Create vlan """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -39,21 +42,20 @@ class Vlan(object):
             payload['partition'] = folder
             if vlanid:
                 payload['tag'] = vlanid
-                payload['interfaces'] = [{'name':interface, 'tagged':True}]
+                payload['interfaces'] = [{'name': interface, 'tagged': True}]
             else:
                 payload['tag'] = 0
-                payload['interfaces'] = [{'name':interface, 'untagged':True}]
+                payload['interfaces'] = [{'name': interface, 'untagged': True}]
             if description:
                 payload['description'] = description
             request_url = self.bigip.icr_url + '/net/vlan/'
-            response = self.bigip.icr_session.post(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if not folder == 'Common':
                     self.bigip.route.add_vlan_to_domain(
-                                    name=name,
-                                    folder=folder)
+                        name=name, folder=folder)
                 return True
             elif response.status_code == 409:
                 return True
@@ -65,12 +67,13 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def delete(self, name=None, folder='Common'):
+        """ Delete vlan """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.delete(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code != 404:
@@ -83,21 +86,22 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def delete_all(self, folder='Common'):
+        """ Delete vlans """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/vlan/'
         request_url += '?$select=name,selfLink'
         request_filter = 'partition eq ' + folder
         request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                            timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for item in response_obj['items']:
                     if item['name'].startswith(self.OBJ_PREFIX):
                         response = self.bigip.icr_session.delete(
-                                       self.bigip.icr_link(item['selfLink']),
-                                       timeout=const.CONNECTION_TIMEOUT)
+                            self.bigip.icr_link(item['selfLink']),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code > 400 and \
                            response.status_code != 404:
                             Log.error('vlan', response.text)
@@ -111,14 +115,15 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def get_vlans(self, folder='Common'):
+        """ Get vlans """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/vlan/'
         request_url += '?$select=name'
         if folder:
             request_filter = 'partition eq ' + folder
             request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                            timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         return_list = []
         if response.status_code < 400:
             return_obj = json.loads(response.text)
@@ -133,13 +138,14 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def get_id(self, name=None, folder='Common'):
+        """ Get vlan id """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=tag'
-            response = self.bigip.icr_session.get(request_url,
-                                 timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 return return_obj['tag']
@@ -151,15 +157,16 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def set_id(self, name=None, vlanid=0, folder='Common'):
+        """ Set vlan id """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
             request_url += '~' + folder + '~' + name
             payload = dict()
             payload['tag'] = vlanid
-            response = self.bigip.icr_session.put(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -170,6 +177,7 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def get_interface(self, name=None, folder='Common'):
+        """ Get vlan interface by name """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
@@ -178,8 +186,8 @@ class Vlan(object):
             if folder:
                 request_filter = 'partition eq ' + folder
                 request_url += '&$filter=' + request_filter
-            response = self.bigip.icr_session.get(request_url,
-                                 timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
@@ -195,19 +203,20 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def set_interface(self, name=None, interface='1.1', folder='Common'):
+        """ Set vlan interface """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
             request_url += '~' + folder + '~' + name
             payload = dict()
             if self.bigip.system.get_platform().startswith(
-                                const.BIGIP_VE_PLATFORM_ID):
-                payload['interfaces'] = [{'name':interface, 'untagged':True}]
+                    const.BIGIP_VE_PLATFORM_ID):
+                payload['interfaces'] = [{'name': interface, 'untagged': True}]
             else:
-                payload['interfaces'] = [{'name':interface, 'untagged':True}]
-            response = self.bigip.icr_session.put(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+                payload['interfaces'] = [{'name': interface, 'untagged': True}]
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -218,15 +227,16 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def get_vlan_name_by_description(self, description=None, folder='Common'):
+        """ Get vlan by description """
         if description:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + \
-                          '/net/vlan?$select=name,description'
+                '/net/vlan?$select=name,description'
             if folder:
                 request_filter = 'partition eq ' + folder
                 request_url += '&$filter=' + request_filter
-            response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
@@ -243,15 +253,16 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def set_description(self, name=None, description=None, folder='Common'):
+        """ Set vlan description """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
             request_url += '~' + folder + '~' + name
             payload = dict()
             payload['description'] = description
-            response = self.bigip.icr_session.put(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -262,17 +273,18 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def get_description(self, name=None, folder='Common'):
+        """ Get vlan description """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + \
-                          '/net/vlan?$select=name,description'
+                '/net/vlan?$select=name,description'
             if folder:
                 request_filter = 'partition eq ' + folder
                 request_url += '&$filter=' + request_filter
             else:
                 folder = 'Common'
-            response = self.bigip.icr_session.get(request_url,
-                                 timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
@@ -293,13 +305,14 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def exists(self, name=None, folder='Common'):
+        """ Does vlan exist? """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/vlan/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=name'
-            response = self.bigip.icr_session.get(request_url,
-                                 timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code != 404:
@@ -309,6 +322,7 @@ class Vlan(object):
 
     @icontrol_rest_folder
     def _in_use(self, name=None, folder=None):
+        """ Does selfip use vlan? """
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/net/self?$select=vlan'
@@ -317,8 +331,8 @@ class Vlan(object):
                 request_url += '&$filter=' + request_filter
             else:
                 folder = 'Common'
-            response = self.bigip.icr_session.get(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:

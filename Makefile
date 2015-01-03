@@ -64,7 +64,8 @@ build/f5-bigip-lbaas-agent-$(VERSION).noarch.rpm:
 	cp agent/dist/f5-bigip-lbaas-agent-$(VERSION)-$(RELEASE).noarch.rpm build
 
 pdf:
-	html2pdf $(PROJECT_DIR)/doc/f5lbaas-readme.html $(PROJECT_DIR)/doc/f5lbaas-readme.pdf
+	html2pdf $(PROJECT_DIR)/doc/f5lbaas-readme.html \
+            $(PROJECT_DIR)/doc/f5lbaas-readme.pdf
 
 clean: clean-debs clean-rpms 
 
@@ -113,9 +114,21 @@ pep8:
          pep8 $(IDIR)/cluster.py; \
          pep8 $(IDIR)/device.py; \
          pep8 $(IDIR)/l2gre.py; \
+         pep8 $(IDIR)/monitor.py; \
+         pep8 $(IDIR)/nat.py; \
+         pep8 $(IDIR)/pool.py; \
+         pep8 $(IDIR)/route.py; \
+         pep8 $(IDIR)/rule.py; \
+         pep8 $(IDIR)/selfip.py; \
+         pep8 $(IDIR)/snat.py; \
          pep8 $(IDIR)/system.py; \
+         pep8 $(IDIR)/virtual_server.py; \
+         pep8 $(IDIR)/vlan.py; \
          pep8 $(IDIR)/vxlan.py; \
         )
+
+PYHOOK := 'import sys;sys.path.insert(1,".")'
+PYLINT := pylint --additional-builtins=_ --init-hook=$(PYHOOK)
 
 pylint:
 	(cd agent; \
@@ -129,50 +142,17 @@ pylint:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/icontrol_driver.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/l2.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/selfips.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/snats.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/pools.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/vips.py | \
-            more; \
-         pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(BDIR)/utils.py | \
-            more; \
-         echo pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(IDIR)/__init__.py | \
-            more; \
-         echo pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(IDIR)/arp.py | \
-            more; \
-         echo pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(IDIR)/system.py | \
-            more; \
-         echo pylint --additional-builtins=_ \
-                --init-hook='import sys;sys.path.insert(1,".")' \
-                $(IDIR)/vxlan.py | \
-            more; \
+         $(PYLINT) $(BDIR)/icontrol_driver.py | more; \
+         $(PYLINT) $(BDIR)/l2.py | more; \
+         $(PYLINT) $(BDIR)/selfips.py | more; \
+         $(PYLINT) $(BDIR)/snats.py | more; \
+         $(PYLINT) $(BDIR)/pools.py | more; \
+         $(PYLINT) $(BDIR)/vips.py | more; \
+         $(PYLINT) $(BDIR)/utils.py | more; \
+         $(PYLINT) $(IDIR)/__init__.py | more; \
+         echo $(PYLINT) $(IDIR)/arp.py | more; \
+         echo $(PYLINT) $(IDIR)/system.py | more; \
+         echo $(PYLINT) $(IDIR)/vxlan.py | more; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
          rm -v neutron/common; \

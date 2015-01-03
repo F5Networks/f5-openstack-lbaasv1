@@ -20,6 +20,7 @@ import time
 
 
 class Stat(object):
+    """ Class for accessing bigip statistics """
     def __init__(self, bigip):
         self.bigip = bigip
 
@@ -33,6 +34,7 @@ class Stat(object):
 
     @log
     def get_composite_score(self):
+        """ Get composite score """
         cpu_score = self.get_cpu_health_score() * \
                     const.DEVICE_HEALTH_SCORE_CPU_WEIGHT
         mem_score = self.get_mem_health_score() * \
@@ -49,7 +51,7 @@ class Stat(object):
     # returns percentage of TMM memory currently in use
     @log
     def get_mem_health_score(self):
-        # use TMM memory usage for memory health
+        """ use TMM memory usage for memory health """
         stat_type = self.sys_stat.typefactory.create(
                                     'Common.StatisticType')
 
@@ -69,6 +71,7 @@ class Stat(object):
 
     @log
     def get_cpu_health_score(self):
+        """ Get cpu health score """
         cpu_stats = self.sys_info.get_cpu_usage_information()
         used_cycles = 1
         idle_cycles = 1
@@ -84,6 +87,7 @@ class Stat(object):
 
     @log
     def get_cps_health_score(self):
+        """ Get cps health score """
         count_init = self._get_tcp_accepted_count()
         time.sleep(const.DEVICE_HEALTH_SCORE_CPS_PERIOD)
         count_final = self._get_tcp_accepted_count()
@@ -98,6 +102,7 @@ class Stat(object):
         return score
 
     def _get_tcp_accepted_count(self):
+        """ Get tcp accepted count """
         stat_type = self.sys_stat.typefactory.create(
                                     'Common.StatisticType')
 

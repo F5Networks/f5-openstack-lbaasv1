@@ -26,6 +26,7 @@ import uuid
 
 
 class System(object):
+    """ Class for configuring bigip system """
     def __init__(self, bigip):
         self.bigip = bigip
 
@@ -51,6 +52,7 @@ class System(object):
 
     @log
     def folder_exists(self, folder):
+        """ Does folder exist? """
         if folder:
             folder = str(folder).replace('/', '')
             if folder == 'Common':
@@ -80,6 +82,7 @@ class System(object):
 
     @log
     def create_folder(self, folder, change_to=False):
+        """ Create folder """
         if folder:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/sys/folder/'
@@ -106,16 +109,16 @@ class System(object):
                 raise exceptions.SystemCreationException(response.text)
         return False
 
-    # Force iControl SOAP context into root folder.
-    # This is typically done before deleting a folder.
-    # We need to ensure the internal context of the iControl
-    # SOAP portal is not associated with a folder before
-    # the folder is deleted or the SOAP portal will become
-    # inoperative.
-    # We need to do a fake query and fake command
-    # because setting your active folder, by itself, does
-    # not do anything.
     def force_root_folder(self):
+        """ Force iControl SOAP context into root folder.
+            This is typically done before deleting a folder.
+            We need to ensure the internal context of the iControl
+            SOAP portal is not associated with a folder before
+            the folder is deleted or the SOAP portal will become
+            inoperative.
+            We need to do a fake query and fake command
+            because setting your active folder, by itself, does
+            not do anything. """
         self.sys_session.set_active_folder('/')
         self.current_folder = '/'
         self.mgmt_folder.get_list()
@@ -146,6 +149,7 @@ class System(object):
 
     @log
     def get_folders(self):
+        """ Get Folders """
         request_url = self.bigip.icr_url + '/sys/folder/'
         request_url += '?$select=name'
         response = self.bigip.icr_session.get(
@@ -163,6 +167,7 @@ class System(object):
 
     @log
     def set_folder(self, folder):
+        """ Set Folder """
         if not folder:
             msg = 'set_folder failed: No folder specified!'
             Log.error('System', msg)
@@ -189,6 +194,7 @@ class System(object):
 
     @log
     def purge_folder_contents(self, folder, bigip=None):
+        """ Purge Folder of contents """
         if not bigip:
             bigip = self.bigip
         if not folder in self.exempt_folders:
@@ -220,6 +226,7 @@ class System(object):
 
     @log
     def purge_orphaned_folders_contents(self, known_folders, bigip=None):
+        """ Purge Folder of contents """
         if not bigip:
             bigip = self.bigip
         existing_folders = bigip.system.get_folders()
@@ -248,6 +255,7 @@ class System(object):
 
     @log
     def purge_orphaned_folders(self, known_folders, bigip=None):
+        """ Purge Folders """
         if not bigip:
             bigip = self.bigip
         existing_folders = bigip.system.get_folders()
@@ -275,6 +283,7 @@ class System(object):
 
     @log
     def purge_all_folders(self, bigip=None):
+        """ Purge all folders """
         if not bigip:
             bigip = self.bigip
         existing_folders = bigip.system.get_folders()
@@ -284,6 +293,7 @@ class System(object):
 
     @log
     def get_hostname(self):
+        """ Get bigip hostname """
         request_url = self.bigip.icr_url + \
             '/sys/global-settings?$select=hostname'
         response = self.bigip.icr_session.get(
@@ -296,6 +306,7 @@ class System(object):
 
     @log
     def set_hostname(self, hostname):
+        """ Set bigip hostname """
         request_url = self.bigip.icr_url + '/sys/global-settings'
         response = self.bigip.icr_session.put(
             request_url, data=json.dumps({'hostname': hostname}),
@@ -307,6 +318,7 @@ class System(object):
 
     @log
     def get_ntp_server(self):
+        """ Get bigip ntp server """
         request_url = self.bigip.icr_url + \
             '/sys/ntp?$select=servers'
         response = self.bigip.icr_session.get(
@@ -322,6 +334,7 @@ class System(object):
 
     @log
     def set_ntp_server(self, addr):
+        """ Set bigip ntp server """
         request_url = self.bigip.icr_url + '/sys/ntp'
         if not isinstance(addr, list):
             addr = [addr]
@@ -335,6 +348,7 @@ class System(object):
 
     @log
     def get_active_modules(self):
+        """ Get bigip active modules """
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=activeModules,selfDevice'
         response = self.bigip.icr_session.get(
@@ -350,6 +364,7 @@ class System(object):
 
     @log
     def get_platform(self):
+        """ Get platform """
         if not self.systeminfo:
             try:
                 self.systeminfo = self.sys_info.get_system_information()
@@ -359,6 +374,7 @@ class System(object):
 
     @log
     def get_serial_number(self):
+        """ Get serial number """
         if not self.systeminfo:
             try:
                 self.systeminfo = self.sys_info.get_system_information()
@@ -368,6 +384,7 @@ class System(object):
 
     @log
     def get_version(self):
+        """ Get version """
         if not self.version:
             try:
                 self.version = self.sys_info.get_version()
@@ -377,14 +394,17 @@ class System(object):
 
     @log
     def get_major_version(self):
+        """ Get major version """
         return self.get_version().split('_v')[1].split('.')[0]
 
     @log
     def get_minor_version(self):
+        """ Get minor version """
         return self.get_version().split('_v')[1].split('.')[1]
 
     @log
     def get_provision_extramb(self):
+        """ Get provisioned extramb for large management memory """
         request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
@@ -399,6 +419,7 @@ class System(object):
 
     @log
     def set_provision_extramb(self, extramdb=500):
+        """ Set provisioned extramb for large management memory """
         request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
         response = self.bigip.icr_session.put(
             request_url, data=json.dumps({'value': extramdb}),
@@ -410,6 +431,7 @@ class System(object):
 
     @log
     def get_tunnel_sync(self):
+        """ Get option for syncing tunnels """
         request_url = self.bigip.icr_url + '/sys/db/iptunnel.configsync'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
@@ -424,6 +446,7 @@ class System(object):
 
     @log
     def set_tunnel_sync(self, enabled=False):
+        """ Set option for syncing tunnels """
         request_url = self.bigip.icr_url + '/sys/db/iptunnel.configsync'
         if enabled:
             response = self.bigip.icr_session.put(

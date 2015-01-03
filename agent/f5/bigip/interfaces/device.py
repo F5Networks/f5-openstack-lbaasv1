@@ -39,6 +39,7 @@ class Device(object):
 
     @log
     def get_device_name(self):
+        """ Get device name """
         if not self.devicename:
             request_url = self.bigip.icr_url + '/cm/device'
             request_filter = '/?$select=name,selfDevice'
@@ -60,6 +61,7 @@ class Device(object):
 
     @log
     def get_all_device_names(self):
+        """ Get all device name """
         request_url = self.bigip.icr_url + '/cm/device'
         request_filter = '/?$select=name&filter partition eq Common'
         request_url += request_filter
@@ -80,6 +82,7 @@ class Device(object):
 
     @log
     def get_lock(self):
+        """ Get device lock """
         current_lock = self._get_lock()
         new_lock = int(time.time())
 
@@ -99,6 +102,7 @@ class Device(object):
 
     @log
     def release_lock(self):
+        """ Release device lock """
         current_lock = self._get_lock()
 
         if current_lock == self.lock:
@@ -113,6 +117,7 @@ class Device(object):
             return False
 
     def _get_lock(self):
+        """ Get device lock """
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '?$select=selfDevice,comment'
         response = self.bigip.icr_session.get(
@@ -130,6 +135,7 @@ class Device(object):
             return int(current_lock.replace(const.DEVICE_LOCK_PREFIX, ''))
 
     def _set_lock(self, lock):
+        """ Set device lock """
         dev_name = self.get_device_name()
         if lock:
             self.lock = lock
@@ -149,6 +155,7 @@ class Device(object):
 
     @log
     def get_mgmt_addr(self):
+        """ Get device management ip """
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_filter = '/?$select=managementIp'
@@ -165,6 +172,7 @@ class Device(object):
 
     @log
     def get_all_mgmt_addrs(self):
+        """ Get device management ips """
         request_url = self.bigip.icr_url + '/cm/device'
         request_url += '/?$select=managementIp'
         response = self.bigip.icr_session.get(
@@ -200,6 +208,7 @@ class Device(object):
 
     @log
     def get_configsync_addr(self):
+        """ Get device config sync ip """
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=configsyncIp'
@@ -216,6 +225,7 @@ class Device(object):
     @domain_address
     @log
     def set_configsync_addr(self, ip_address=None, folder='/Common'):
+        """ Set device config sync ip """
         dev_name = self.get_device_name()
         request_url = self.bigip.icr_url + '/cm/device/'
         request_url += '~Common~' + dev_name
@@ -236,6 +246,7 @@ class Device(object):
 
     @log
     def get_primary_mirror_addr(self):
+        """ Get device primary mirror ip """
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=mirrorIp'
@@ -255,6 +266,7 @@ class Device(object):
 
     @log
     def get_secondary_mirror_addr(self):
+        """ Get device secondary mirror ip """
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=mirrorSecondaryIp'
@@ -275,6 +287,7 @@ class Device(object):
     @domain_address
     @log
     def set_primary_mirror_addr(self, ip_address=None, folder='/Common'):
+        """ Set device primary mirror ip """
         dev_name = self.get_device_name()
         request_url = self.bigip.icr_url + '/cm/device/'
         request_url += '~Common~' + dev_name
@@ -296,6 +309,7 @@ class Device(object):
     @domain_address
     @log
     def set_secondary_mirror_addr(self, ip_address=None, folder='/Common'):
+        """ Set device secondary mirror ip """
         dev_name = self.get_device_name()
         request_url = self.bigip.icr_url + '/cm/device/'
         request_url += '~Common~' + dev_name
@@ -316,6 +330,7 @@ class Device(object):
 
     @log
     def get_failover_addrs(self):
+        """ Get device failover ips """
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=unicastAddress'
@@ -338,6 +353,7 @@ class Device(object):
 
     @log
     def set_failover_address(self, ip_address=None, folder='/Common'):
+        """ Get device failover ips """
         dev_name = self.get_device_name()
         dev_ip = self.get_mgmt_addr()
         request_url = self.bigip.icr_url + '/cm/device/'
@@ -370,6 +386,7 @@ class Device(object):
 
     @log
     def get_failover_state(self):
+        """ Get device failover state """
         request_url = self.bigip.icr_url + '/cm/device/~Common'
         request_url += '~' + self.get_device_name()
         request_url += '/?$select=failoverState'
@@ -385,6 +402,7 @@ class Device(object):
 
     @log
     def get_device_group(self):
+        """ Get device group """
         request_url = self.bigip.icr_url + '/cm/device-group'
         request_url += '/?$select=name,type'
         response = self.bigip.icr_session.get(
@@ -406,6 +424,7 @@ class Device(object):
 
     @log
     def remove_from_device_group(self, name=None, folder='/Common'):
+        """ Remove device from group """
         device_group = self.get_device_group()
         if device_group:
             return self.bigip.cluster.remove_devices(device_group,
@@ -413,6 +432,7 @@ class Device(object):
 
     @log
     def remove_all_peers(self):
+        """ Remove all peers from group """
         self.bigip.system.set_folder('/Common')
         current_dev_name = self.get_device_name()
         devs_to_remove = []
@@ -431,6 +451,7 @@ class Device(object):
 
     @log
     def reset_trust(self, new_name):
+        """ Remove trust """
         self.bigip.system.set_folder('/Common')
         self.remove_all_peers()
         try:
@@ -446,6 +467,7 @@ class Device(object):
 
     @log
     def set_metadata(self, name=None, device_dict=None):
+        """ Set device metadata """
         if not name:
             name = self.get_device_name()
         if isinstance(device_dict, dict):
@@ -469,6 +491,7 @@ class Device(object):
 
     @log
     def get_metadata(self, name=None):
+        """ Get device metadata """
         if not name:
             name = self.get_device_name()
         request_url = self.bigip.icr_url + '/cm/device/~Common~'
@@ -496,6 +519,7 @@ class Device(object):
 
     @log
     def remove_metadata(self, name=None, remove_dict=None):
+        """ Remove device metadata """
         if not name:
             name = self.get_device_name()
         if isinstance(remove_dict, dict):
@@ -512,6 +536,7 @@ class Device(object):
 
     @log
     def update_metadata(self, name=None, cluster_dict=None):
+        """ Update device metadata """
         if not name:
             name = self.get_device_name()
         if isinstance(cluster_dict, dict):

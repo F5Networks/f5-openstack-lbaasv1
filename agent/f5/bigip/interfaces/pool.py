@@ -43,11 +43,11 @@ class Pool(object):
             if description:
                 payload['description'] = description
             payload['loadBalancingMode'] = \
-                              self._get_rest_lb_method_type(lb_method)
+                self._get_rest_lb_method_type(lb_method)
             request_url = self.bigip.icr_url + '/ltm/pool'
-            response = self.bigip.icr_session.post(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 409:
@@ -66,8 +66,8 @@ class Pool(object):
             request_url += '~' + folder + '~' + name
             node_addresses = []
             # get a list of node addresses before we delete
-            response = self.bigip.icr_session.get(request_url + '/members',
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url + '/members', timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
@@ -77,20 +77,20 @@ class Pool(object):
                 Log.error('members', response.text)
                 raise exceptions.PoolQueryException(response.text)
             # delete the pool
-            response = self.bigip.icr_session.delete(request_url,
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400 or response.status_code == 404:
                 for node_address in node_addresses:
                     node_url = self.bigip.icr_url + '/ltm/node/'
                     node_url += '~' + folder + '~' + urllib.quote(node_address)
-                    node_res = self.bigip.icr_session.delete(node_url,
-                                              timeout=const.CONNECTION_TIMEOUT)
+                    node_res = self.bigip.icr_session.delete(
+                        node_url, timeout=const.CONNECTION_TIMEOUT)
                     # we only care if this works.  Otherwise node is likely
                     # in use by another pool
                     if node_res.status_code < 400:
                         self._del_arp_and_fdb(node_address, folder)
                     elif node_res.status_code == 400 and \
-                         (node_res.text.find('is referenced') > 0):
+                            node_res.text.find('is referenced') > 0:
                         # same node can be in multiple pools
                         pass
                     else:
@@ -100,58 +100,57 @@ class Pool(object):
 
     # best effort ARP and fdb cleanup
     def _del_arp_and_fdb(self, ip_address, folder):
-        if const.FDB_POPULATE_STATIC_ARP:
-            arp_req = self.bigip.icr_url + '/net/arp'
-            arp_req += '?$select=ipAddress,macAddress,selfLink'
-            arp_req += '&$filter=partition eq ' + folder
-            arp_res = self.bigip.icr_session.get(arp_req,
-                               timeout=const.CONNECTION_TIMEOUT)
-            if arp_res.status_code < 400:
-                arp_obj = json.loads(arp_res.text)
-                if 'items' in arp_obj:
-                    for arp in arp_obj['items']:
-                        if ip_address == arp['ipAddress']:
-                            # iControl REST ARP is broken < 11.7
-                            # self.bigip.arp.delete(
-                            #                  arp['ipAddress'],
-                            #                  folder)
-                            try:
-                                self.bigip.arp.delete(
-                                                arp['ipAddress'],
-                                                folder=folder)
-                            except Exception as e:
-                                Log.error('ARP', e.message)
-                            fdb_req = self.bigip.icr_url + '/net/fdb/tunnel'
-                            fdb_req += '?$select=records,selfLink'
-                            fdb_req += '&$filter=partition eq ' + folder
-                            response = self.bigip.icr_session.get(
-                                  fdb_req,
-                                  timeout=const.CONNECTION_TIMEOUT)
-                            if response.status_code < 400:
-                                fdb_obj = json.loads(response.text)
-                                if 'items' in fdb_obj:
-                                    for tunnel in fdb_obj['items']:
-                                        if 'records' in tunnel:
-                                            records = list(tunnel['records'])
-                                            need_to_update = False
-                                            for record in \
-                                                tunnel['records']:
-                                                if record['name'] == \
-                                                           arp['macAddress']:
-                                                    records.remove(record)
-                                                    need_to_update = True
-                                            if need_to_update:
-                                                payload = dict()
-                                                payload['records'] = records
-                                                response = \
-                                                 self.bigip.icr_session.put(
-                                               self.bigip.icr_link(
-                                                    tunnel['selfLink']),
-                                               data=json.dumps(payload),
-                                               timeout=const.CONNECTION_TIMEOUT
-                                              )
-                                            if response.status_code > 399:
-                                                Log.error('fdb', response.text)
+        if not const.FDB_POPULATE_STATIC_ARP:
+            return
+        arp_req = self.bigip.icr_url + '/net/arp'
+        arp_req += '?$select=ipAddress,macAddress,selfLink'
+        arp_req += '&$filter=partition eq ' + folder
+        arp_res = self.bigip.icr_session.get(
+            arp_req, timeout=const.CONNECTION_TIMEOUT)
+        if not (arp_res.status_code < 400):
+            return
+        arp_obj = json.loads(arp_res.text)
+        if not 'items' in arp_obj:
+            return
+        for arp in arp_obj['items']:
+            if ip_address != arp['ipAddress']:
+                continue
+            # iControl REST ARP is broken < 11.7
+            # self.bigip.arp.delete(
+            #                  arp['ipAddress'],
+            #                  folder)
+            try:
+                self.bigip.arp.delete(arp['ipAddress'], folder=folder)
+            except Exception as exp:
+                Log.error('ARP', exp.message)
+            fdb_req = self.bigip.icr_url + '/net/fdb/tunnel'
+            fdb_req += '?$select=records,selfLink'
+            fdb_req += '&$filter=partition eq ' + folder
+            response = self.bigip.icr_session.get(
+                fdb_req, timeout=const.CONNECTION_TIMEOUT)
+            if not response.status_code < 400:
+                continue
+            fdb_obj = json.loads(response.text)
+            if not 'items' in fdb_obj:
+                continue
+            for tunnel in fdb_obj['items']:
+                if not 'records' in tunnel:
+                    continue
+                records = list(tunnel['records'])
+                need_to_update = False
+                for record in tunnel['records']:
+                    if record['name'] == arp['macAddress']:
+                        records.remove(record)
+                        need_to_update = True
+                if need_to_update:
+                    payload = dict()
+                    payload['records'] = records
+                    response = self.bigip.icr_session.put(
+                        self.bigip.icr_link(tunnel['selfLink']),
+                        data=json.dumps(payload),
+                        timeout=const.CONNECTION_TIMEOUT)
+                if response.status_code > 399:
+                    Log.error('fdb', response.text)
 
     @icontrol_rest_folder
     @log
@@ -161,8 +160,8 @@ class Pool(object):
         request_url += '?$select=name,selfLink'
         request_filter = 'partition eq ' + folder
         request_url += '&$filter=' + request_filter
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
@@ -184,8 +183,8 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '/members?$select=name'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             members = []
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
@@ -193,11 +192,8 @@ class Pool(object):
                     for member in return_obj['items']:
                         name_parts = member['name'].split(":")
                         members.append(
-                            {
-                             'addr': strip_domain_address(name_parts[0]),
-                             'port': int(name_parts[1])
-                            }
-                        )
+                            {'addr': strip_domain_address(name_parts[0]),
+                             'port': int(name_parts[1])})
             elif response.status_code != 404:
                 Log.error('pool', response.text)
                 raise exceptions.PoolQueryException(response.text)
@@ -212,28 +208,27 @@ class Pool(object):
         request_url += '?$select=name'
         request_url += '&$filter=partition eq ' + folder
 
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         pool_names = []
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for pool in return_obj['items']:
                     pool_names.append(
-                                strip_folder_and_prefix(pool['name']))
+                        strip_folder_and_prefix(pool['name']))
         elif response.status_code != 404:
             Log.error('pool', response.text)
             raise exceptions.PoolQueryException(response.text)
         return pool_names
 
     @log
-    def purge_orphaned_pools(self, known_pools,
-                              delete_virtual_server=True):
+    def purge_orphaned_pools(self, known_pools, delete_virtual_server=True):
         request_url = self.bigip.icr_url + '/ltm/pool'
         request_url += '?$select=name,partition'
 
-        response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         existing_pools = {}
         if response.status_code < 400:
             return_obj = json.loads(response.text)
@@ -245,7 +240,7 @@ class Pool(object):
             raise exceptions.PoolQueryException(response.text)
 
         Log.debug('pool', 'purging pools - existing : %s, known : %s'
-                 % (existing_pools.keys(), known_pools))
+                  % (existing_pools.keys(), known_pools))
 
         # remove all pools which are not managed
         # with this object prefix
@@ -260,26 +255,24 @@ class Pool(object):
         # anything left should be purged
         for pool in existing_pools:
             vs_name = \
-                 self.bigip.virtual_server.get_virtual_servers_by_pool_name(
+                self.bigip.virtual_server.get_virtual_servers_by_pool_name(
                     pool_name=pool, folder=existing_pools[pool])
             if vs_name:
                 try:
-                    self.bigip.virtual_server.delete(name=vs_name,
-                                         folder=existing_pools[pool])
+                    self.bigip.virtual_server.delete(
+                        name=vs_name, folder=existing_pools[pool])
                     self.bigip.virtual_server.delete_persist_profile_like(
-                                         match=vs_name,
-                                         folder=existing_pools[pool])
-                    self.bigip.rule.delete_like(match=vs_name,
-                                        folder=existing_pools[pool])
+                        match=vs_name, folder=existing_pools[pool])
+                    self.bigip.rule.delete_like(
+                        match=vs_name, folder=existing_pools[pool])
                     self.bigip.virtual_server.delete_profile_like(
-                                         match=vs_name,
-                                         folder=existing_pools[pool])
+                        match=vs_name, folder=existing_pools[pool])
                 except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)
             try:
                 Log.debug('purge_orphaned_pools',
-                          "Deleting pool %s in folder %s" 
-                          % (pool, existing_pools[pool]))
+                          "Deleting pool %s in folder %s",
+                          pool, existing_pools[pool])
                 self.delete(name=pool, folder=existing_pools[pool])
             except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)
@@ -292,8 +285,8 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '/members?$select=name,state'
-            response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             members = []
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
@@ -301,14 +294,11 @@ class Pool(object):
                     for member in return_obj['items']:
                         name_parts = member['name'].split(":")
                         member_state = 'MONITOR_STATUS_' + \
-                                               member['state'].upper()
+                            member['state'].upper()
                         members.append(
-                             {
-                              'addr': strip_domain_address(name_parts[0]),
-                              'port': name_parts[1],
-                              'state': member_state
-                             }
-                        )
+                            {'addr': strip_domain_address(name_parts[0]),
+                             'port': name_parts[1],
+                             'state': member_state})
             else:
                 Log.error('pool', response.text)
                 raise exceptions.PoolQueryException(response.text)
@@ -318,31 +308,31 @@ class Pool(object):
     @icontrol_rest_folder
     @log
     def get_statistics(self, name=None, folder='Common'):
-        if name:
-            folder = str(folder).replace('/', '')
-            request_url = self.bigip.icr_url + '/ltm/pool/'
-            request_url += '~' + folder + '~' + name
-            request_url += '/stats'
-            response = self.bigip.icr_session.get(request_url,
-                                    timeout=const.CONNECTION_TIMEOUT)
-            return_stats = {}
-            if response.status_code < 400:
-                return_obj = json.loads(response.text)
-                if 'entries' in return_obj:
-                    for stat in return_obj['entries']:
-                        name = stat
-                        if 'value' in return_obj['entries'][name]:
-                            value = return_obj['entries'][name]['value']
-                        if 'description' in return_obj['entries'][name]:
-                            value = return_obj['entries'][name]['description']
-                        (st, val) = self._get_icontrol_stat(name, value)
-                        if st:
-                            return_stats[st] = val
-            elif response.status_code != 404:
-                Log.error('pool', response.text)
-                raise exceptions.PoolQueryException(response.text)
-            return return_stats
-        return None
+        if not name:
+            return None
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/ltm/pool/'
+        request_url += '~' + folder + '~' + name
+        request_url += '/stats'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        return_stats = {}
+        if response.status_code < 400:
+            return_obj = json.loads(response.text)
+            if 'entries' in return_obj:
+                for stat in return_obj['entries']:
+                    name = stat
+                    if 'value' in return_obj['entries'][name]:
+                        value = return_obj['entries'][name]['value']
+                    if 'description' in return_obj['entries'][name]:
+                        value = return_obj['entries'][name]['description']
+                    (st, val) = self._get_icontrol_stat(name, value)
+                    if st:
+                        return_stats[st] = val
+        elif response.status_code != 404:
+            Log.error('pool', response.text)
+            raise exceptions.PoolQueryException(response.text)
+        return return_stats
 
     @icontrol_rest_folder
     @domain_address
@@ -358,9 +348,9 @@ class Pool(object):
             payload['name'] = ip_address + ':' + str(port)
             payload['partition'] = folder
             payload['address'] = ip_address
-            response = self.bigip.icr_session.post(request_url,
-                                        data=json.dumps(payload),
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.post(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -379,7 +369,7 @@ class Pool(object):
     @domain_address
     @log
     def enable_member(self, name=None, ip_address=None, port=None,
-                       folder='Common', no_checks=False):
+                      folder='Common', no_checks=False):
         if name and ip_address and port:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/pool/'
@@ -389,9 +379,9 @@ class Pool(object):
             request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['session'] = 'user-enabled'
-            response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -419,9 +409,9 @@ class Pool(object):
             request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['session'] = 'user-disabled'
-            response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
@@ -449,16 +439,17 @@ class Pool(object):
             request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['ratio'] = ratio
-            response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             elif response.status_code == 404:
-                Log.error('pool',
-                'tried to set ratio on non-existant member %s on pool %s.'
-                 % (ip_address + ':' + str(port),
-                    '/' + folder + '/' + name))
+                Log.error(
+                    'pool',
+                    'tried to set ratio on non-existant member %s on pool %s.'
+                    % (ip_address + ':' + str(port),
+                        '/' + folder + '/' + name))
                 return False
             else:
                 Log.error('pool', response.text)
@@ -477,20 +468,20 @@ class Pool(object):
             request_url += '/members/'
             request_url += '~' + folder + '~'
             request_url += urllib.quote(ip_address) + ':' + str(port)
-            response = self.bigip.icr_session.delete(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.delete(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400 or response.status_code == 404:
                 # delete nodes
                 node_req = self.bigip.icr_url + '/ltm/node/'
                 node_req += '~' + folder + '~' + urllib.quote(ip_address)
-                response = self.bigip.icr_session.delete(node_req,
-                                        timeout=const.CONNECTION_TIMEOUT)
+                response = self.bigip.icr_session.delete(
+                    node_req, timeout=const.CONNECTION_TIMEOUT)
                 if response.status_code == 400 and \
-                 (response.text.find('is referenced') > 0):
+                        response.text.find('is referenced') > 0:
                     # Node address is part of multiple pools
                     pass
                 elif response.status_code > 399 and \
-                   (not response.status_code == 404):
+                        (not response.status_code == 404):
                     Log.error('node', response.text)
                     raise exceptions.PoolDeleteException(response.text)
                 else:
@@ -507,16 +498,16 @@ class Pool(object):
         request_url = self.bigip.icr_url + '/ltm/node'
         request_url += '?$select=address,selfLink'
         request_url += '&$filter=partition eq ' + folder
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for node in return_obj['items']:
                     ip_address = node['address']
                     response = self.bigip.icr_session.delete(
-                                self.bigip.icr_link(node['selfLink']),
-                                timeout=const.CONNECTION_TIMEOUT)
+                        self.bigip.icr_link(node['selfLink']),
+                        timeout=const.CONNECTION_TIMEOUT)
                     if response.status_code < 400:
                         self._del_arp_and_fdb(ip_address, folder)
         elif response.status_code != 404:
@@ -531,8 +522,8 @@ class Pool(object):
         request_url = self.bigip.icr_url + '/ltm/node'
         request_url += '?$select=address'
         request_url += '&$filter=partition eq ' + folder
-        response = self.bigip.icr_session.get(request_url,
-                            timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         node_addresses = []
         if response.status_code < 400:
             return_obj = json.loads(response.text)
@@ -552,8 +543,8 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=serviceDownAction'
-            response = self.bigip.icr_session.get(request_url,
-                                      timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if not 'serviceDownAction' in response_obj:
@@ -584,9 +575,9 @@ class Pool(object):
                 payload['serviceDownAction'] = str(service_down_action).lower()
             else:
                 payload['serviceDownAction'] = 'none'
-            response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -604,12 +595,12 @@ class Pool(object):
             payload = dict()
             if lb_method:
                 payload['loadBalancingMode'] = \
-                                 self._get_rest_lb_method_type(lb_method)
+                    self._get_rest_lb_method_type(lb_method)
             else:
                 payload['loadBalancingMode'] = 'least-connections-member'
-            response = self.bigip.icr_session.put(request_url,
-                                           data=json.dumps(payload),
-                                           timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -625,38 +616,39 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=loadBalancingMode'
-            response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if not 'loadBalancingMode' in response_obj:
                     return 'round-robin'
                 else:
                     if response_obj['loadBalancingMode'] == \
-                                    'least-connections-member':
+                            'least-connections-member':
                         return 'LEAST_CONNECTIONS'
                     if response_obj['loadBalancingMode'] == \
-                                    'ratio-least-connections-member':
+                            'ratio-least-connections-member':
                         return 'RATIO_LEAST_CONNECTIONS'
                     if response_obj['loadBalancingMode'] == \
-                                    'least-connections-node':
+                            'least-connections-node':
                         return 'SOURCE_IP'
                     if response_obj['loadBalancingMode'] == \
-                                    'observed-member':
+                            'observed-member':
                         return 'OBSERVED_MEMBER'
                     if response_obj['loadBalancingMode'] == \
-                                    'predictive-member':
+                            'predictive-member':
                         return 'PREDICTIVE_MEMBER'
                     if response_obj['loadBalancingMode'] == \
-                                    'ratio-member':
+                            'ratio-member':
                         return 'RATIO'
                     if response_obj['loadBalancingMode'] == \
-                                    'round-robin':
+                            'round-robin':
                         return 'ROUND_ROBIN'
             elif response.status_code == 404:
-                Log.error('pool',
+                Log.error(
+                    'pool',
                     'tied to get lb_method for non-existant pool %s'
-                          % '/' + folder + '/' + name)
+                    % '/' + folder + '/' + name)
             else:
                 Log.error('pool', response.text)
                 raise exceptions.PoolQueryException(response.text)
@@ -674,9 +666,9 @@ class Pool(object):
                 payload['description'] = description
             else:
                 payload['description'] = ''
-            response = self.bigip.icr_session.put(request_url,
-                                  data=json.dumps(payload),
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return True
             else:
@@ -692,8 +684,8 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=description'
-            response = self.bigip.icr_session.get(request_url,
-                                  timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if not 'description' in response_obj:
@@ -701,9 +693,10 @@ class Pool(object):
                 else:
                     return response_obj['description']
             elif response.status_code == 404:
-                Log.error('pool',
-                 'tied to get description for non-existant pool %s'
-                          % '/' + folder + '/' + name)
+                Log.error(
+                    'pool',
+                    'tied to get description for non-existant pool %s'
+                    % '/' + folder + '/' + name)
             else:
                 Log.error('pool', response.text)
                 raise exceptions.PoolQueryException(response.text)
@@ -717,8 +710,8 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=monitor'
-            response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 monitors = []
@@ -726,8 +719,7 @@ class Pool(object):
                     w_split = response_obj['monitor'].split()
                     for w in w_split:
                         if w.startswith('/'):
-                            monitors.append(
-                                      strip_folder_and_prefix(w))
+                            monitors.append(strip_folder_and_prefix(w))
                 return monitors
             elif response.status_code != 404:
                 Log.error('pool', response.text)
@@ -742,8 +734,8 @@ class Pool(object):
             request_url = self.bigip.icr_url + '/ltm/pool/'
             request_url += '~' + folder + '~' + name
             request_url += '?$select=monitor'
-            response = self.bigip.icr_session.get(request_url,
-                                 timeout=const.CONNECTION_TIMEOUT)
+            response = self.bigip.icr_session.get(
+                request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'monitor' in response_obj:
@@ -770,9 +762,9 @@ class Pool(object):
                         request_url += '~' + folder + '~' + name
                         payload = dict()
                         payload['monitor'] = monitor_string
-                        response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                        response = self.bigip.icr_session.put(
+                            request_url, data=json.dumps(payload),
+                            timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code < 400:
                             return True
                         else:
@@ -785,9 +777,9 @@ class Pool(object):
                     payload['monitor'] = monitor_name
                     request_url = self.bigip.icr_url + '/ltm/pool/'
                     request_url += '~' + folder + '~' + name
-                    response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
+                    response = self.bigip.icr_session.put(
+                        request_url, data=json.dumps(payload),
+                        timeout=const.CONNECTION_TIMEOUT)
                     if response.status_code < 400:
                         return True
                     else:
@@ -801,60 +793,61 @@ class Pool(object):
     @icontrol_rest_folder
     @log
     def remove_monitor(self, name=None, monitor_name=None, folder='Common'):
-        if name and monitor_name:
-            folder = str(folder).replace('/', '')
-            request_url = self.bigip.icr_url + '/ltm/pool/'
-            request_url += '~' + folder + '~' + name
-            request_url += '?$select=monitor'
-            response = self.bigip.icr_session.get(request_url,
-                                        timeout=const.CONNECTION_TIMEOUT)
-            if response.status_code < 400:
-                response_obj = json.loads(response.text)
-                if 'monitor' in response_obj:
-                    w_split = response_obj['monitor'].split()
-                    existing_monitors = []
-                    for w in w_split:
-                        if w.startswith('/'):
-                            existing_monitors.append(w)
-                    fp_monitor = '/' + folder + '/' + monitor_name
-                    monitor_string = ''
-                    if fp_monitor in existing_monitors:
-                        existing_monitors.remove(fp_monitor)
-                        new_monitor_count = len(existing_monitors)
-                        if new_monitor_count > 0:
-                            if response_obj['monitor'].startswith('min'):
-                                min_count = w_split[1]
-                                if min_count > new_monitor_count:
-                                    min_count = new_monitor_count
-                                monitor_string = 'min ' + min_count + ' of { '
-                                for monitor in existing_monitors:
-                                    monitor_string += monitor + ' '
-                                monitor_string += '}'
-                            else:
-                                for i in range(new_monitor_count):
-                                    if (i + 1) < new_monitor_count:
-                                        monitor_string += \
-                                                existing_monitors[i] + ' and '
-                                    else:
-                                        monitor_string += \
-                                                existing_monitors[i] + ' '
-                        request_url = self.bigip.icr_url + '/ltm/pool/'
-                        request_url += '~' + folder + '~' + name
-                        payload = dict()
-                        payload['monitor'] = monitor_string
-                        response = self.bigip.icr_session.put(request_url,
-                                            data=json.dumps(payload),
-                                            timeout=const.CONNECTION_TIMEOUT)
-                        if response.status_code < 400:
-                            return True
+        if not (name and monitor_name):
+            return False
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/ltm/pool/'
+        request_url += '~' + folder + '~' + name
+        request_url += '?$select=monitor'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'monitor' in response_obj:
+                w_split = response_obj['monitor'].split()
+                existing_monitors = []
+                for w in w_split:
+                    if w.startswith('/'):
+                        existing_monitors.append(w)
+                fp_monitor = '/' + folder + '/' + monitor_name
+                monitor_string = ''
+                if fp_monitor in existing_monitors:
+                    existing_monitors.remove(fp_monitor)
+                    new_monitor_count = len(existing_monitors)
+                    if new_monitor_count > 0:
+                        if response_obj['monitor'].startswith('min'):
+                            min_count = w_split[1]
+                            if min_count > new_monitor_count:
+                                min_count = new_monitor_count
+                            monitor_string = 'min ' + min_count + ' of { '
+                            for monitor in existing_monitors:
+                                monitor_string += monitor + ' '
+                            monitor_string += '}'
                         else:
-                            Log.error('pool', response.text)
-                            raise exceptions.PoolUpdateException(response.text)
-                    else:
+                            for i in range(new_monitor_count):
+                                if (i + 1) < new_monitor_count:
+                                    monitor_string += \
+                                        existing_monitors[i] + ' and '
+                                else:
+                                    monitor_string += \
+                                        existing_monitors[i] + ' '
+                    request_url = self.bigip.icr_url + '/ltm/pool/'
+                    request_url += '~' + folder + '~' + name
+                    payload = dict()
+                    payload['monitor'] = monitor_string
+                    response = self.bigip.icr_session.put(
+                        request_url, data=json.dumps(payload),
+                        timeout=const.CONNECTION_TIMEOUT)
+                    if response.status_code < 400:
                         return True
-            elif response.status_code != 404:
-                Log.error('pool', response.text)
-                raise exceptions.PoolQueryException(response.text)
+                    else:
+                        Log.error('pool', response.text)
+                        raise exceptions.PoolUpdateException(response.text)
+                else:
+                    return True
+        elif response.status_code != 404:
+            Log.error('pool', response.text)
+            raise exceptions.PoolQueryException(response.text)
         return False
 
     def _get_lb_method_type(self, lb_method):
@@ -899,73 +892,51 @@ class Pool(object):
             return ('POOL_ACTIVE_MEMBERS', value)
         elif name == "connqAll.ageEdm":
             return ('STATISTIC_CONNQUEUE_AGGR_AGE_EXPONENTIAL_DECAY_MAX',
-                   value)
+                    value)
         elif name == "connqAll.ageEma":
-            return ('STATISTIC_CONNQUEUE_AGGR_AGE_MOVING_AVG',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGGR_AGE_MOVING_AVG', value)
         elif name == "connqAll.ageHead":
-            return ('STATISTIC_CONNQUEUE_AGGR_AGE_OLDEST_ENTRY',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGGR_AGE_OLDEST_ENTRY', value)
         elif name == "connqAll.ageMax":
-            return ('STATISTIC_CONNQUEUE_AGGR_AGE_MAX',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGGR_AGE_MAX', value)
         elif name == "connqAll.depth":
-            return ('STATISTIC_CONNQUEUE_AGGR_CONNECTIONS',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGGR_CONNECTIONS', value)
         elif name == "connqAll.serviced":
-            return ('STATISTIC_CONNQUEUE_AGGR_SERVICED',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGGR_SERVICED', value)
         elif name == "connq.ageEdm":
-            return ('STATISTIC_CONNQUEUE_AGE_EXPONENTIAL_DECAY_MAX',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGE_EXPONENTIAL_DECAY_MAX', value)
         elif name == "connq.ageEma":
-            return ('STATISTIC_CONNQUEUE_AGE_MOVING_AVG',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGE_MOVING_AVG', value)
         elif name == "connq.ageHead":
-            return ('STATISTIC_CONNQUEUE_AGE_OLDEST_ENTRY',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGE_OLDEST_ENTRY', value)
         elif name == "connq.ageMax":
-            return ('STATISTIC_CONNQUEUE_AGE_MAX',
-                   value)
+            return ('STATISTIC_CONNQUEUE_AGE_MAX', value)
         elif name == "connq.depth":
-            return ('STATISTIC_CONNQUEUE_CONNECTIONS',
-                   value)
+            return ('STATISTIC_CONNQUEUE_CONNECTIONS', value)
         elif name == "connq.serviced":
-            return ('STATISTIC_CONNQUEUE_SERVICED',
-                   value)
+            return ('STATISTIC_CONNQUEUE_SERVICED', value)
         elif name == "curSessions":
-            return ('STATISTIC_CURRENT_SESSIONS',
-                   value)
+            return ('STATISTIC_CURRENT_SESSIONS', value)
         elif name == "minActiveMembers":
-            return ('POOL_MINIMUM_ACTIVE_MEMBERS',
-                   value)
+            return ('POOL_MINIMUM_ACTIVE_MEMBERS', value)
         elif name == "monitorRule":
-            return ('POOL_MONITOR_RULE',
-                   value)
+            return ('POOL_MONITOR_RULE', value)
         elif name == "tmName":
-            return ('POOL_NAME',
-                   os.path.basename(value))
+            return ('POOL_NAME', os.path.basename(value))
         elif name == "serverside.bitsIn":
-            return ('STATISTIC_SERVER_SIDE_BYTES_IN',
-                   int(value) * 8)
+            return ('STATISTIC_SERVER_SIDE_BYTES_IN', int(value) * 8)
         elif name == "serverside.bitsOut":
-            return ('STATISTIC_SERVER_SIDE_BYTES_OUT',
-                   int(value) * 8)
+            return ('STATISTIC_SERVER_SIDE_BYTES_OUT', int(value) * 8)
         elif name == "serverside.curConns":
-            return ('STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS',
-                   value)
+            return ('STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS', value)
         elif name == "serverside.maxConns":
-            return ('STATISTIC_SERVER_SIDE_MAXIMUM_CONNECTIONS',
-                   value)
+            return ('STATISTIC_SERVER_SIDE_MAXIMUM_CONNECTIONS', value)
         elif name == "serverside.pktsIn":
-            return ('STATISTIC_SERVER_SIDE_PACKETS_IN',
-                   value)
+            return ('STATISTIC_SERVER_SIDE_PACKETS_IN', value)
         elif name == "serverside.pktsOut":
-            return ('STATISTIC_SERVER_SIDE_PACKETS_OUT',
-                   value)
+            return ('STATISTIC_SERVER_SIDE_PACKETS_OUT', value)
         elif name == "serverside.totConns":
-            return ('STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS',
-                   value)
+            return ('STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS', value)
         elif name == "status.availabilityState":
             return ('AVAILABLE_STATE', value)
         elif name == "status.enabledState":
@@ -984,8 +955,8 @@ class Pool(object):
         request_url = self.bigip.icr_url + '/ltm/pool/'
         request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
-        response = self.bigip.icr_session.get(request_url,
-                             timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             return True
         elif response.status_code != 404:
@@ -1004,8 +975,8 @@ class Pool(object):
         request_url += '/members/'
         request_url += '~' + folder + '~'
         request_url += urllib.quote(ip_address) + ':' + str(port)
-        response = self.bigip.icr_session.get(request_url,
-                                timeout=const.CONNECTION_TIMEOUT)
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'address' in response_obj:

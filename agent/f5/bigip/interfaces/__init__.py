@@ -1,3 +1,4 @@
+""" BIG-IP API Interfaces """
 # Copyright 2014 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +24,7 @@ LOG = logging.getLogger(__name__)
 
 
 def prefixed(name):
+    """ Put object prefix in front of name """
     if not name.startswith(OBJ_PREFIX):
         name = OBJ_PREFIX + name
     return name
@@ -47,6 +49,7 @@ def icontrol_folder(method):
     decoration honors that full path.
     """
     def wrapper(*args, **kwargs):
+        """ Necessary wrapper """
         instance = args[0]
         preserve_vlan_name = False
         if 'preserve_vlan_name' in kwargs:
@@ -130,6 +133,7 @@ def icontrol_rest_folder(method):
     prefix OBJ_PREFIX.
     """
     def wrapper(*args, **kwargs):
+        """ Necessary wrapper """
         preserve_vlan_name = False
         if 'preserve_vlan_name' in kwargs:
             preserve_vlan_name = kwargs['preserve_vlan_name']
@@ -201,6 +205,7 @@ def domain_address(method):
     all folders.
     """
     def wrapper(*args, **kwargs):
+        """ Necessary wrapper """
         instance = args[0]
         if not instance.bigip.route_domain_required:
             return method(*args, **kwargs)
@@ -282,6 +287,7 @@ def domain_address(method):
 
 
 def decorate_name(name=None, folder='Common', use_prefix=True):
+    """ Add "namespace" prefix to names """
     folder = os.path.basename(folder)
     if not folder == 'Common':
         folder = prefixed(folder)
@@ -299,6 +305,7 @@ def decorate_name(name=None, folder='Common', use_prefix=True):
 
 
 def strip_folder_and_prefix(path):
+    """ Strip folder and prefix """
     if isinstance(path, list):
         for i in range(len(path)):
             if path[i].find('~') > -1:
@@ -319,6 +326,7 @@ def strip_folder_and_prefix(path):
 
 
 def strip_domain_address(ip_address):
+    """ Strip domain from ip address """
     mask_index = ip_address.find('/')
     if mask_index > 0:
         return ip_address[:mask_index].split('%')[0] + ip_address[mask_index:]
@@ -329,11 +337,12 @@ def strip_domain_address(ip_address):
 def log(method):
     """Decorator helping to log method calls."""
     def wrapper(*args, **kwargs):
+        """ Necessary wrapper """
         instance = args[0]
-        LOG.debug('%s::%s called with args: %s kwargs: %s' %
-                  (instance.__class__.__name__,
-                   method.__name__,
-                   args[1:],
-                   kwargs))
+        LOG.debug('%s::%s called with args: %s kwargs: %s',
+                  instance.__class__.__name__,
+                  method.__name__,
+                  args[1:],
+                  kwargs)
         return method(*args, **kwargs)
     return wrapper
