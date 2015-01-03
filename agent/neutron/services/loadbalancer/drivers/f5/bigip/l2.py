@@ -501,10 +501,8 @@ class BigipL2Manager(object):
                            {'ports':
                             {bigip.local_ip:
                              [q_const.FLOODING_ENTRY]},
-                            'network_type':
-                            network['provider:network_type'],
-                            'segment_id':
-                            network['provider:segmentation_id']}}
+                            'network_type': network['provider:network_type'],
+                            'segment_id': network['provider:segmentation_id']}}
             self.l2pop_rpc.remove_fdb_entries(self.driver.context,
                                               fdb_entries)
 
@@ -691,111 +689,104 @@ class BigipL2Manager(object):
                                          arp_ip_address=ip_address,
                                          folder=net_folder)
 
-    def fdb_add(self, fdb_entries):
+    def fdb_add(self, fdb):
         """ Add L2 records for MAC addresses behind tunnel endpoints """
-        for network in fdb_entries:
-            self._fdb_add_for_network(network, fdb_entries[network])
+        for bigip in self.driver.get_all_bigips():
+            for fdb_operation in \
+                [{'network_type': 'vxlan',
+                  'get_tunnel_folder': bigip.vxlan.get_tunnel_folder,
+                  'fdb_method': bigip.vxlan.add_fdb_entries},
+                 {'network_type': 'gre',
+                  'get_tunnel_folder': bigip.l2gre.get_tunnel_folder,
+                  'fdb_method': bigip.l2gre.add_fdb_entries}]:
+                self._operate_bigip_fdb(bigip, fdb, fdb_operation)
 
-    def _fdb_add_for_network(self, network, net_entries):
-        """ Add L2 records for a specific network """
-        net = {'name': network,
-               'provider:network_type':
-               net_entries['network_type'],
-               'provider:segmentation_id':
-               net_entries['segment_id']
-               }
-        tunnel_name = _get_tunnel_name(net)
-        add_fdb = {}
-        for vtep in net_entries['ports']:
-            self._fdb_add_for_vtep(network, net_entries, vtep, add_fdb)
+    def _operate_bigip_fdb(self, bigip, fdb, fdb_operation):
+        """ Add L2 records for MAC addresses behind tunnel endpoints """
+        network_type = fdb_operation['network_type']
+        get_tunnel_folder = fdb_operation['get_tunnel_folder']
+        fdb_method = fdb_operation['fdb_method']
 
-        if len(add_fdb) > 0:
-            if net_entries['network_type'] == 'vxlan':
-                for bigip in self.driver.get_all_bigips():
-                    bigip.vxlan.add_fdb_entries(tunnel_name=tunnel_name,
-                                                fdb_entries=add_fdb)
-            if net_entries['network_type'] == 'gre':
-                for bigip in self.driver.get_all_bigips():
-                    bigip.l2gre.add_fdb_entries(tunnel_name=tunnel_name,
-                                                fdb_entries=add_fdb)
+        for network in fdb:
+            net_fdb = fdb[network]
+            if net_fdb['network_type'] == network_type:
+                net = {'name': network,
+                       'provider:network_type': net_fdb['network_type'],
+                       'provider:segmentation_id': net_fdb['segment_id']}
+                tunnel_name = _get_tunnel_name(net)
+                folder = get_tunnel_folder(tunnel_name=tunnel_name)
+                net_info = {'network': network,
+                            'folder': folder,
+                            'tunnel_name': tunnel_name,
+                            'net_fdb': net_fdb}
+                fdbs = self._get_bigip_network_fdbs(bigip, net_info)
+                if len(fdbs) > 0:
+                    fdb_method(tunnel_name=tunnel_name, fdb_entries=fdbs)
 
-    def _fdb_add_for_vtep(self, network, net_entries, vtep, add_fdb):
+    def _get_bigip_network_fdbs(self, bigip, net_info):
+        """ Get network fdb entries to add to a bigip """
+        if not net_info['folder']:
+            return {}
+        net_fdb = net_info['net_fdb']
+        fdbs = {}
+        for vtep in net_fdb['ports']:
+            # bigip does not need to set fdb entries for local addresses
+            if vtep == bigip.local_ip:
+                continue
+
+            # most net_info applies to the vtep
+            vtep_info = dict(net_info)
+            # but the network fdb is too broad so delete it
+            del vtep_info['net_fdb']
+            # use a slice of the fdb for the vtep instead
+            vtep_info['vtep'] = vtep
+            vtep_info['fdb_entries'] = net_fdb['ports'][vtep]
+
+            self._merge_vtep_fdbs(vtep_info, fdbs)
+        return fdbs
+
+    def _merge_vtep_fdbs(self, vtep_info, fdbs):
         """ Add L2 records for a specific network+vtep """
+        folder = vtep_info['folder']
+        tunnel_name = vtep_info['tunnel_name']
+        for entry in vtep_info['fdb_entries']:
+            mac_address = entry[0]
+            if mac_address == '00:00:00:00:00:00':
+                continue
+            ip_address = entry[1]
+
+            # create/get tunnel data
+            if not tunnel_name in fdbs:
+                fdbs[tunnel_name] = {}
+            tunnel_fdbs = fdbs[tunnel_name]
+            # update tunnel folder
+            tunnel_fdbs['folder'] = folder
+
+            # maybe create records for tunnel
+            if not 'records' in tunnel_fdbs:
+                tunnel_fdbs['records'] = {}
+
+            # add entry to records map keyed by mac address
+            tunnel_fdbs['records'][mac_address] = \
+                {'endpoint': vtep_info['vtep'], 'ip_address': ip_address}
+
+    def fdb_update(self, fdb):
+        """ Update l2 records """
+        self.fdb_add(fdb)
+
+    def fdb_remove(self, fdb):
+        """ Add L2 records for MAC addresses behind tunnel endpoints """
         for bigip in self.driver.get_all_bigips():
-            _fdb_add_for_bigip(network, net_entries, vtep, bigip, add_fdb)
+            for fdb_operation in \
+                [{'network_type': 'vxlan',
+                  'get_tunnel_folder': bigip.vxlan.get_tunnel_folder,
+                  'fdb_method': bigip.vxlan.delete_fdb_entries},
+                 {'network_type': 'gre',
+                  'get_tunnel_folder': bigip.l2gre.get_tunnel_folder,
+                  'fdb_method': bigip.l2gre.delete_fdb_entries}]:
+                self._operate_bigip_fdb(bigip, fdb, fdb_operation)
 
-    def fdb_remove(self, fdb_entries):
-        """ Remove L2 records for MAC addresses behind tunnel endpoints """
-        for network in fdb_entries:
-            self._fdb_remove_for_network(network, fdb_entries[network])
-
-    def _fdb_remove_for_network(self, network, net_entries):
-        """ Remove L2 records for a specific network """
-        net = {'name': network,
-               'provider:network_type':
-               net_entries['network_type'],
-               'provider:segmentation_id':
-               net_entries['segment_id']
-               }
-        tunnel_name = _get_tunnel_name(net)
-        remove_fdb = {}
-        for vtep in net_entries['ports']:
-            self._fdb_remove_for_vtep(network, net_entries,
-                                      vtep, remove_fdb)
-        if len(remove_fdb) > 0:
-            if net_entries['network_type'] == 'vxlan':
-                for bigip in self.driver.get_all_bigips():
-                    delete_fdb_entries = bigip.vxlan.delete_fdb_entries
-                    delete_fdb_entries(tunnel_name=tunnel_name,
-                                       fdb_entries=remove_fdb)
-            if net_entries['network_type'] == 'gre':
-                for bigip in self.driver.get_all_bigips():
-                    delete_fdb_entries = bigip.l2gre.delete_fdb_entries
-                    delete_fdb_entries(tunnel_name=tunnel_name,
-                                       fdb_entries=remove_fdb)
-
-    def _fdb_remove_for_vtep(self, network, net_entries,
-                             vtep, remove_fdb):
-        """ Figure out fdb entries to remove for a specific vtep """
-        for bigip in self.driver.get_all_bigips():
-            _fdb_remove_for_bigip(network, net_entries, vtep, bigip,
-                                  remove_fdb)
-
-    def fdb_update(self, fdb_entries):
-        """ Update L2 records for MAC addresses behind tunnel endpoints """
-        for network in fdb_entries:
-            self._fdb_update_for_network(network, fdb_entries[network])
-
-    def _fdb_update_for_network(self, network, net_entries):
-        """ Update L2 records for a specific network """
-        net = {'name': network,
-               'provider:network_type':
-               net_entries['network_type'],
-               'provider:segmentation_id':
-               net_entries['segment_id']
-               }
-        tunnel_name = _get_tunnel_name(net)
-        update_fdb = {}
-        for vtep in net_entries['ports']:
-            self._fdb_update_for_vtep(network, net_entries, vtep, update_fdb)
-
-        if len(update_fdb) > 0:
-            if net_entries['network_type'] == 'vxlan':
-                for bigip in self.driver.get_all_bigips():
-                    bigip.vxlan.add_fdb_entries(tunnel_name=tunnel_name,
-                                                fdb_entries=update_fdb)
-            if net_entries['network_type'] == 'gre':
-                for bigip in self.driver.get_all_bigips():
-                    bigip.l2gre.add_fdb_entries(tunnel_name=tunnel_name,
-                                                fdb_entries=update_fdb)
-
-    def _fdb_update_for_vtep(self, network, net_entries,
-                             vtep, update_fdb):
-        """ Update L2 records for a specific network+vtep """
-        for bigip in self.driver.get_all_bigips():
-            _fdb_update_for_bigip(network, net_entries, vtep, bigip,
-                                  update_fdb)
-
+    # Utilities
     def get_network_name(self, bigip, network):
         """ This constructs a name for a tunnel or vlan interface """
         preserve_network_name = False
@@ -819,106 +810,3 @@ class BigipL2Manager(object):
             LOG.error(_(error_message))
             raise f5ex.InvalidNetworkType(error_message)
         return network_name, preserve_network_name
-
-
-def _fdb_add_for_bigip(network, net_entries, vtep, bigip, add_fdb):
-    """ Figure out fdb entries to add for a specific network+vtep+bigip """
-    net = {'name': network,
-           'provider:network_type':
-           net_entries['network_type'],
-           'provider:segmentation_id':
-           net_entries['segment_id']
-           }
-    tunnel_name = _get_tunnel_name(net)
-    if vtep == bigip.local_ip:
-        return
-    folder = None
-    if net_entries['network_type'] == 'gre':
-        folder = bigip.l2gre.get_tunnel_folder(
-            tunnel_name=tunnel_name)
-    if net_entries['network_type'] == 'vxlan':
-        folder = bigip.vxlan.get_tunnel_folder(
-            tunnel_name=tunnel_name)
-    if not folder:
-        return
-    entries = net_entries['ports'][vtep]
-    for ent in entries:
-        if ent[0] == '00:00:00:00:00:00':
-            continue
-        if not tunnel_name in add_fdb:
-            add_fdb[tunnel_name] = {}
-        add_fdb[tunnel_name]['folder'] = folder
-        if not 'records' in add_fdb[tunnel_name]:
-            add_fdb[tunnel_name]['records'] = {}
-        add_fdb[tunnel_name]['records'][ent[0]] = {
-            'endpoint': vtep,
-            'ip_address': ent[1]}
-
-
-def _fdb_remove_for_bigip(network, net_entries, vtep, bigip, remove_fdb):
-    """ Figure out fdb entries to remove for a specific network+vtep+bigip """
-    if vtep == bigip.local_ip:
-        return
-
-    net = {'name': network,
-           'provider:network_type':
-           net_entries['network_type'],
-           'provider:segmentation_id':
-           net_entries['segment_id']
-           }
-    tunnel_name = _get_tunnel_name(net)
-    folder = None
-    if net_entries['network_type'] == 'gre':
-        folder = bigip.l2gre.get_tunnel_folder(
-            tunnel_name=tunnel_name)
-    if net_entries['network_type'] == 'vxlan':
-        folder = bigip.vxlan.get_tunnel_folder(
-            tunnel_name=tunnel_name)
-    if not folder:
-        return
-    entries = net_entries['ports'][vtep]
-    for ent in entries:
-        if ent[0] == '00:00:00:00:00:00':
-            continue
-        if not tunnel_name in remove_fdb:
-            remove_fdb[tunnel_name] = {}
-        remove_fdb[tunnel_name]['folder'] = folder
-        if not 'records' in remove_fdb[tunnel_name]:
-            remove_fdb[tunnel_name]['records'] = {}
-        remove_fdb[tunnel_name]['records'][ent[0]] = {
-            'endpoint': vtep,
-            'ip_address': ent[1]}
-
-
-def _fdb_update_for_bigip(network, net_entries, vtep, bigip, update_fdb):
-    """ Figure out fdb entries to update for a specific network+vtep+bigip """
-    if vtep == bigip.local_ip:
-        return
-
-    net = {'name': network,
-           'provider:network_type':
-           net_entries['network_type'],
-           'provider:segmentation_id':
-           net_entries['segment_id']
-           }
-    tunnel_name = _get_tunnel_name(net)
-    folder = None
-    if net_entries['network_type'] == 'gre':
-        folder = bigip.l2gre.get_tunnel_folder(
-            tunnel_name=tunnel_name)
-    if net_entries['network_type'] == 'vxlan':
-        folder = bigip.l2gre.get_tunnel_folder(
-            tunnel_name=tunnel_name)
-    if not folder:
-        return
-    entries = net_entries['ports'][vtep]
-    for ent in entries:
-        if ent[0] != '00:00:00:00:00:00':
-            if not tunnel_name in update_fdb:
-                update_fdb[tunnel_name] = {}
-            update_fdb[tunnel_name]['folder'] = folder
-            if not 'records' in update_fdb[tunnel_name]:
-                update_fdb[tunnel_name]['records'] = {}
-            update_fdb[tunnel_name]['records'][ent[0]] = {
-                'endpoint': vtep,
-                'ip_address': ent[1]}
