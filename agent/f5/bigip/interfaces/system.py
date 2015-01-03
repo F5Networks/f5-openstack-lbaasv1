@@ -1,3 +1,4 @@
+""" Classes and functions for configuring bigip system """
 # Copyright 2014 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# pylint: disable=broad-except
 
 from f5.common.logger import Log
 from f5.common import constants as const
@@ -27,6 +29,9 @@ import uuid
 
 class System(object):
     """ Class for configuring bigip system """
+
+    OBJ_PREFIX = 'uuid_'
+
     def __init__(self, bigip):
         self.bigip = bigip
 
@@ -125,11 +130,12 @@ class System(object):
         fakename = '/set-folder-workaround-'+str(uuid.uuid4())[0:8]
         try:
             self.mgmt_folder.delete_folder([fakename])
-        except WebFault as e:
+        except WebFault:
             pass
 
     @log
     def delete_folder(self, folder):
+        """ Delete folder """
         if folder:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/sys/folder/~' + folder
@@ -186,11 +192,11 @@ class System(object):
         try:
             self.sys_session.set_active_folder(folder)
             self.current_folder = folder
-        except WebFault as wf:
+        except WebFault as webfault:
             Log.error('System',
                       'set_folder:set_active_folder failed: ' +
-                      str(wf.message))
-            raise exceptions.SystemUpdateException(wf.message)
+                      str(webfault.message))
+            raise exceptions.SystemUpdateException(webfault.message)
 
     @log
     def purge_folder_contents(self, folder, bigip=None):
@@ -216,6 +222,7 @@ class System(object):
 
     @log
     def purge_folder(self, folder, bigip=None):
+        """ Purge folder """
         if not bigip:
             bigip = self.bigip
         if not folder in self.exempt_folders:
@@ -250,8 +257,8 @@ class System(object):
         for folder in existing_folders:
             try:
                 bigip.system.purge_folder_contents(folder, bigip)
-            except Exception as e:
-                Log.error('purge_orphaned_folders_contents', e.message)
+            except Exception as exc:
+                Log.error('purge_orphaned_folders_contents', exc.message)
 
     @log
     def purge_orphaned_folders(self, known_folders, bigip=None):
@@ -278,8 +285,8 @@ class System(object):
         for folder in existing_folders:
             try:
                 bigip.system.purge_folder(folder, bigip)
-            except Exception as e:
-                Log.error('purge_orphaned_folders', e.message)
+            except Exception as exc:
+                Log.error('purge_orphaned_folders', exc.message)
 
     @log
     def purge_all_folders(self, bigip=None):
@@ -368,8 +375,8 @@ class System(object):
         if not self.systeminfo:
             try:
                 self.systeminfo = self.sys_info.get_system_information()
-            except Exception as e:
-                raise exceptions.SystemQueryException(e.message)
+            except Exception as exc:
+                raise exceptions.SystemQueryException(exc.message)
         return self.systeminfo.product_category
 
     @log
@@ -378,8 +385,8 @@ class System(object):
         if not self.systeminfo:
             try:
                 self.systeminfo = self.sys_info.get_system_information()
-            except Exception as e:
-                raise exceptions.SystemQueryException(e.message)
+            except Exception as exc:
+                raise exceptions.SystemQueryException(exc.message)
         return self.systeminfo.chassis_serial
 
     @log
@@ -388,8 +395,8 @@ class System(object):
         if not self.version:
             try:
                 self.version = self.sys_info.get_version()
-            except Exception as e:
-                raise exceptions.SystemQueryException(e.message)
+            except Exception as exc:
+                raise exceptions.SystemQueryException(exc.message)
         return self.version
 
     @log

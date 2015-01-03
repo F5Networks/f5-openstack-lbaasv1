@@ -731,10 +731,10 @@ class iControlDriver(object):
                             self.tunnel_rpc.tunnel_sync(self.context,
                                                         bigip.local_ip,
                                                         tunnel_type)
-                except Exception as exp:
+                except Exception as exc:
                     LOG.debug(
                         _("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
-                        {'local_ip': bigip.local_ip, 'e': exp})
+                        {'local_ip': bigip.local_ip, 'e': exc})
                     resync = True
         return resync
 
@@ -1388,8 +1388,8 @@ class iControlDriver(object):
                                    force_now=force_now)
                 LOG.debug('Cluster synced.')
                 return
-            except Exception as exp:
-                LOG.error('ERROR: Cluster sync failed: %s' % exp)
+            except Exception as exc:
+                LOG.error('ERROR: Cluster sync failed: %s' % exc)
                 if attempt == attempts:
                     raise
                 LOG.error('Wait another %d seconds for devices '

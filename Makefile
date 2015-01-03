@@ -142,17 +142,18 @@ pylint:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
-         $(PYLINT) $(BDIR)/icontrol_driver.py | more; \
-         $(PYLINT) $(BDIR)/l2.py | more; \
-         $(PYLINT) $(BDIR)/selfips.py | more; \
-         $(PYLINT) $(BDIR)/snats.py | more; \
-         $(PYLINT) $(BDIR)/pools.py | more; \
-         $(PYLINT) $(BDIR)/vips.py | more; \
-         $(PYLINT) $(BDIR)/utils.py | more; \
-         $(PYLINT) $(IDIR)/__init__.py | more; \
-         echo $(PYLINT) $(IDIR)/arp.py | more; \
-         echo $(PYLINT) $(IDIR)/system.py | more; \
-         echo $(PYLINT) $(IDIR)/vxlan.py | more; \
+         $(PYLINT) $(BDIR)/icontrol_driver.py; \
+         $(PYLINT) $(BDIR)/l2.py; \
+         $(PYLINT) $(BDIR)/selfips.py; \
+         $(PYLINT) $(BDIR)/snats.py; \
+         $(PYLINT) $(BDIR)/pools.py; \
+         $(PYLINT) $(BDIR)/vips.py; \
+         $(PYLINT) $(BDIR)/utils.py; \
+         $(PYLINT) $(IDIR)/__init__.py; \
+         $(PYLINT) $(IDIR)/arp.py; \
+         $(PYLINT) $(IDIR)/system.py; \
+         echo $(PYLINT) $(IDIR)/virtual_server.py; \
+         $(PYLINT) $(IDIR)/vxlan.py; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
          rm -v neutron/common; \

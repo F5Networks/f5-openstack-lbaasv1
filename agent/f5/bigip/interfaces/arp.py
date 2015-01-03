@@ -1,3 +1,4 @@
+""" Classes and functions for configuring ARP on bigip """
 # Copyright 2014 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# pylint: disable=broad-except,no-self-use
 
 from f5.common.logger import Log
 from f5.common import constants as const
@@ -39,6 +41,7 @@ class ARP(object):
         # iControl helper objects
         self.net_arp = self.bigip.icontrol.Networking.ARP
 
+    # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
     @domain_address
@@ -62,6 +65,7 @@ class ARP(object):
         else:
             raise exceptions.StaticARPCreationException(response.text)
     '''
+    # pylint: enable=pointless-string-statement
 
     @icontrol_folder
     @domain_address
@@ -79,11 +83,12 @@ class ARP(object):
                 entry.mac_address = mac_address
                 self.net_arp.add_static_entry([entry])
                 return True
-            except Exception as e:
-                Log.error('ARP', 'create exception: ' + e.message)
-                raise exceptions.StaticARPCreationException(e.message)
+            except Exception as exc:
+                Log.error('ARP', 'create exception: ' + exc.message)
+                raise exceptions.StaticARPCreationException(exc.message)
         return False
 
+    # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
     @domain_address
@@ -104,6 +109,8 @@ class ARP(object):
                 Log.error('ARP', response.text)
         return False
     '''
+    # pylint: enable=pointless-string-statement
+
     @icontrol_folder
     @domain_address
     @log
@@ -117,9 +124,9 @@ class ARP(object):
                 self.net_arp.delete_static_entry_v2(
                     ['/' + folder + '/' + ip_address])
                 return True
-            except Exception as e:
-                Log.error('ARP', 'delete exception: ' + e.message)
-                raise exceptions.StaticARPDeleteException(e.message)
+            except Exception as exc:
+                Log.error('ARP', 'delete exception: ' + exc.message)
+                raise exceptions.StaticARPDeleteException(exc.message)
         return False
 
     @icontrol_folder
@@ -129,9 +136,9 @@ class ARP(object):
         if mac_address:
             arps = self.get_arps(None, folder)
             for arp in arps:
-                for ip in arp:
-                    if arp[ip] == mac_address:
-                        self.delete(ip_address=ip, folder=folder)
+                for ip_address in arp:
+                    if arp[ip_address] == mac_address:
+                        self.delete(ip_address=ip_address, folder=folder)
 
     @icontrol_folder
     @log
@@ -147,8 +154,8 @@ class ARP(object):
                             subnet[0:mask_div][0:rd_div] + subnet[mask_div:])
                     else:
                         network = netaddr.IPNetwork(subnet)
-                except Exception as e:
-                    Log.error('ARP', e.message)
+                except Exception as exc:
+                    Log.error('ARP', exc.message)
                     return []
             elif not mask:
                 return []
@@ -160,30 +167,34 @@ class ARP(object):
                             subnet[0:rd_div] + '/' + mask)
                     else:
                         network = netaddr.IPNetwork(subnet + '/' + mask)
-                except Exception as e:
-                    Log.error('ARP', e.message)
+                except Exception as exc:
+                    Log.error('ARP', exc.message)
                     return []
 
-            mac_addresses = []
-            if network:
-                request_url = self.bigip.icr_url + '/net/arp'
-                request_filter = 'partition eq ' + folder
-                request_url += '?$filter=' + request_filter
-                response = self.bigip.icr_session.get(
-                    request_url, timeout=const.CONNECTION_TIMEOUT)
-                Log.debug('ARP::get response', '%s' % response.json())
-                if response.status_code < 400:
-                    response_obj = json.loads(response.text)
-                    if 'items' in response_obj:
-                        for arp in response_obj['items']:
-                            ad_rd_div = arp['ipAddress'].find('%')
-                            address = netaddr.IPAddress(
-                                arp['ipAddress'][0:ad_rd_div])
-                            if address in network:
-                                mac_addresses.append(arp['macAddress'])
-                                self.delete(arp['ipAddress'],
-                                            folder=arp['partition'])
-            return mac_addresses
+            return self._delete_by_network(folder, network)
+
+    def _delete_by_network(self, folder, network):
+        """ Delete for network """
+        if not network:
+            return []
+        mac_addresses = []
+        request_url = self.bigip.icr_url + '/net/arp'
+        request_filter = 'partition eq ' + folder
+        request_url += '?$filter=' + request_filter
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                for arp in response_obj['items']:
+                    ad_rd_div = arp['ipAddress'].find('%')
+                    address = netaddr.IPAddress(
+                        arp['ipAddress'][0:ad_rd_div])
+                    if address in network:
+                        mac_addresses.append(arp['macAddress'])
+                        self.delete(arp['ipAddress'],
+                                    folder=arp['partition'])
+        return mac_addresses
 
     @icontrol_rest_folder
     @domain_address
@@ -231,6 +242,7 @@ class ARP(object):
                 raise exceptions.StaticARPQueryException(response.text)
         return []
 
+    # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
     def delete_all(self, folder='Common'):
@@ -261,6 +273,7 @@ class ARP(object):
             Log.error('ARP', response.text)
             exceptions.StaticARPDeleteException(response.text)
      '''
+    # pylint: enable=pointless-string-statement
 
     @icontrol_folder
     @log
@@ -268,10 +281,11 @@ class ARP(object):
         """ Delete all ARP entries """
         try:
             self.net_arp.delete_all_static_entries()
-        except Exception as e:
-            Log.error('ARP', 'delete exception: ' + e.message)
-            raise exceptions.StaticARPDeleteException(e.message)
+        except Exception as exc:
+            Log.error('ARP', 'delete exception: ' + exc.message)
+            raise exceptions.StaticARPDeleteException(exc.message)
 
+    # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
     @domain_address
@@ -288,6 +302,7 @@ class ARP(object):
             return True
         return False
     '''
+    # pylint: enable=pointless-string-statement
 
     @icontrol_folder
     @domain_address
@@ -299,10 +314,10 @@ class ARP(object):
         ip_address = self._remove_route_domain_zero(ip_address)
         try:
             arp_list = self.net_arp.get_static_entry_list()
-        except Exception as e:
+        except Exception as exc:
             Log.error('ARP', 'query exception: %s on %s' %
-                      (e.message, self.bigip.device_name))
-            raise exceptions.StaticARPQueryException(e.message)
+                      (exc.message, self.bigip.device_name))
+            raise exceptions.StaticARPQueryException(exc.message)
 
         if '/' + folder + '/' + ip_address in arp_list:
             return True

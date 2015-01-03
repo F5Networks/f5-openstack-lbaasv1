@@ -168,10 +168,10 @@ class BigipPoolManager(object):
                 else:
                     int(monitor['expected_codes'])
                     recv_text = "HTTP/1.(0|1) " + monitor['expected_codes']
-            except Exception as exp:
+            except Exception as exc:
                 LOG.error(_(
                     "invalid monitor: %s, expected_codes %s, setting to 200"
-                    % (exp, monitor['expected_codes'])))
+                    % (exc, monitor['expected_codes'])))
                 recv_text = "HTTP/1.(0|1) 200"
         else:
             recv_text = "HTTP/1.(0|1) 200"

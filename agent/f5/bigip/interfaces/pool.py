@@ -121,8 +121,8 @@ class Pool(object):
             #                  folder)
             try:
                 self.bigip.arp.delete(arp['ipAddress'], folder=folder)
-            except Exception as exp:
-                Log.error('ARP', exp.message)
+            except Exception as exc:
+                Log.error('ARP', exc.message)
             fdb_req = self.bigip.icr_url + '/net/fdb/tunnel'
             fdb_req += '?$select=records,selfLink'
             fdb_req += '&$filter=partition eq ' + folder

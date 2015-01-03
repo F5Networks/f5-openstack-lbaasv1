@@ -234,28 +234,28 @@ class VirtualServer(object):
                                                    client_context,
                                                    server_context,
                                                    folder):
-                    payload = dict()
-                    payload['name'] = profile_name
-                    if client_context and not server_context:
-                        payload['context'] = 'clientside'
-                    elif not client_context and server_context:
-                        payload['context'] = 'serverside'
-                    else:
-                        payload['context'] = 'all'
-                    request_url = self.bigip.icr_url + '/ltm/virtual/'
-                    request_url += '~' + folder + '~' + name
-                    request_url += '/profiles'
-                    response = self.bigip.icr_session.post(
-                        request_url, data=json.dumps(payload),
-                        timeout=const.CONNECTION_TIMEOUT)
-                    if response.status_code < 400:
-                        return True
-                    elif response.status_code == 409:
-                        return True
-                    else:
-                        Log.error('profile', response.text)
-                        raise exceptions.VirtualServerCreationException(
-                            response.text)
+                payload = dict()
+                payload['name'] = profile_name
+                if client_context and not server_context:
+                    payload['context'] = 'clientside'
+                elif not client_context and server_context:
+                    payload['context'] = 'serverside'
+                else:
+                    payload['context'] = 'all'
+                request_url = self.bigip.icr_url + '/ltm/virtual/'
+                request_url += '~' + folder + '~' + name
+                request_url += '/profiles'
+                response = self.bigip.icr_session.post(
+                    request_url, data=json.dumps(payload),
+                    timeout=const.CONNECTION_TIMEOUT)
+                if response.status_code < 400:
+                    return True
+                elif response.status_code == 409:
+                    return True
+                else:
+                    Log.error('profile', response.text)
+                    raise exceptions.VirtualServerCreationException(
+                        response.text)
         return False
 
     @icontrol_rest_folder
@@ -322,14 +322,14 @@ class VirtualServer(object):
             profiles = self.get_profiles(name, folder)
             common_name = strip_folder_and_prefix(profile_name)
             for profile in profiles:
-                if (profile_name in profile):
+                if profile_name in profile:
                     if client_context and \
                             profile.get(profile_name)['client_context']:
                         return True
                     if server_context and \
                             profile.get(profile_name)['server_context']:
                         return True
-                if (common_name in profile):
+                if common_name in profile:
                     if client_context and \
                             profile.get(common_name)['client_context']:
                         return True
@@ -785,9 +785,9 @@ class VirtualServer(object):
                     del_req, timeout=const.CONNECTION_TIMEOUT)
                 if del_res.status_code < 400:
                     if name in self.folder_persistence_profiles:
-                        del(self.folder_persistence_profiles[name])
+                        del self.folder_persistence_profiles[name]
                     if name in self.common_persistence_profiles:
-                        del(self.common_profiles[name])
+                        del self.common_profiles[name]
                     return True
                 else:
                     Log.error('persistence', del_res.text)
@@ -859,9 +859,9 @@ class VirtualServer(object):
                     del_req, timeout=const.CONNECTION_TIMEOUT)
                 if del_res.status_code < 400:
                     if name in self.folder_persistence_profiles:
-                        del(self.folder_persistence_profiles[name])
+                        del self.folder_persistence_profiles[name]
                     if name in self.common_persistence_profiles:
-                        del(self.common_persistence_profiles[name])
+                        del self.common_persistence_profiles[name]
                     return True
                 else:
                     Log.error('persistence', del_res.text)
@@ -883,9 +883,9 @@ class VirtualServer(object):
                 link, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if name in self.folder_persistence_profiles:
-                    del(self.folder_persistence_profiles[name])
+                    del self.folder_persistence_profiles[name]
                 if name in self.common_persistence_profiles:
-                    del(self.common_persistence_profiles[name])
+                    del self.common_persistence_profiles[name]
                 return True
             elif response.status_code == 404:
                 return True

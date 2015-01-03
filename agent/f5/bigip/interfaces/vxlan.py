@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# pylint: disable=broad-except
 
 from f5.common.logger import Log
 from f5.common import constants as const
@@ -29,6 +30,9 @@ from eventlet import greenthread
 
 class VXLAN(object):
     """ Interface for vxlan related REST methods """
+
+    OBJ_PREFIX = 'uuid_'
+
     def __init__(self, bigip):
         self.bigip = bigip
 
@@ -260,10 +264,10 @@ class VXLAN(object):
                             return True
                         else:
                             return False
-                    except Exception as e:
+                    except Exception as exc:
                         Log.error('VXLAN',
                                   'could not create static arp: %s on %s'
-                                  % (e.message, self.bigip.device_name))
+                                  % (exc.message, self.bigip.device_name))
                         return False
             return True
         else:
@@ -317,10 +321,10 @@ class VXLAN(object):
                                 ip_address=new_arp_addresses[mac],
                                 mac_address=mac,
                                 folder=folder)
-                        except Exception as e:
+                        except Exception as exc:
                             Log.error('VXLAN',
                                       'could not create static arp: %s'
-                                      % e.message)
+                                      % exc.message)
             return True
         return False
 
@@ -407,6 +411,7 @@ class VXLAN(object):
     @icontrol_rest_folder
     @log
     def delete_all_fdb_entries(self, tunnel_name=None, folder='Common'):
+        """ Delete fdb entries """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + tunnel_name
@@ -448,6 +453,7 @@ class VXLAN(object):
     @icontrol_rest_folder
     @log
     def profile_exists(self, name=None, folder='Common'):
+        """ Does vxlan tunnel exist? """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/tunnels/vxlan/'
         request_url += '~' + folder + '~' + name
