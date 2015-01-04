@@ -62,6 +62,7 @@ setup(name='f5-bigip-lbaas-agent',
          'neutron.services.loadbalancer.drivers.f5.bigip.selfips',
          'neutron.services.loadbalancer.drivers.f5.bigip.snats',
          'neutron.services.loadbalancer.drivers.f5.bigip.pools',
+         'neutron.services.loadbalancer.drivers.f5.bigip.vcmp',
          'neutron.services.loadbalancer.drivers.f5.bigip.vips',
          'neutron.services.loadbalancer.drivers.f5.bigip.utils'],
       packages=[

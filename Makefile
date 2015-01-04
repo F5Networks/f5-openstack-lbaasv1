@@ -107,6 +107,7 @@ pep8:
          pep8 $(BDIR)/selfips.py; \
          pep8 $(BDIR)/snats.py; \
          pep8 $(BDIR)/pools.py; \
+         pep8 $(BDIR)/vcmp.py; \
          pep8 $(BDIR)/vips.py; \
          pep8 $(BDIR)/utils.py; \
          pep8 $(IDIR)/__init__.py; \
@@ -147,6 +148,7 @@ pylint:
          $(PYLINT) $(BDIR)/selfips.py; \
          $(PYLINT) $(BDIR)/snats.py; \
          $(PYLINT) $(BDIR)/pools.py; \
+         $(PYLINT) $(BDIR)/vcmp.py; \
          $(PYLINT) $(BDIR)/vips.py; \
          $(PYLINT) $(BDIR)/utils.py; \
          $(PYLINT) $(IDIR)/__init__.py; \

@@ -3,10 +3,8 @@
 
 from neutron.openstack.common import log as logging
 from neutron.common import constants as q_const
-
 from f5.bigip import exceptions as f5ex
 from f5.bigip.interfaces import prefixed
-from f5.bigip import bigip as f5_bigip
 from f5.bigip.exceptions import \
     VLANCreationException, VLANDeleteException
 
@@ -47,18 +45,11 @@ def _get_tunnel_fake_mac(network, local_ip):
     return mac_prefix + ':'.join("%02x" % octet for octet in mac)
 
 
-def get_vcmp_guest(vcmp_host, bigip):
-    """Get vCMP Guest associated with bigip (if any)"""
-    for vcmp_guest in vcmp_host['guests']:
-        if vcmp_guest['mgmt_addr'] == bigip.icontrol.hostname:
-            return vcmp_guest
-    return None
-
-
 class BigipL2Manager(object):
     """ Class for configuring L2 networks and FDB entries """
-    def __init__(self, driver):
+    def __init__(self, driver, vcmp_manager):
         self.driver = driver
+        self.vcmp_manager = vcmp_manager
 
         self.l2pop_rpc = None
 
@@ -75,78 +66,6 @@ class BigipL2Manager(object):
             self.tagging_mapping[net_key] = str(intmap[2]).strip()
             LOG.debug(_('physical_network %s = interface %s, tagged %s'
                         % (net_key, intmap[1], intmap[2])))
-
-        self.__vcmp_hosts = []
-        self._init_vcmp_hosts()
-
-    def get_vcmp_host(self, bigip):
-        """Get vCMP Host associated with bigip (if any)"""
-        for vcmp_host in self.__vcmp_hosts:
-            for vcmp_guest in vcmp_host['guests']:
-                if vcmp_guest['mgmt_addr'] == bigip.icontrol.hostname:
-                    return vcmp_host
-        return None
-
-    def _init_vcmp_hosts(self):
-        """Initialize vCMP Hosts.  Includes establishing a bigip connection
-           to the vCMP host and determining associated vCMP Guests."""
-        if not self.driver.conf.icontrol_vcmp_hostname:
-            # No vCMP Hosts. Check if any vCMP Guests exist.
-            # Flag issue in log.
-            self.check_vcmp_host_assignments()
-            return
-
-        vcmp_hostnames = self.driver.conf.icontrol_vcmp_hostname.split(',')
-        for vcmp_hostname in vcmp_hostnames:
-            # vCMP Host Attributes
-            vcmp_host = {}
-            vcmp_host['bigip'] = f5_bigip.BigIP(
-                vcmp_hostname,
-                self.driver.conf.icontrol_username,
-                self.driver.conf.icontrol_password, 5)
-            vcmp_host['guests'] = []
-
-            # vCMP Guest Attributes
-            guest_names = vcmp_host['bigip'].system.sys_vcmp.get_list()
-            guest_mgmts = vcmp_host['bigip'].\
-                system.sys_vcmp.get_management_address(guest_names)
-
-            for guest_name, guest_mgmt in zip(guest_names, guest_mgmts):
-                # Only add vCMP Guests with BIG-IP that has been registered
-                if guest_mgmt.address in self.driver.get_bigip_hosts():
-                    vcmp_guest = {}
-                    vcmp_guest['name'] = guest_name
-                    vcmp_guest['mgmt_addr'] = guest_mgmt.address
-                    vcmp_host['guests'].append(vcmp_guest)
-
-            self.__vcmp_hosts.append(vcmp_host)
-
-        self.check_vcmp_host_assignments()
-
-        # Output vCMP Hosts/Guests in log
-        for vcmp_host in self.__vcmp_hosts:
-            for vcmp_guest in vcmp_host['guests']:
-                LOG.debug(('vCMPHost[%s] vCMPGuest[%s] - mgmt: %s' %
-                          (vcmp_host['bigip'].icontrol.hostname,
-                           vcmp_guest['name'], vcmp_guest['mgmt_addr'])))
-
-    def check_vcmp_host_assignments(self):
-        """Check that all vCMP Guest bigips have a host assignment"""
-        LOG.debug(('Check registered bigips to ensure vCMP Guests '
-                   'have a vCMP host assignment'))
-
-        for bigip in self.driver.get_all_bigips():
-            system_info = bigip.system.sys_info.get_system_information()
-            if system_info.platform == 'Z101':
-                if self.get_vcmp_host(bigip):
-                    LOG.debug(('vCMP host found for vCMP Guest %s' %
-                               bigip.icontrol.hostname))
-                else:
-                    LOG.error(('vCMP host not found for vCMP Guest %s' %
-                               bigip.icontrol.hostname))
-            else:
-                LOG.debug(('BIG-IP %s is not a vCMP Guest' %
-                           bigip.icontrol.hostname))
 
     def is_common_network(self, network):
         """ Does this network belong in the /Common folder? """
@@ -251,7 +170,7 @@ class BigipL2Manager(object):
                                                'interface': interface,
                                                'network': network})
 
-        if self.get_vcmp_host(bigip):
+        if self.vcmp_manager.get_vcmp_host(bigip):
             interface = None
 
         bigip.vlan.create(name=vlan_name,
@@ -297,7 +216,7 @@ class BigipL2Manager(object):
                                                'interface': interface,
                                                'network': network})
 
-        if self.get_vcmp_host(bigip):
+        if self.vcmp_manager.get_vcmp_host(bigip):
             interface = None
 
         bigip.vlan.create(name=vlan_name,
@@ -371,7 +290,7 @@ class BigipL2Manager(object):
     def _assure_vcmp_device_network(self, bigip, vlan):
         """For vCMP Guests, add VLAN to vCMP Host, associate VLAN with
            vCMP Guest, and remove VLAN from /Common on vCMP Guest."""
-        vcmp_host = self.get_vcmp_host(bigip)
+        vcmp_host = self.vcmp_manager.get_vcmp_host(bigip)
         if not vcmp_host:
             return
 
@@ -390,7 +309,7 @@ class BigipL2Manager(object):
                  (vlan['name'], vcmp_host['bigip'].icontrol.hostname, exc)))
 
         # Associate the VLAN with the vCMP Guest
-        vcmp_guest = get_vcmp_guest(vcmp_host, bigip)
+        vcmp_guest = self.vcmp_manager.get_vcmp_guest(vcmp_host, bigip)
         try:
             vlan_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
                 create('Common.StringSequence')
@@ -532,12 +451,12 @@ class BigipL2Manager(object):
     def _delete_vcmp_device_network(self, bigip, vlan_name):
         """For vCMP Guests, disassociate VLAN from vCMP Guest and
            delete VLAN from vCMP Host."""
-        vcmp_host = self.get_vcmp_host(bigip)
+        vcmp_host = self.vcmp_manager.get_vcmp_host(bigip)
         if not vcmp_host:
             return
 
         # Remove VLAN association from the vCMP Guest
-        vcmp_guest = get_vcmp_guest(vcmp_host, bigip)
+        vcmp_guest = self.vcmp_manager.get_vcmp_guest(vcmp_host, bigip)
         try:
             vlan_seq = vcmp_host['bigip'].system.sys_vcmp.typefactory.\
                 create('Common.StringSequence')
@@ -689,20 +608,35 @@ class BigipL2Manager(object):
                                          arp_ip_address=ip_address,
                                          folder=net_folder)
 
-    def fdb_add(self, fdb):
-        """ Add L2 records for MAC addresses behind tunnel endpoints """
-        for bigip in self.driver.get_all_bigips():
-            for fdb_operation in \
-                [{'network_type': 'vxlan',
-                  'get_tunnel_folder': bigip.vxlan.get_tunnel_folder,
-                  'fdb_method': bigip.vxlan.add_fdb_entries},
-                 {'network_type': 'gre',
-                  'get_tunnel_folder': bigip.l2gre.get_tunnel_folder,
-                  'fdb_method': bigip.l2gre.add_fdb_entries}]:
-                self._operate_bigip_fdb(bigip, fdb, fdb_operation)
+    def add_bigip_fdb(self, bigip, fdb):
+        """ Add entries from the fdb relevant to the bigip """
+        for fdb_operation in \
+            [{'network_type': 'vxlan',
+              'get_tunnel_folder': bigip.vxlan.get_tunnel_folder,
+              'fdb_method': bigip.vxlan.add_fdb_entries},
+             {'network_type': 'gre',
+              'get_tunnel_folder': bigip.l2gre.get_tunnel_folder,
+              'fdb_method': bigip.l2gre.add_fdb_entries}]:
+            self._operate_bigip_fdb(bigip, fdb, fdb_operation)
 
     def _operate_bigip_fdb(self, bigip, fdb, fdb_operation):
-        """ Add L2 records for MAC addresses behind tunnel endpoints """
+        """ Add L2 records for MAC addresses behind tunnel endpoints.
+            Description of fdb structure:
+            {'<network_id>':
+                'segment_id': <int>
+                'ports': [ '<vtep>': ['<mac_address>': '<ip_address>'] ]
+             '<network_id>':
+                'segment_id':
+                'ports': [ '<vtep>': ['<mac_address>': '<ip_address>'] ] }
+
+            Sample real fdb structure:
+            {u'45bbbce1-191b-4f7b-84c5-54c6c8243bd2':
+                {u'segment_id': 1008,
+                 u'ports':
+                     {u'10.30.30.2': [[u'00:00:00:00:00:00', u'0.0.0.0'],
+                                      [u'fa:16:3e:3d:7b:7f', u'10.10.1.4']]},
+                 u'network_type': u'vxlan'}}
+        """
         network_type = fdb_operation['network_type']
         get_tunnel_folder = fdb_operation['get_tunnel_folder']
         fdb_method = fdb_operation['fdb_method']
@@ -770,21 +704,20 @@ class BigipL2Manager(object):
             tunnel_fdbs['records'][mac_address] = \
                 {'endpoint': vtep_info['vtep'], 'ip_address': ip_address}
 
-    def fdb_update(self, fdb):
+    def update_bigip_fdb(self, bigip, fdb):
         """ Update l2 records """
-        self.fdb_add(fdb)
+        self.add_bigip_fdb(bigip, fdb)
 
-    def fdb_remove(self, fdb):
+    def remove_bigip_fdb(self, bigip, fdb):
         """ Add L2 records for MAC addresses behind tunnel endpoints """
-        for bigip in self.driver.get_all_bigips():
-            for fdb_operation in \
-                [{'network_type': 'vxlan',
-                  'get_tunnel_folder': bigip.vxlan.get_tunnel_folder,
-                  'fdb_method': bigip.vxlan.delete_fdb_entries},
-                 {'network_type': 'gre',
-                  'get_tunnel_folder': bigip.l2gre.get_tunnel_folder,
-                  'fdb_method': bigip.l2gre.delete_fdb_entries}]:
-                self._operate_bigip_fdb(bigip, fdb, fdb_operation)
+        for fdb_operation in \
+            [{'network_type': 'vxlan',
+              'get_tunnel_folder': bigip.vxlan.get_tunnel_folder,
+              'fdb_method': bigip.vxlan.delete_fdb_entries},
+             {'network_type': 'gre',
+              'get_tunnel_folder': bigip.l2gre.get_tunnel_folder,
+              'fdb_method': bigip.l2gre.delete_fdb_entries}]:
+            self._operate_bigip_fdb(bigip, fdb, fdb_operation)
 
     # Utilities
     def get_network_name(self, bigip, network):

@@ -22,6 +22,8 @@ from neutron.common.exceptions import NeutronException, \
     InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
 
+from neutron.services.loadbalancer.drivers.f5.bigip.vcmp \
+    import VcmpManager
 from neutron.services.loadbalancer.drivers.f5.bigip.l2 \
     import BigipL2Manager
 from neutron.services.loadbalancer.drivers.f5.bigip.selfips \
@@ -240,22 +242,22 @@ class iControlDriver(object):
         self._init_bigip_hostnames()
         self._init_bigips()
 
+        self.vcmp_manager = VcmpManager(self)
+
         if self.conf.f5_global_routed_mode:
             self.bigip_l2_manager = None
             self.bigip_selfip_manager = None
             self.bigip_snat_manager = None
         else:
-            self.bigip_l2_manager = BigipL2Manager(self)
+            l2_manager = BigipL2Manager(self, self.vcmp_manager)
+            self.bigip_l2_manager = l2_manager
+            self.bigip_selfip_manager = BigipSelfIpManager(self, l2_manager)
+            self.bigip_snat_manager = BigipSnatManager(self, l2_manager)
+            self.bigip_pool_manager = BigipPoolManager(self, l2_manager)
+            self.bigip_vip_manager = BigipVipManager(self, l2_manager)
+
             self.agent_configurations['bridge_mappings'] = \
                 self.bigip_l2_manager.interface_mapping
-            self.bigip_selfip_manager = BigipSelfIpManager(
-                self, self.bigip_l2_manager)
-            self.bigip_snat_manager = BigipSnatManager(
-                self, self.bigip_l2_manager)
-            self.bigip_pool_manager = BigipPoolManager(
-                self, self.bigip_l2_manager)
-            self.bigip_vip_manager = BigipVipManager(
-                self, self.bigip_l2_manager)
 
         LOG.info(_('iControlDriver initialized to %d bigips with username:%s'
                    % (len(self.__bigips), self.conf.icontrol_username)))
@@ -706,19 +708,22 @@ class iControlDriver(object):
             bigip.system.purge_orphaned_folders(existing_tenants)
 
     @serialized('fdb_add')
-    def fdb_add(self, fdb_entries):
+    def fdb_add(self, fdb):
         """ Add (L2toL3) forwarding database entries """
-        return self.bigip_l2_manager.fdb_add(fdb_entries)
+        for bigip in self.get_all_bigips():
+            self.bigip_l2_manager.add_bigip_fdb(bigip, fdb)
 
     @serialized('fdb_remove')
-    def fdb_remove(self, fdb_entries):
+    def fdb_remove(self, fdb):
         """ Remove (L2toL3) forwarding database entries """
-        return self.bigip_l2_manager.fdb_remove(fdb_entries)
+        for bigip in self.get_all_bigips():
+            self.bigip_l2_manager.remove_bigip_fdb(bigip, fdb)
 
     @serialized('fdb_update')
-    def fdb_update(self, fdb_entries):
+    def fdb_update(self, fdb):
         """ Update (L2toL3) forwarding database entries """
-        return self.bigip_l2_manager.fdb_update(fdb_entries)
+        for bigip in self.get_all_bigips():
+            self.bigip_l2_manager.update_bigip_fdb(bigip, fdb)
 
     def tunnel_sync(self):
         """ Update list of tunnel endpoints """
