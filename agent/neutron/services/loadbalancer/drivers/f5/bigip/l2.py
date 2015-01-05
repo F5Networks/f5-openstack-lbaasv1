@@ -47,8 +47,9 @@ def _get_tunnel_fake_mac(network, local_ip):
 
 class BigipL2Manager(object):
     """ Class for configuring L2 networks and FDB entries """
-    def __init__(self, driver, vcmp_manager):
-        self.driver = driver
+    def __init__(self, conf, vcmp_manager):
+        self.conf = conf
+        self.context = None
         self.vcmp_manager = vcmp_manager
 
         self.l2pop_rpc = None
@@ -57,7 +58,7 @@ class BigipL2Manager(object):
         self.tagging_mapping = {}
 
         # map format is   phynet:interface:tagged
-        for maps in self.driver.conf.f5_external_physical_mappings:
+        for maps in self.conf.f5_external_physical_mappings:
             intmap = maps.split(':')
             net_key = str(intmap[0]).strip()
             if len(intmap) > 3:
@@ -70,10 +71,10 @@ class BigipL2Manager(object):
     def is_common_network(self, network):
         """ Does this network belong in the /Common folder? """
         return network['shared'] or \
-            (network['id'] in self.driver.conf.common_network_ids) or \
+            (network['id'] in self.conf.common_network_ids) or \
             ('router:external' in network and
              network['router:external'] and
-             (network['id'] in self.driver.conf.common_external_networks))
+             (network['id'] in self.conf.common_external_networks))
 
     def get_vlan_name(self, network, hostname):
         """ Construct a consistent vlan name """
@@ -113,7 +114,7 @@ class BigipL2Manager(object):
         if network['id'] in bigip.assured_networks:
             return
 
-        if network['id'] in self.driver.conf.common_network_ids:
+        if network['id'] in self.conf.common_network_ids:
             LOG.debug(_('assure_bigip_network: '
                         'Network is a common global network... skipping.'))
             return
@@ -245,16 +246,13 @@ class BigipL2Manager(object):
             folder=network_folder)
         # notify all the compute nodes we are VTEPs
         # for this network now.
-        if self.driver.conf.l2_population:
+        if self.conf.l2_population:
             fdb_entries = {network['id']:
                            {'ports': {
-                            bigip.local_ip: [q_const.FLOODING_ENTRY]
-                            },
-                            'network_type':
-                               network['provider:network_type'],
-                            'segment_id':
-                               network['provider:segmentation_id']}}
-            self.l2pop_rpc.add_fdb_entries(self.driver.context, fdb_entries)
+                            bigip.local_ip: [q_const.FLOODING_ENTRY]},
+                            'network_type': network['provider:network_type'],
+                            'segment_id': network['provider:segmentation_id']}}
+            self.l2pop_rpc.add_fdb_entries(self.context, fdb_entries)
 
     def _assure_device_network_gre(self, network, bigip, network_folder):
         """ Ensure bigip has configured gre tunnel """
@@ -276,16 +274,13 @@ class BigipL2Manager(object):
             folder=network_folder)
         # notify all the compute nodes we are VTEPs
         # for this network now.
-        if self.driver.conf.l2_population:
+        if self.conf.l2_population:
             fdb_entries = {network['id']:
                            {'ports': {
-                            bigip.local_ip: [q_const.FLOODING_ENTRY]
-                            },
-                            'network_type':
-                               network['provider:network_type'],
-                            'segment_id':
-                               network['provider:segmentation_id']}}
-            self.l2pop_rpc.add_fdb_entries(self.driver.context, fdb_entries)
+                            bigip.local_ip: [q_const.FLOODING_ENTRY]},
+                            'network_type': network['provider:network_type'],
+                            'segment_id': network['provider:segmentation_id']}}
+            self.l2pop_rpc.add_fdb_entries(self.context, fdb_entries)
 
     def _assure_vcmp_device_network(self, bigip, vlan):
         """For vCMP Guests, add VLAN to vCMP Host, associate VLAN with
@@ -367,7 +362,7 @@ class BigipL2Manager(object):
 
     def delete_bigip_network(self, bigip, network):
         """ Delete network on bigip """
-        if network['id'] in self.driver.conf.common_network_ids:
+        if network['id'] in self.conf.common_network_ids:
             LOG.debug(_('skipping delete of common network %s'
                         % network['id']))
             return
@@ -415,14 +410,14 @@ class BigipL2Manager(object):
                                   folder=network_folder)
         # notify all the compute nodes we no longer have
         # VTEPs for this network now.
-        if self.driver.conf.l2_population:
+        if self.conf.l2_population:
             fdb_entries = {network['id']:
                            {'ports':
                             {bigip.local_ip:
                              [q_const.FLOODING_ENTRY]},
                             'network_type': network['provider:network_type'],
                             'segment_id': network['provider:segmentation_id']}}
-            self.l2pop_rpc.remove_fdb_entries(self.driver.context,
+            self.l2pop_rpc.remove_fdb_entries(self.context,
                                               fdb_entries)
 
     def _delete_device_gre(self, bigip, network, network_folder):
@@ -436,7 +431,7 @@ class BigipL2Manager(object):
                                   folder=network_folder)
         # notify all the compute nodes we no longer
         # VTEPs for this network now.
-        if self.driver.conf.l2_population:
+        if self.conf.l2_population:
             fdb_entries = {network['id']:
                            {'ports': {
                             bigip.local_ip:
@@ -445,7 +440,7 @@ class BigipL2Manager(object):
                             network['provider:network_type'],
                             'segment_id':
                             network['provider:segmentation_id']}}
-            self.l2pop_rpc.remove_fdb_entries(self.driver.context,
+            self.l2pop_rpc.remove_fdb_entries(self.context,
                                               fdb_entries)
 
     def _delete_vcmp_device_network(self, bigip, vlan_name):
@@ -491,32 +486,6 @@ class BigipL2Manager(object):
         except Exception as exc:
             LOG.error(('Exception deleting VLAN %s from vCMP Host %s:%s' %
                       (vlan_name, vcmp_host['bigip'].icontrol.hostname, exc)))
-
-    def update_bigip_vip_l2(self, bigip, vip):
-        """ Update vip l2 records """
-        network = vip['network']
-        if network:
-            if self.is_common_network(network):
-                net_folder = 'Common'
-            else:
-                net_folder = vip['tenant_id']
-            fdb_info = {'network': network,
-                        'ip_address': None,
-                        'mac_address': None}
-            self.add_bigip_fdbs(bigip, net_folder, fdb_info, vip)
-
-    def delete_bigip_vip_l2(self, bigip, vip):
-        """ Delete vip l2 records """
-        network = vip['network']
-        if network:
-            if self.is_common_network(network):
-                net_folder = 'Common'
-            else:
-                net_folder = vip['tenant_id']
-            fdb_info = {'network': network,
-                        'ip_address': None,
-                        'mac_address': None}
-            self.delete_bigip_fdbs(bigip, net_folder, fdb_info, vip)
 
     def add_bigip_fdbs(self, bigip, net_folder, fdb_info, vteps_by_type):
         """ Add fdb records for a mac/ip with specified vteps """
@@ -723,8 +692,8 @@ class BigipL2Manager(object):
     def get_network_name(self, bigip, network):
         """ This constructs a name for a tunnel or vlan interface """
         preserve_network_name = False
-        if network['id'] in self.driver.conf.common_network_ids:
-            network_name = self.driver.conf.common_network_ids[network['id']]
+        if network['id'] in self.conf.common_network_ids:
+            network_name = self.conf.common_network_ids[network['id']]
             preserve_network_name = True
         elif network['provider:network_type'] == 'vlan':
             network_name = self.get_vlan_name(network,

@@ -55,7 +55,7 @@ class BigipSelfIpManager(object):
                 fixed_address_count=1)
         return port['fixed_ips'][0]['ip_address']
 
-    def assure_gateway_on_subnet(self, bigip, subnetinfo):
+    def assure_gateway_on_subnet(self, bigip, subnetinfo, traffic_group):
         """ called for every bigip only in replication mode.
             otherwise called once """
         subnet = subnetinfo['subnet']
@@ -75,20 +75,15 @@ class BigipSelfIpManager(object):
         # Select a traffic group for the floating SelfIP
         floating_selfip_name = "gw-" + subnet['id']
         netmask = netaddr.IPNetwork(subnet['cidr']).netmask
-        vip_tg = self.driver.get_least_gw_traffic_group()
 
         bigip.selfip.create(name=floating_selfip_name,
                             ip_address=subnet['gateway_ip'],
                             netmask=netmask,
                             vlan_name=network_name,
                             floating=True,
-                            traffic_group=vip_tg,
+                            traffic_group=traffic_group,
                             folder=network_folder,
                             preserve_vlan_name=preserve_network_name)
-
-        # Get the actual traffic group if the Self IP already existed
-        vip_tg = bigip.selfip.get_traffic_group(name=floating_selfip_name,
-                                                folder=subnet['tenant_id'])
 
         # Setup a wild card ip forwarding virtual service for this subnet
         gw_name = "gw-" + subnet['id']
@@ -96,7 +91,7 @@ class BigipSelfIpManager(object):
             name=gw_name, ip_address='0.0.0.0',
             mask='0.0.0.0',
             vlan_name=network_name,
-            traffic_group=vip_tg,
+            traffic_group=traffic_group,
             folder=network_folder,
             preserve_vlan_name=preserve_network_name)
 

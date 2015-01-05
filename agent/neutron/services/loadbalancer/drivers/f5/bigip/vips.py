@@ -15,7 +15,7 @@ class BigipVipManager(object):
         self.driver = driver
         self.bigip_l2_manager = bigip_l2_manager
 
-    def assure_bigip_create_vip(self, bigip, service):
+    def assure_bigip_create_vip(self, bigip, service, traffic_group):
         """ Called for every bigip only in replication mode,
             otherwise called once for autosync mode. """
         vip = service['vip']
@@ -45,17 +45,15 @@ class BigipVipManager(object):
         vip_info = {'network_name': network_name,
                     'preserve_network_name': preserve_network_name,
                     'ip_address': ip_address,
+                    'traffic_group': traffic_group,
                     'snat_pool_name': snat_pool_name}
 
-        just_added_vip, vip_tg = self._create_bigip_vip(
-            bigip, service, vip_info)
+        just_added_vip = self._create_bigip_vip(bigip, service, vip_info)
 
         if vip['status'] == plugin_const.PENDING_CREATE or \
            vip['status'] == plugin_const.PENDING_UPDATE or \
            just_added_vip:
             self._update_bigip_vip(bigip, service)
-
-        return just_added_vip, vip_tg
 
     def assure_bigip_delete_vip(self, bigip, service):
         """ Remove vip from big-ip """
@@ -83,15 +81,14 @@ class BigipVipManager(object):
     def _create_bigip_vip(self, bigip, service, vip_info):
         """ Create vip on big-ip """
         vip = service['vip']
-        pool = service['pool']
 
         network_name = vip_info['network_name']
         preserve_network_name = vip_info['preserve_network_name']
         ip_address = vip_info['ip_address']
+        vip_tg = vip_info['traffic_group']
         snat_pool_name = vip_info['snat_pool_name']
 
         bigip_vs = bigip.virtual_server
-        vip_tg = self.driver.service_to_traffic_group(service)
 
         # This is where you could decide to use a fastl4
         # or a standard virtual server.  The problem
@@ -144,11 +141,7 @@ class BigipVipManager(object):
                                snat_pool=snat_pool_name,
                                folder=folder,
                                preserve_vlan_name=preserve_network_name):
-                # update driver traffic group mapping
-                vip_tg = bigip_vs.get_traffic_group(
-                    name=vip['id'],
-                    folder=pool['tenant_id'])
-                return True, vip_tg
+                return True
         else:
             preserve_name = preserve_network_name
             if bigip_vs.create_fastl4(name=vip['id'],
@@ -162,11 +155,7 @@ class BigipVipManager(object):
                                       snat_pool=snat_pool_name,
                                       folder=folder,
                                       preserve_vlan_name=preserve_name):
-                # created update driver traffic group mapping
-                vip_tg = bigip_vs.get_traffic_group(
-                    name=vip['id'],
-                    folder=pool['tenant_id'])
-                return True, vip_tg
+                return True
 
     def _update_bigip_vip(self, bigip, service):
         """ Update vip on big-ip """

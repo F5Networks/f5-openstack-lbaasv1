@@ -30,10 +30,8 @@ from neutron.services.loadbalancer.drivers.f5.bigip.selfips \
     import BigipSelfIpManager
 from neutron.services.loadbalancer.drivers.f5.bigip.snats \
     import BigipSnatManager
-from neutron.services.loadbalancer.drivers.f5.bigip.pools \
-    import BigipPoolManager
-from neutron.services.loadbalancer.drivers.f5.bigip.vips \
-    import BigipVipManager
+from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_direct \
+    import LBaaSBuilderDirect
 from neutron.services.loadbalancer.drivers.f5.bigip.utils \
     import serialized
 
@@ -197,14 +195,6 @@ class iControlDriver(object):
         self.__bigips = {}
         self.__traffic_groups = []
 
-        # mappings
-        self.__vips_to_traffic_group = {}
-        self.__gw_to_traffic_group = {}
-
-        # scheduling counts
-        self.__vips_on_traffic_groups = {}
-        self.__gw_on_traffic_groups = {}
-
         if self.conf.f5_global_routed_mode:
             LOG.info(_('WARNING - f5_global_routed_mode enabled.'
                        ' There will be no L2 or L3 orchestration'
@@ -249,15 +239,18 @@ class iControlDriver(object):
             self.bigip_selfip_manager = None
             self.bigip_snat_manager = None
         else:
-            l2_manager = BigipL2Manager(self, self.vcmp_manager)
+            l2_manager = BigipL2Manager(self.conf,
+                                        self.vcmp_manager)
             self.bigip_l2_manager = l2_manager
             self.bigip_selfip_manager = BigipSelfIpManager(self, l2_manager)
             self.bigip_snat_manager = BigipSnatManager(self, l2_manager)
-            self.bigip_pool_manager = BigipPoolManager(self, l2_manager)
-            self.bigip_vip_manager = BigipVipManager(self, l2_manager)
 
             self.agent_configurations['bridge_mappings'] = \
                 self.bigip_l2_manager.interface_mapping
+
+        # Direct means creating vips, pools directly rather than via iApp
+        self.lbaas_builder = LBaaSBuilderDirect(
+            self.conf, self, self.bigip_l2_manager)
 
         LOG.info(_('iControlDriver initialized to %d bigips with username:%s'
                    % (len(self.__bigips), self.conf.icontrol_username)))
@@ -502,6 +495,8 @@ class iControlDriver(object):
     def set_context(self, context):
         """ Context to keep for database access """
         self.context = context
+        if self.bigip_l2_manager:
+            self.bigip_l2_manager.context = context
 
     def set_tunnel_rpc(self, tunnel_rpc):
         """ Provide L2 manager with ML2 RPC access """
@@ -754,7 +749,7 @@ class iControlDriver(object):
     def backup_configuration(self):
         """ Save Configuration on Devices """
         for bigip in self.get_all_bigips():
-            LOG.debug(_('saving %s device configuration.'
+            LOG.debug(_('_backup_configuration: saving device %s.'
                         % bigip.icontrol.hostname))
             bigip.cluster.save_config()
 
@@ -781,25 +776,29 @@ class iControlDriver(object):
         LOG.debug("    _assure_tenant_created took %.5f secs" %
                   (time() - start_time))
 
+        traffic_group = self.service_to_traffic_group(service)
+
         if not skip_networking:
             start_time = time()
-            self._assure_create_networks(service)
+            self._prep_service_networking(service, traffic_group)
             if time() - start_time > .001:
-                LOG.debug("        _assure_service_networks "
+                LOG.debug("        _prep_service_networking "
                           "took %.5f secs" % (time() - start_time))
-
-        all_subnet_hints = self._assure_service(service)
+        all_subnet_hints = self.lbaas_builder.assure_service(
+            service, traffic_group)
 
         if not skip_networking:
             start_time = time()
-            self._assure_delete_networks(service, all_subnet_hints)
-            LOG.debug("    _assure_delete_networks took %.5f secs" %
+            self._post_service_networking(service, all_subnet_hints)
+            LOG.debug("    _post_service_networking took %.5f secs" %
                       (time() - start_time))
 
         start_time = time()
         self._assure_tenant_cleanup(service, all_subnet_hints)
         LOG.debug("    _assure_tenant_cleanup took %.5f secs" %
                   (time() - start_time))
+
+        self._update_service_status(service)
 
         start_time = time()
         self._sync_if_clustered()
@@ -813,7 +812,7 @@ class iControlDriver(object):
         tenant_id = service['pool']['tenant_id']
 
         # create tenant folder
-        for bigip in self._get_config_bigips():
+        for bigip in self.get_config_bigips():
             folder = bigip.decorate_folder(tenant_id)
             if not bigip.system.folder_exists(folder):
                 bigip.system.create_folder(folder, change_to=True)
@@ -828,7 +827,7 @@ class iControlDriver(object):
                 if not bigip.route.domain_exists(folder):
                     bigip.route.create_domain(folder)
 
-    def _assure_create_networks(self, service):
+    def _prep_service_networking(self, service, traffic_group):
         """ Assure network connectivity is established on all
             bigips for the service. """
         if self.conf.f5_global_routed_mode or not service['pool']:
@@ -846,7 +845,7 @@ class iControlDriver(object):
                 assure_bigip, service, subnetinfo)
 
         # L3 Shared Config
-        assure_bigips = self._get_config_bigips()
+        assure_bigips = self.get_config_bigips()
         for subnetinfo in subnetsinfo:
             if self.conf.f5_snat_addresses_per_subnet > 0:
                 self._assure_subnet_snats(assure_bigips, service, subnetinfo)
@@ -857,7 +856,7 @@ class iControlDriver(object):
                     # if we are not using SNATS, attempt to become
                     # the subnet's default gateway.
                     self.bigip_selfip_manager.assure_gateway_on_subnet(
-                        assure_bigip, subnetinfo)
+                        assure_bigip, subnetinfo, traffic_group)
 
         if time() - start_time > .001:
             LOG.debug("    assure_service_networks took %.5f secs" %
@@ -913,117 +912,16 @@ class iControlDriver(object):
                 LOG.error(_(ermsg))
         return True
 
-    def _assure_service(self, service):
-        """ Assure that the service is configured """
-        if not service['pool']:
-            return
+    def _update_service_status(self, service):
+        """ Update status of objects in OpenStack """
+        self._update_members_status(service['members'])
+        self._update_pool_status(service['pool'])
+        self._update_pool_monitors_status(service)
+        self._update_vip_status(service['vip'])
 
-        bigips = self._get_config_bigips()
-        all_subnet_hints = {}
-        for prep_bigip in bigips:
-            # check_for_delete_subnets:
-            #     keep track of which subnets we should check to delete
-            #     for a deleted vip or member
-            # do_not_delete_subnets:
-            #     If we add an IP to a subnet we must not delete the subnet
-            all_subnet_hints[prep_bigip.device_name] = \
-                {'check_for_delete_subnets': {},
-                 'do_not_delete_subnets': []}
-
-        check_monitor_delete(service)
-
-        start_time = time()
-        self._assure_pool_create(service['pool'])
-        LOG.debug("    _assure_pool_create took %.5f secs" %
-                  (time() - start_time))
-
-        start_time = time()
-        self._assure_pool_monitors(service)
-        LOG.debug("    _assure_pool_monitors took %.5f secs" %
-                  (time() - start_time))
-
-        start_time = time()
-        self._assure_members(service, all_subnet_hints)
-        LOG.debug("    _assure_members took %.5f secs" %
-                  (time() - start_time))
-
-        start_time = time()
-        self._assure_vip(service, all_subnet_hints)
-        LOG.debug("    _assure_vip took %.5f secs" %
-                  (time() - start_time))
-
-        start_time = time()
-        self._assure_pool_delete(service)
-        LOG.debug("    _assure_pool_delete took %.5f secs" %
-                  (time() - start_time))
-
-        return all_subnet_hints
-
-    def _assure_pool_create(self, pool):
-        """
-            Provision Pool - Create/Update
-        """
-        # Service Layer (Shared Config)
-        for bigip in self._get_config_bigips():
-            self.bigip_pool_manager.assure_bigip_pool_create(bigip, pool)
-
-        # OpenStack Updates
-        if pool['status'] == plugin_const.PENDING_UPDATE:
-            self.plugin_rpc.update_pool_status(
-                pool['id'],
-                status=plugin_const.ACTIVE,
-                status_description='pool updated')
-        elif pool['status'] == plugin_const.PENDING_CREATE:
-            self.plugin_rpc.update_pool_status(
-                pool['id'],
-                status=plugin_const.ACTIVE,
-                status_description='pool created')
-
-    def _assure_pool_monitors(self, service):
-        """
-            Provision Health Monitors - Create/Update
-        """
-        # Service Layer (Shared Config)
-        for bigip in self._get_config_bigips():
-            monitors_destroyed, monitors_updated = \
-                self.bigip_pool_manager.assure_bigip_pool_monitors(
-                    bigip, service)
-        for monitor_destroyed in monitors_destroyed:
-            self.plugin_rpc.health_monitor_destroyed(
-                **monitor_destroyed)
-        for monitor_updated in monitors_updated:
-            self.plugin_rpc.update_health_monitor_status(
-                **monitor_updated)
-
-    def _assure_members(self, service, all_subnet_hints):
-        """
-            Provision Members - Create/Update
-        """
-        # Service Layer (Shared Config)
-        for bigip in self._get_config_bigips():
-            subnet_hints = all_subnet_hints[bigip.device_name]
-            self.bigip_pool_manager.assure_bigip_members(
-                bigip, service, subnet_hints)
-
-        # avoids race condition:
-        # deletion of pool member objects must sync before we
-        # remove the selfip from the peer bigips.
-        self._sync_if_clustered()
-
-        # L2toL3 networking layer
-        # Non Shared Config -  Local Per BIG-IP
-        for bigip in self.get_all_bigips():
-            for member in service['members']:
-                if member['status'] == plugin_const.PENDING_CREATE or \
-                        member['status'] == plugin_const.PENDING_UPDATE:
-                    self.bigip_pool_manager.update_bigip_member_l2(
-                        bigip, service['pool'], member)
-                if member['status'] == plugin_const.PENDING_DELETE:
-                    self.bigip_pool_manager.delete_bigip_member_l2(
-                        bigip, service['pool'], member)
-
-        # OpenStack Updates
-        for member in service['members']:
+    def _update_members_status(self, members):
+        """ Update member status in OpenStack """
+        for member in members:
             if member['status'] == plugin_const.PENDING_CREATE:
                 start_time = time()
                 self.plugin_rpc.update_member_status(
@@ -1047,43 +945,60 @@ class iControlDriver(object):
                     LOG.error(_("Plugin delete member %s error: %s"
                                 % (member['id'], exc.message)))
 
-    def _assure_vip(self, service, all_subnet_hints):
-        """ Ensure the vip is on all bigips. """
-        vip = service['vip']
+    def _update_pool_status(self, pool):
+        """ Update pool status in OpenStack """
+        if pool['status'] == plugin_const.PENDING_UPDATE:
+            self.plugin_rpc.update_pool_status(
+                pool['id'],
+                status=plugin_const.ACTIVE,
+                status_description='pool updated')
+        elif pool['status'] == plugin_const.PENDING_CREATE:
+            self.plugin_rpc.update_pool_status(
+                pool['id'],
+                status=plugin_const.ACTIVE,
+                status_description='pool created')
+        elif pool['status'] == plugin_const.PENDING_DELETE:
+            try:
+                self.plugin_rpc.pool_destroyed(pool['id'])
+            except Exception as exc:
+                LOG.error(_("Plugin destroy pool %s error: %s"
+                            % (pool['id'], exc.message)))
+
+    def _update_pool_monitors_status(self, service):
+        """ Update pool monitor status in OpenStack """
+        monitors_destroyed = []
+        monitors_updated = []
+        pool = service['pool']
+
+        health_monitors_status = {}
+        for monitor in pool['health_monitors_status']:
+            health_monitors_status[monitor['monitor_id']] = \
+                monitor['status']
+
+        for monitor in service['health_monitors']:
+            if monitor['id'] in health_monitors_status and \
+                    health_monitors_status[monitor['id']] == \
+                    plugin_const.PENDING_DELETE:
+                monitors_destroyed.append({'health_monitor_id': monitor['id'],
+                                           'pool_id': pool['id']})
+            else:
+                monitors_updated.append(
+                    {'pool_id': pool['id'],
+                     'health_monitor_id': monitor['id'],
+                     'status': plugin_const.ACTIVE,
+                     'status_description': 'monitor active'})
+
+        for monitor_destroyed in monitors_destroyed:
+            self.plugin_rpc.health_monitor_destroyed(
+                **monitor_destroyed)
+        for monitor_updated in monitors_updated:
+            self.plugin_rpc.update_health_monitor_status(
+                **monitor_updated)
+
+    def _update_vip_status(self, vip):
+        """ Update vip status in OpenStack """
         if 'id' not in vip:
             return
-
-        # Service Layer
-        # (Shared Config)
-        bigips = self._get_config_bigips()
-        for bigip in bigips:
-            if vip['status'] == plugin_const.PENDING_CREATE or \
-               vip['status'] == plugin_const.PENDING_UPDATE:
-                just_added_vip, vip_tg = \
-                    self.bigip_vip_manager.assure_bigip_create_vip(
-                        bigip, service)
-                if just_added_vip:
-                    self.__vips_to_traffic_group[vip['id']] = vip_tg
-                    self.__vips_on_traffic_groups[vip_tg] += 1
-
-            elif vip['status'] == plugin_const.PENDING_DELETE:
-                self.bigip_vip_manager.assure_bigip_delete_vip(bigip, service)
-
-        # avoids race condition:
-        # deletion of vip address must sync before we
-        # remove the selfip from the peer bigips.
-        self._sync_if_clustered()
-
-        # L2toL3 networking layer
-        # (Non Shared - Config Per BIG-IP)
-        for bigip in self.get_all_bigips():
-            if vip['status'] == plugin_const.PENDING_CREATE or \
-               vip['status'] == plugin_const.PENDING_UPDATE:
-                self.bigip_vip_manager.update_bigip_vip_l2(bigip, vip)
-            if vip['status'] == plugin_const.PENDING_DELETE:
-                self.bigip_vip_manager.delete_bigip_vip_l2(bigip, vip)
-
-        # OpenStack Layer Updates
         if vip['status'] == plugin_const.PENDING_CREATE:
             self.plugin_rpc.update_vip_status(
                 vip['id'],
@@ -1101,59 +1016,32 @@ class iControlDriver(object):
                 LOG.error(_("Plugin delete vip %s error: %s"
                             % (vip['id'], exc.message)))
 
-        self._update_vip_cache(bigips, vip, all_subnet_hints)
-
-    def _update_vip_cache(self, bigips, vip, all_subnet_hints):
-        """ update internal cache """
-        if vip['status'] == plugin_const.PENDING_DELETE and \
-                vip['id'] in self.__vips_to_traffic_group:
-            vip_tg = self.__vips_to_traffic_group[vip['id']]
-            self.__vips_on_traffic_groups[vip_tg] -= 1
-            del self.__vips_to_traffic_group[vip['id']]
-        for bigip in bigips:
-            subnet_hints = all_subnet_hints[bigip.device_name]
-            subnet = vip['subnet']
-            if vip['status'] == plugin_const.PENDING_DELETE:
-                network = vip['network']
-                if subnet and subnet['id'] not in \
-                        subnet_hints['do_not_delete_subnets']:
-                    subnet_hints['check_for_delete_subnets'][subnet['id']] = \
-                        {'network': network,
-                         'subnet': subnet,
-                         'is_for_member': False}
-            else:
-                if subnet and subnet['id'] in \
-                        subnet_hints['check_for_delete_subnets']:
-                    del subnet_hints['check_for_delete_subnets'][subnet['id']]
-                if subnet and subnet['id'] not in \
-                        subnet_hints['do_not_delete_subnets']:
-                    subnet_hints['do_not_delete_subnets'].append(subnet['id'])
-
-    def _assure_pool_delete(self, service):
-        """ Assure pool is deleted from big-ip """
-        if service['pool']['status'] != plugin_const.PENDING_DELETE:
-            return
-
-        # Service Layer (Shared Config)
-        for bigip in self._get_config_bigips():
-            self.bigip_pool_manager.assure_bigip_pool_delete(bigip, service)
-
-        # OpenStack Updates
-        try:
-            self.plugin_rpc.pool_destroyed(service['pool']['id'])
-        except Exception as exc:
-            LOG.error(_("Plugin destroy pool %s error: %s"
-                        % (service['pool']['id'], exc.message)))
-
-    def _assure_delete_networks(self, service, all_subnet_hints):
-        """ Assure networks is deleted from big-ips """
+    def _post_service_networking(self, service, all_subnet_hints):
+        """ Assure networks are deleted from big-ips """
         if self.conf.f5_global_routed_mode:
             return
 
-        deleted_names = set()
+        # L2toL3 networking layer
+        # Non Shared Config -  Local Per BIG-IP
+        pool = service['pool']
+        vip = service['vip']
+        for bigip in self.get_all_bigips():
+            for member in service['members']:
+                if member['status'] == plugin_const.PENDING_CREATE or \
+                        member['status'] == plugin_const.PENDING_UPDATE:
+                    self.update_bigip_member_l2(bigip, pool, member)
+                elif member['status'] == plugin_const.PENDING_DELETE:
+                    self.delete_bigip_member_l2(bigip, pool, member)
+            if 'id' in vip:
+                if vip['status'] == plugin_const.PENDING_CREATE or \
+                   vip['status'] == plugin_const.PENDING_UPDATE:
+                    self.update_bigip_vip_l2(bigip, vip)
+                elif vip['status'] == plugin_const.PENDING_DELETE:
+                    self.delete_bigip_vip_l2(bigip, vip)
 
         # Delete shared config objects
-        for bigip in self._get_config_bigips():
+        deleted_names = set()
+        for bigip in self.get_config_bigips():
             LOG.debug('_assure_delete_networks delete nets for bigip %s %s'
                       % (bigip.device_name, all_subnet_hints))
             subnet_hints = all_subnet_hints[bigip.device_name]
@@ -1187,6 +1075,77 @@ class iControlDriver(object):
                       % port_name)
             self.plugin_rpc.delete_port_by_name(
                 port_name=port_name)
+
+    def update_bigip_member_l2(self, bigip, pool, member):
+        """ update pool member l2 records """
+        network = member['network']
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = pool['tenant_id']
+            ip_address = member['address']
+            if self.conf.f5_global_routed_mode \
+                    or self.bigip_l2_manager.is_common_network(network):
+                ip_address = ip_address + '%0'
+            fdb_info = {'network': network,
+                        'ip_address': ip_address,
+                        'mac_address': member['port']['mac_address']}
+            self.bigip_l2_manager.add_bigip_fdbs(
+                bigip, net_folder, fdb_info, member)
+
+    def delete_bigip_member_l2(self, bigip, pool, member):
+        """ Delete pool member l2 records """
+        network = member['network']
+        if network:
+            if member['port']:
+                if self.bigip_l2_manager.is_common_network(network):
+                    net_folder = 'Common'
+                else:
+                    net_folder = pool['tenant_id']
+                ip_address = member['address']
+                if self.conf.f5_global_routed_mode or \
+                        self.bigip_l2_manager.is_common_network(network):
+                    ip_address = ip_address + '%0'
+                fdb_info = {'network': network,
+                            'ip_address': ip_address,
+                            'mac_address': member['port']['mac_address']}
+                self.bigip_l2_manager.delete_bigip_fdbs(
+                    bigip, net_folder, fdb_info, member)
+            else:
+                LOG.error(_('Member on SDN has no port. Manual '
+                            'removal on the BIG-IP will be '
+                            'required. Was the vm instance '
+                            'deleted before the pool member '
+                            'was deleted?'))
+
+    def update_bigip_vip_l2(self, bigip, vip):
+        """ Update vip l2 records """
+        network = vip['network']
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = vip['tenant_id']
+            fdb_info = {'network': network,
+                        'ip_address': None,
+                        'mac_address': None}
+            self.bigip_l2_manager.add_bigip_fdbs(
+                bigip, net_folder, fdb_info, vip)
+
+    def delete_bigip_vip_l2(self, bigip, vip):
+        """ Delete vip l2 records """
+        network = vip['network']
+        if network:
+            if self.bigip_l2_manager.is_common_network(network):
+                net_folder = 'Common'
+            else:
+                net_folder = vip['tenant_id']
+            fdb_info = {'network': network,
+                        'ip_address': None,
+                        'mac_address': None}
+            self.bigip_l2_manager.delete_bigip_fdbs(
+                bigip, net_folder, fdb_info, vip)
 
     def _assure_delete_nets_shared(self, bigip, service, subnet_hints):
         """ Assure shared configuration (which syncs) is deleted """
@@ -1235,7 +1194,7 @@ class iControlDriver(object):
             Called for every bigip only in replication mode,
             otherwise called once.
         """
-        for bigip in self._get_config_bigips():
+        for bigip in self.get_config_bigips():
             subnet_hints = all_subnet_hints[bigip.device_name]
             self._assure_bigip_tenant_cleanup(bigip, service, subnet_hints)
 
@@ -1294,31 +1253,6 @@ class iControlDriver(object):
         tg_index = int(hexhash, 16) % len(self.__traffic_groups)
         return self.__traffic_groups[tg_index]
 
-    # deprecated, use _service_to_traffic_group
-    def _service_to_tg_least_vips(self, vip_id):
-        """ Return least loaded traffic group """
-        if vip_id in self.__vips_to_traffic_group:
-            return self.__vips_to_traffic_group[vip_id]
-
-        vips_on_tgs = self.__vips_on_traffic_groups
-
-        ret_traffic_group = self.__traffic_groups[0]
-        lowest_count = vips_on_tgs[ret_traffic_group]
-        for traffic_group in vips_on_tgs:
-            if vips_on_tgs[traffic_group] < lowest_count:
-                ret_traffic_group = traffic_group
-                lowest_count = vips_on_tgs[ret_traffic_group]
-        return ret_traffic_group
-
-    def _get_least_gw_traffic_group(self):
-        """ Return least loaded traffic group """
-        ret_traffic_group = 'traffic-group-1'
-        lowest_count = 0
-        for traffic_group in self.__gw_on_traffic_groups:
-            if self.__gw_on_traffic_groups[traffic_group] <= lowest_count:
-                ret_traffic_group = self.__gw_on_traffic_groups[traffic_group]
-        return ret_traffic_group
-
     def get_bigip(self):
         """ Get one consistent big-ip """
         hostnames = sorted(self.__bigips)
@@ -1338,7 +1272,7 @@ class iControlDriver(object):
         """ Get all big-ips under management """
         return self.__bigips.values()
 
-    def _get_config_bigips(self):
+    def get_config_bigips(self):
         """ Return a list of big-ips that need to be configured.
             In replication sync mode, we configure all big-ips
             individually. In autosync mode we only use one big-ip
@@ -1356,20 +1290,6 @@ class iControlDriver(object):
             self.__traffic_groups.remove(
                 'traffic-group-local-only')
         self.__traffic_groups.sort()
-        for traffic_group in self.__traffic_groups:
-            self.__gw_on_traffic_groups[traffic_group] = 0
-            self.__vips_on_traffic_groups[traffic_group] = 0
-
-        for folder in bigip.system.get_folders():
-            if not folder.startswith(bigip_interfaces.OBJ_PREFIX):
-                continue
-            for virtserv in bigip.virtual_server.get_virtual_servers(folder):
-                vip_tg = bigip.virtual_server.get_traffic_group(
-                    name=virtserv,
-                    folder=folder)
-                self.__vips_on_traffic_groups[vip_tg] += 1
-        LOG.debug("init_traffic_groups: starting tg counts: %s"
-                  % str(self.__vips_on_traffic_groups))
 
     def _sync_if_clustered(self):
         """ sync device group if not in replication mode """
@@ -1421,18 +1341,6 @@ def _get_subnets_to_assure(service):
                                        'subnet': subnet,
                                        'is_for_member': True}
     return networks.values()
-
-
-def check_monitor_delete(service):
-    """If the pool is being deleted, then delete related objects"""
-    if service['pool']['status'] == plugin_const.PENDING_DELETE:
-        # Everything needs to be go with the pool, so overwrite
-        # service state to appropriately remove all elements
-        service['vip']['status'] = plugin_const.PENDING_DELETE
-        for member in service['members']:
-            member['status'] = plugin_const.PENDING_DELETE
-        for monitor in service['pool']['health_monitors_status']:
-            monitor['status'] = plugin_const.PENDING_DELETE
 
 
 def _get_subnets_to_delete(bigip, service, subnet_hints):

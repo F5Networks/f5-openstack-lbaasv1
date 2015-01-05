@@ -104,6 +104,8 @@ pep8:
 	(cd agent; \
          pep8 $(BDIR)/icontrol_driver.py; \
          pep8 $(BDIR)/l2.py; \
+         pep8 $(BDIR)/lbaas.py; \
+         pep8 $(BDIR)/lbaas_direct.py; \
          pep8 $(BDIR)/selfips.py; \
          pep8 $(BDIR)/snats.py; \
          pep8 $(BDIR)/pools.py; \
@@ -144,6 +146,8 @@ pylint:
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
          $(PYLINT) $(BDIR)/icontrol_driver.py; \
+         $(PYLINT) $(BDIR)/lbaas.py; \
+         $(PYLINT) $(BDIR)/lbaas_direct.py; \
          $(PYLINT) $(BDIR)/l2.py; \
          $(PYLINT) $(BDIR)/selfips.py; \
          $(PYLINT) $(BDIR)/snats.py; \

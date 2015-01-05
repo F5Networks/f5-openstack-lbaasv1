@@ -40,8 +40,6 @@ class BigipPoolManager(object):
 
     def assure_bigip_pool_monitors(self, bigip, service):
         """ Create pool monitors on bigip """
-        monitors_destroyed = []
-        monitors_updated = []
         pool = service['pool']
         # Current monitors on the pool according to BigIP
         existing_monitors = bigip.pool.get_monitors(name=pool['id'],
@@ -61,8 +59,6 @@ class BigipPoolManager(object):
                 bigip.pool.remove_monitor(name=pool['id'],
                                           monitor_name=monitor['id'],
                                           folder=pool['tenant_id'])
-                monitors_destroyed.append({'health_monitor_id': monitor['id'],
-                                           'pool_id': pool['id']})
                 # not sure if the monitor might be in use
                 try:
                     LOG.debug(_('Deleting %s monitor /%s/%s'
@@ -77,7 +73,6 @@ class BigipPoolManager(object):
                     pass
                 # pylint: enable=bare-except
             else:
-                update_status = False
                 if not found_existing_monitor:
                     timeout = int(monitor['max_retries']) * \
                         int(monitor['timeout'])
@@ -89,24 +84,15 @@ class BigipPoolManager(object):
                                          recv_text=None,
                                          folder=monitor['tenant_id'])
                     self._update_monitor(bigip, monitor, set_times=False)
-                    update_status = True
                 else:
                     if health_monitors_status[monitor['id']] == \
                             plugin_const.PENDING_UPDATE:
                         self._update_monitor(bigip, monitor)
-                        update_status = True
 
                 if not found_existing_monitor:
                     bigip.pool.add_monitor(name=pool['id'],
                                            monitor_name=monitor['id'],
                                            folder=pool['tenant_id'])
-                    update_status = True
-                if update_status:
-                    monitors_updated.append(
-                        {'pool_id': pool['id'],
-                         'health_monitor_id': monitor['id'],
-                         'status': plugin_const.ACTIVE,
-                         'status_description': 'monitor active'})
 
             if found_existing_monitor:
                 existing_monitors.remove(monitor['id'])
@@ -118,7 +104,6 @@ class BigipPoolManager(object):
             bigip.monitor.delete(name=monitor,
                                  mon_type=None,
                                  folder=pool['tenant_id'])
-        return monitors_destroyed, monitors_updated
 
     def _update_monitor(self, bigip, monitor, set_times=True):
         """ Update monitor on bigip """
