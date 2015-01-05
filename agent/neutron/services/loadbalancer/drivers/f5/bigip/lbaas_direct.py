@@ -35,7 +35,8 @@ class LBaaSBuilderDirect(LBaaSBuilder):
        (rather than using an iApp - LBaaSBuilderiApp)."""
 
     def __init__(self, conf, driver, bigip_l2_manager=None):
-        super(LBaaSBuilderDirect, self).__init__(conf, driver, bigip_l2_manager)
+        super(LBaaSBuilderDirect, self).__init__(
+            conf, driver, bigip_l2_manager)
         self.bigip_pool_manager = BigipPoolManager(self, self.bigip_l2_manager)
         self.bigip_vip_manager = BigipVipManager(self, self.bigip_l2_manager)
 
@@ -169,4 +170,3 @@ class LBaaSBuilderDirect(LBaaSBuilder):
                 member['status'] = plugin_const.PENDING_DELETE
             for monitor in service['pool']['health_monitors_status']:
                 monitor['status'] = plugin_const.PENDING_DELETE
-

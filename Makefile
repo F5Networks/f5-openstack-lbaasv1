@@ -102,6 +102,8 @@ IDIR := f5/bigip/interfaces
 NDIR := /usr/lib/python2.7/dist-packages/neutron
 pep8:
 	(cd agent; \
+         pep8 $(BDIR)/fdb_connector.py; \
+         pep8 $(BDIR)/fdb_connector_ml2.py; \
          pep8 $(BDIR)/icontrol_driver.py; \
          pep8 $(BDIR)/l2.py; \
          pep8 $(BDIR)/lbaas.py; \
@@ -145,6 +147,8 @@ pylint:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
+         $(PYLINT) $(BDIR)/fdb_connector.py; \
+         $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
          $(PYLINT) $(BDIR)/icontrol_driver.py; \
          $(PYLINT) $(BDIR)/lbaas.py; \
          $(PYLINT) $(BDIR)/lbaas_direct.py; \

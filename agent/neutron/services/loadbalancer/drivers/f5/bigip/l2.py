@@ -2,7 +2,6 @@
 # pylint: disable=no-self-use
 
 from neutron.openstack.common import log as logging
-from neutron.common import constants as q_const
 from f5.bigip import exceptions as f5ex
 from f5.bigip.interfaces import prefixed
 from f5.bigip.exceptions import \
@@ -46,13 +45,11 @@ def _get_tunnel_fake_mac(network, local_ip):
 
 
 class BigipL2Manager(object):
-    """ Class for configuring L2 networks and FDB entries """
-    def __init__(self, conf, vcmp_manager):
+    """ Class for configuring L2 networks """
+    def __init__(self, conf, vcmp_manager, fdb_connector):
         self.conf = conf
-        self.context = None
         self.vcmp_manager = vcmp_manager
-
-        self.l2pop_rpc = None
+        self.fdb_connector = fdb_connector
 
         self.interface_mapping = {}
         self.tagging_mapping = {}
@@ -244,15 +241,8 @@ class BigipL2Manager(object):
             vxlanid=network['provider:segmentation_id'],
             description=network['id'],
             folder=network_folder)
-        # notify all the compute nodes we are VTEPs
-        # for this network now.
-        if self.conf.l2_population:
-            fdb_entries = {network['id']:
-                           {'ports': {
-                            bigip.local_ip: [q_const.FLOODING_ENTRY]},
-                            'network_type': network['provider:network_type'],
-                            'segment_id': network['provider:segmentation_id']}}
-            self.l2pop_rpc.add_fdb_entries(self.context, fdb_entries)
+        if self.fdb_connector:
+            self.fdb_connector.notify_vtep_added(network, bigip.local_ip)
 
     def _assure_device_network_gre(self, network, bigip, network_folder):
         """ Ensure bigip has configured gre tunnel """
@@ -272,15 +262,9 @@ class BigipL2Manager(object):
             greid=network['provider:segmentation_id'],
             description=network['id'],
             folder=network_folder)
-        # notify all the compute nodes we are VTEPs
-        # for this network now.
-        if self.conf.l2_population:
-            fdb_entries = {network['id']:
-                           {'ports': {
-                            bigip.local_ip: [q_const.FLOODING_ENTRY]},
-                            'network_type': network['provider:network_type'],
-                            'segment_id': network['provider:segmentation_id']}}
-            self.l2pop_rpc.add_fdb_entries(self.context, fdb_entries)
+
+        if self.fdb_connector:
+            self.fdb_connector.notify_vtep_added(network, bigip.local_ip)
 
     def _assure_vcmp_device_network(self, bigip, vlan):
         """For vCMP Guests, add VLAN to vCMP Host, associate VLAN with
@@ -408,17 +392,8 @@ class BigipL2Manager(object):
                                            folder=network_folder)
         bigip.vxlan.delete_tunnel(name=tunnel_name,
                                   folder=network_folder)
-        # notify all the compute nodes we no longer have
-        # VTEPs for this network now.
-        if self.conf.l2_population:
-            fdb_entries = {network['id']:
-                           {'ports':
-                            {bigip.local_ip:
-                             [q_const.FLOODING_ENTRY]},
-                            'network_type': network['provider:network_type'],
-                            'segment_id': network['provider:segmentation_id']}}
-            self.l2pop_rpc.remove_fdb_entries(self.context,
-                                              fdb_entries)
+        if self.fdb_connector:
+            self.fdb_connector.notify_vtep_removed(network, bigip.local_ip)
 
     def _delete_device_gre(self, bigip, network, network_folder):
         """ Delete gre tunnel on specific bigip """
@@ -429,19 +404,8 @@ class BigipL2Manager(object):
                                            folder=network_folder)
         bigip.l2gre.delete_tunnel(name=tunnel_name,
                                   folder=network_folder)
-        # notify all the compute nodes we no longer
-        # VTEPs for this network now.
-        if self.conf.l2_population:
-            fdb_entries = {network['id']:
-                           {'ports': {
-                            bigip.local_ip:
-                            [q_const.FLOODING_ENTRY]},
-                            'network_type':
-                            network['provider:network_type'],
-                            'segment_id':
-                            network['provider:segmentation_id']}}
-            self.l2pop_rpc.remove_fdb_entries(self.context,
-                                              fdb_entries)
+        if self.fdb_connector:
+            self.fdb_connector.notify_vtep_removed(network, bigip.local_ip)
 
     def _delete_vcmp_device_network(self, bigip, vlan_name):
         """For vCMP Guests, disassociate VLAN from vCMP Guest and

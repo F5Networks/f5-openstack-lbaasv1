@@ -24,6 +24,8 @@ from neutron.services.loadbalancer import constants as lb_const
 
 from neutron.services.loadbalancer.drivers.f5.bigip.vcmp \
     import VcmpManager
+from neutron.services.loadbalancer.drivers.f5.bigip.fdb_connector_ml2 \
+    import FDBConnectorML2
 from neutron.services.loadbalancer.drivers.f5.bigip.l2 \
     import BigipL2Manager
 from neutron.services.loadbalancer.drivers.f5.bigip.selfips \
@@ -188,8 +190,6 @@ class iControlDriver(object):
         self.__last_connect_attempt = None
         self.service_queue = []
         self.agent_configurations = {}
-        self.tunnel_rpc = None
-        self.l2pop_rpc = None
 
         # BIG-IP containers
         self.__bigips = {}
@@ -207,9 +207,8 @@ class iControlDriver(object):
             self.agent_configurations['tunnel_types'] = []
             self.agent_configurations['bridge_mappings'] = {}
         else:
-            self.tunnel_types = self.conf.advertised_tunnel_types
-            self.agent_configurations['tunnel_types'] = self.tunnel_types
-
+            self.agent_configurations['tunnel_types'] = \
+                self.conf.advertised_tunnel_types
             for net_id in self.conf.common_network_ids:
                 LOG.debug(_('network %s will be mapped to /Common/%s'
                             % (net_id, self.conf.common_network_ids[net_id])))
@@ -239,8 +238,10 @@ class iControlDriver(object):
             self.bigip_selfip_manager = None
             self.bigip_snat_manager = None
         else:
+            self.fdb_connector = FDBConnectorML2(self.conf)
             l2_manager = BigipL2Manager(self.conf,
-                                        self.vcmp_manager)
+                                        self.vcmp_manager,
+                                        self.fdb_connector)
             self.bigip_l2_manager = l2_manager
             self.bigip_selfip_manager = BigipSelfIpManager(self, l2_manager)
             self.bigip_snat_manager = BigipSnatManager(self, l2_manager)
@@ -495,19 +496,18 @@ class iControlDriver(object):
     def set_context(self, context):
         """ Context to keep for database access """
         self.context = context
-        if self.bigip_l2_manager:
-            self.bigip_l2_manager.context = context
+        if self.fdb_connector:
+            self.fdb_connector.set_context(context)
 
     def set_tunnel_rpc(self, tunnel_rpc):
-        """ Provide L2 manager with ML2 RPC access """
-        self.tunnel_rpc = tunnel_rpc
-        if self.bigip_l2_manager:
-            self.bigip_l2_manager.tunnel_rpc = tunnel_rpc
+        """ Provide FDB Connector with ML2 RPC access """
+        if self.fdb_connector:
+            self.fdb_connector.set_tunnel_rpc(tunnel_rpc)
 
     def set_l2pop_rpc(self, l2pop_rpc):
-        """ Provide L2 manager with ML2 RPC access """
-        if self.bigip_l2_manager:
-            self.bigip_l2_manager.l2pop_rpc = l2pop_rpc
+        """ Provide FDB Connector with ML2 RPC access """
+        if self.fdb_connector:
+            self.fdb_connector.set_l2pop_rpc(l2pop_rpc)
 
     @serialized('exists')
     @is_connected
@@ -721,22 +721,12 @@ class iControlDriver(object):
             self.bigip_l2_manager.update_bigip_fdb(bigip, fdb)
 
     def tunnel_sync(self):
-        """ Update list of tunnel endpoints """
-        resync = False
+        """ Advertise all bigip tunnel endpoints """
+        tunnel_ips = []
         for bigip in self.get_all_bigips():
             if bigip.local_ip:
-                try:
-                    for tunnel_type in self.tunnel_types:
-                        if self.tunnel_rpc:
-                            self.tunnel_rpc.tunnel_sync(self.context,
-                                                        bigip.local_ip,
-                                                        tunnel_type)
-                except Exception as exc:
-                    LOG.debug(
-                        _("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
-                        {'local_ip': bigip.local_ip, 'e': exc})
-                    resync = True
-        return resync
+                tunnel_ips.append(bigip.local_ip)
+        self.fdb_connector.advertise_tunnel_ips(tunnel_ips)
 
     @serialized('sync')
     @is_connected
@@ -1080,14 +1070,12 @@ class iControlDriver(object):
         """ update pool member l2 records """
         network = member['network']
         if network:
+            ip_address = member['address']
             if self.bigip_l2_manager.is_common_network(network):
                 net_folder = 'Common'
+                ip_address = ip_address + '%0'
             else:
                 net_folder = pool['tenant_id']
-            ip_address = member['address']
-            if self.conf.f5_global_routed_mode \
-                    or self.bigip_l2_manager.is_common_network(network):
-                ip_address = ip_address + '%0'
             fdb_info = {'network': network,
                         'ip_address': ip_address,
                         'mac_address': member['port']['mac_address']}
@@ -1099,14 +1087,12 @@ class iControlDriver(object):
         network = member['network']
         if network:
             if member['port']:
+                ip_address = member['address']
                 if self.bigip_l2_manager.is_common_network(network):
                     net_folder = 'Common'
+                    ip_address = ip_address + '%0'
                 else:
                     net_folder = pool['tenant_id']
-                ip_address = member['address']
-                if self.conf.f5_global_routed_mode or \
-                        self.bigip_l2_manager.is_common_network(network):
-                    ip_address = ip_address + '%0'
                 fdb_info = {'network': network,
                             'ip_address': ip_address,
                             'mac_address': member['port']['mac_address']}
