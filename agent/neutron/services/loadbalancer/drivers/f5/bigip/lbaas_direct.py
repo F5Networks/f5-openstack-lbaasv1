@@ -113,7 +113,7 @@ class LBaaSBuilderDirect(LBaaSBuilder):
         # avoids race condition:
         # deletion of pool member objects must sync before we
         # remove the selfip from the peer bigips.
-        self._sync_if_clustered()
+        self.driver.sync_if_clustered()
 
     def _assure_vip(self, service, traffic_group, all_subnet_hints):
         """ Ensure the vip is on all bigips. """
@@ -149,7 +149,7 @@ class LBaaSBuilderDirect(LBaaSBuilder):
         # avoids race condition:
         # deletion of vip address must sync before we
         # remove the selfip from the peer bigips.
-        self._sync_if_clustered()
+        self.driver.sync_if_clustered()
 
     def _assure_pool_delete(self, service):
         """ Assure pool is deleted from big-ip """
