@@ -148,25 +148,25 @@ pylint:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
-         echo $(PYLINT) $(BDIR)/fdb_connector.py; \
-         echo $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
+         $(PYLINT) $(BDIR)/fdb_connector.py; \
+         $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
          $(PYLINT) $(BDIR)/icontrol_driver.py; \
-         echo $(PYLINT) $(BDIR)/lbaas.py; \
-         echo $(PYLINT) $(BDIR)/lbaas_direct.py; \
+         $(PYLINT) $(BDIR)/lbaas.py; \
+         $(PYLINT) $(BDIR)/lbaas_direct.py; \
          $(PYLINT) $(BDIR)/l2.py; \
          $(PYLINT) $(BDIR)/network_direct.py; \
-         echo $(PYLINT) $(BDIR)/pools.py; \
-         echo $(PYLINT) $(BDIR)/selfips.py; \
-         echo $(PYLINT) $(BDIR)/snats.py; \
+         $(PYLINT) $(BDIR)/pools.py; \
+         $(PYLINT) $(BDIR)/selfips.py; \
+         $(PYLINT) $(BDIR)/snats.py; \
          $(PYLINT) $(BDIR)/tenants.py; \
-         echo $(PYLINT) $(BDIR)/vcmp.py; \
-         echo $(PYLINT) $(BDIR)/vips.py; \
-         echo $(PYLINT) $(BDIR)/utils.py; \
-         echo $(PYLINT) $(IDIR)/__init__.py; \
-         echo $(PYLINT) $(IDIR)/arp.py; \
-         echo $(PYLINT) $(IDIR)/system.py; \
+         $(PYLINT) $(BDIR)/vcmp.py; \
+         $(PYLINT) $(BDIR)/vips.py; \
+         $(PYLINT) $(BDIR)/utils.py; \
+         $(PYLINT) $(IDIR)/__init__.py; \
+         $(PYLINT) $(IDIR)/arp.py; \
+         $(PYLINT) $(IDIR)/system.py; \
          echo $(PYLINT) $(IDIR)/virtual_server.py; \
-         echo $(PYLINT) $(IDIR)/vxlan.py; \
+         $(PYLINT) $(IDIR)/vxlan.py; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
          rm -v neutron/common; \
