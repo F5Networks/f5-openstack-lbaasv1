@@ -17,6 +17,7 @@
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
 from eventlet import greenthread
+import logging as std_logging
 
 LOG = logging.getLogger(__name__)
 
@@ -81,7 +82,10 @@ class BigipTenantManager(object):
     def _remove_tenant_replication_mode(self, bigip, tenant_id):
         """ Remove tenant in replication sync-mode """
         bigip.route.delete_domain(folder=tenant_id)
+        sudslog = std_logging.getLogger('suds.client')
+        sudslog.setLevel(std_logging.FATAL)
         bigip.system.force_root_folder()
+        sudslog.setLevel(std_logging.ERROR)
         bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
 
     def _remove_tenant_autosync_mode(self, bigip, tenant_id):

@@ -209,7 +209,7 @@ class iControlDriver(object):
             f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
 
         self._init_bigip_hostnames()
-        self._init_bigips()
+        self.init_bigips()
 
         self.vcmp_manager = None
         self.tenant_manager = None
@@ -281,7 +281,7 @@ class iControlDriver(object):
             self.agent_id = str(
                 uuid.uuid5(uuid.NAMESPACE_DNS, self.hostnames[0]))
 
-    def _init_bigips(self):
+    def init_bigips(self):
         """ Connect to all BIG-IPs """
         if self.connected:
             return
@@ -661,8 +661,11 @@ class iControlDriver(object):
         for bigip in self.get_all_bigips():
             bigip.system.purge_orphaned_folders_contents(existing_tenants)
 
+        sudslog = std_logging.getLogger('suds.client')
+        sudslog.setLevel(std_logging.FATAL)
         for bigip in self.get_all_bigips():
             bigip.system.force_root_folder()
+        sudslog.setLevel(std_logging.ERROR)
 
         for bigip in self.get_all_bigips():
             bigip.system.purge_orphaned_folders(existing_tenants)
@@ -722,7 +725,7 @@ class iControlDriver(object):
         if (now - self.__last_connect_attempt).total_seconds() > \
                 self.conf.icontrol_connection_retry_interval:
             self.connected = False
-            self._init_bigips()
+            self.init_bigips()
 
     def _common_service_handler(self, service, skip_networking=False):
         """ Assure that the service is configured on bigip(s) """

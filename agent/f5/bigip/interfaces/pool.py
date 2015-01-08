@@ -271,8 +271,8 @@ class Pool(object):
                     Log.error('purge_orphaned_pools', e.message)
             try:
                 Log.debug('purge_orphaned_pools',
-                          "Deleting pool %s in folder %s",
-                          pool, existing_pools[pool])
+                          "Deleting pool %s in folder %s" %
+                          (pool, existing_pools[pool]))
                 self.delete(name=pool, folder=existing_pools[pool])
             except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)

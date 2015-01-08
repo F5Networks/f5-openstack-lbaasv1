@@ -296,7 +296,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             # assure agent is connected:
             if not self.lbdriver.connected:
-                self.lbdriver._init_connection()
+                self.lbdriver.init_bigips()
 
             service_count = self.cache.size
             self.agent_state['configurations']['services'] = service_count
