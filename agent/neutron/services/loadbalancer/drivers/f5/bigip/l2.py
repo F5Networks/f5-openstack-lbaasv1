@@ -266,6 +266,27 @@ class BigipL2Manager(object):
         if self.fdb_connector:
             self.fdb_connector.notify_vtep_added(network, bigip.local_ip)
 
+    def _is_vlan_assoc_with_vcmp_guest(self, bigip, vlan):
+        """Is a vlan associated with a vcmp_guest?"""
+        try:
+            vcmp_host = self.vcmp_manager.get_vcmp_host(bigip)
+            vcmp_guest = self.vcmp_manager.get_vcmp_guest(vcmp_host, bigip)
+            vlan_list = vcmp_host['bigip'].system.sys_vcmp.get_vlan(
+                [vcmp_guest['name']])
+            full_path_vlan_name = '/Common/' + prefixed(vlan['name'])
+            if full_path_vlan_name in vlan_list[0]:
+                LOG.debug(('VLAN %s is associated with guest %s' %
+                           (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
+                return True
+        except WebFault as exc:
+            LOG.error(('Exception checking association of VLAN %s '
+                       'to vCMP Guest %s: %s ' %
+                       (vlan['name'], vcmp_guest['mgmt_addr'], exc)))
+            return False
+        LOG.debug(('VLAN %s is not associated with guest %s' %
+                  (full_path_vlan_name, vcmp_guest['mgmt_addr'])))
+        return False
+
     def _assure_vcmp_device_network(self, bigip, vlan):
         """For vCMP Guests, add VLAN to vCMP Host, associate VLAN with
            vCMP Guest, and remove VLAN from /Common on vCMP Guest."""
@@ -286,6 +307,10 @@ class BigipL2Manager(object):
             LOG.error(
                 ('Exception creating VLAN %s on vCMP Host %s:%s' %
                  (vlan['name'], vcmp_host['bigip'].icontrol.hostname, exc)))
+
+        # Determine if the VLAN is already associated with the vCMP Guest
+        if self._is_vlan_assoc_with_vcmp_guest(bigip, vlan):
+            return
 
         # Associate the VLAN with the vCMP Guest
         vcmp_guest = self.vcmp_manager.get_vcmp_guest(vcmp_host, bigip)
@@ -309,7 +334,7 @@ class BigipL2Manager(object):
         try:
             vlan_created = False
             for _ in range(0, 30):
-                if full_path_vlan_name in bigip.vlan.get_all(folder='/Common'):
+                if bigip.vlan.exists(name=vlan['name'], folder='/Common'):
                     vlan_created = True
                     break
                 LOG.debug(('Wait for VLAN %s to be created on vCMP Guest %s.'
@@ -435,6 +460,12 @@ class BigipL2Manager(object):
             LOG.error(('Exception removing VLAN %s association from vCMP '
                        'Guest %s:%s' %
                        (vlan_name, vcmp_guest['mgmt_addr'], exc)))
+
+        # Only delete VLAN if it is not in use by other vCMP Guests
+        if self.vcmp_manager.get_vlan_use_count(vcmp_host, vlan_name):
+            LOG.debug(('VLAN %s in use by other vCMP Guests on vCMP Host %s' %
+                      (vlan_name, vcmp_host['bigip'].icontrol.hostname)))
+            return
 
         # Delete VLAN from vCMP Host.  This will fail if any other vCMP Guest
         # is using this VLAN
