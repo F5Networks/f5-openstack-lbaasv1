@@ -42,10 +42,14 @@ class Vlan(object):
             payload['partition'] = folder
             if vlanid:
                 payload['tag'] = vlanid
-                payload['interfaces'] = [{'name': interface, 'tagged': True}]
+                if interface:
+                    payload['interfaces'] = [{'name': interface,
+                                              'tagged': True}]
             else:
                 payload['tag'] = 0
-                payload['interfaces'] = [{'name': interface, 'untagged': True}]
+                if interface:
+                    payload['interfaces'] = [{'name': interface,
+                                              'untagged': True}]
             if description:
                 payload['description'] = description
             request_url = self.bigip.icr_url + '/net/vlan/'
