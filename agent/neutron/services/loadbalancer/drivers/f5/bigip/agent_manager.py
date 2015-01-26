@@ -317,6 +317,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
     @periodic_task.periodic_task
     def periodic_resync(self, context):
+        LOG.debug("tunnel_sync: periodic_resync called")
         now = datetime.datetime.now()
         # Only force resync if the agent thinks it is
         # synchronized and the resync timer has exired
@@ -330,6 +331,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 self.cache.services = {}
                 self.last_resync = now
                 self.lbdriver.flush_cache()
+        LOG.debug("tunnel_sync: periodic_resync need_resync: %s" % str(self.needs_resync))
         # resync if we need to
         if self.needs_resync:
             self.needs_resync = False
@@ -360,6 +362,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         self.lbdriver.backup_configuration()
 
     def tunnel_sync(self):
+        LOG.debug("manager:tunnel_sync: calling driver tunnel_sync")
         return self.lbdriver.tunnel_sync()
 
     def sync_state(self):
@@ -434,7 +437,6 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             return
         try:
             self.lbdriver.delete_pool(pool_id, service)
-            self.plugin_rpc.pool_destroyed(pool_id)
         except Exception as e:
             LOG.exception(_('Unable to destroy service for pool: %s' +
                             str(e.message)), pool_id)

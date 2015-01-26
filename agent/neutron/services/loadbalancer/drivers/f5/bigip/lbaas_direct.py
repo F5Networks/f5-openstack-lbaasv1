@@ -29,14 +29,15 @@ from neutron.services.loadbalancer.drivers.f5.bigip.vips \
 LOG = logging.getLogger(__name__)
 
 
-class LBaaSBuilderDirect(LBaaSBuilder):
-    """F5 LBaaS Driver for BIG-IP using iControl
-       to create objects (vips, pools) directly,
-       (rather than using an iApp - LBaaSBuilderiApp)."""
+class LBaaSBuilderBigipObjects(LBaaSBuilder):
+    """F5 LBaaS Driver using iControl for BIG-IP to
+       create objects (vips, pools).
+       (rather than using an iApp - LBaaSBuilderBigipiApp,
+        or an iApp via BIG-IQ LBaaSBuilderBigiqiApp)."""
 
     def __init__(self, conf, driver, bigip_l2_manager=None):
-        super(LBaaSBuilderDirect, self).__init__(
-            conf, driver, bigip_l2_manager)
+        super(LBaaSBuilderBigipObjects, self).__init__(conf, driver)
+        self.bigip_l2_manager = bigip_l2_manager
         self.bigip_pool_manager = BigipPoolManager(self, self.bigip_l2_manager)
         self.bigip_vip_manager = BigipVipManager(self, self.bigip_l2_manager)
 
