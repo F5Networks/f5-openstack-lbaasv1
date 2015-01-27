@@ -94,7 +94,10 @@ class BigipTenantManager(object):
         # the folder or it won't delete due to not being empty
         for set_bigip in self.driver.get_all_bigips():
             set_bigip.route.delete_domain(folder=tenant_id)
+            sudslog = std_logging.getLogger('suds.client')
+            sudslog.setLevel(std_logging.FATAL)
             set_bigip.system.force_root_folder()
+            sudslog.setLevel(std_logging.ERROR)
 
         # we need to ensure that the following folder deletion
         # is clearly the last change that needs to be synced.

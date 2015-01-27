@@ -49,7 +49,7 @@ class FDBConnectorML2(FDBConnector):
                                              tunnel_ip,
                                              tunnel_type)
         except Exception as exc:
-            LOG.debug(
+            LOG.error(
                 _("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
                 {'local_ip': tunnel_ip, 'e': exc})
 

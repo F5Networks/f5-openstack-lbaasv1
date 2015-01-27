@@ -33,7 +33,9 @@ from neutron.services.loadbalancer.drivers.f5.bigip.l2 \
 from neutron.services.loadbalancer.drivers.f5.bigip.network_direct \
     import NetworkBuilderDirect
 from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_direct \
-    import LBaaSBuilderDirect
+    import LBaaSBuilderBigipObjects
+from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_bigiq_iapp \
+    import LBaaSBuilderBigiqIApp
 from neutron.services.loadbalancer.drivers.f5.bigip.utils \
     import serialized
 
@@ -56,6 +58,52 @@ __VERSION__ = '0.1.1'
 
 # configuration objects specific to iControl driver
 OPTS = [
+    cfg.StrOpt(
+        'bigiq_hostname',
+        help=_('The hostname (name or IP address) to use for the BIG-IQ host'),
+    ),
+    cfg.StrOpt(
+        'bigiq_admin_username',
+        default='admin',
+        help=_('The admin username to use for BIG-IQ authentication'),
+    ),
+    cfg.StrOpt(
+        'bigiq_admin_password',
+        default='[Provide password in config file]',
+        secret=True,
+        help=_('The admin password to use for BIG-IQ authentication')
+    ),
+    cfg.StrOpt(
+        'openstack_keystone_uri',
+        default='http://192.0.2.248:5000/',
+        help=_('The admin password to use for BIG-IQ authentication')
+    ),
+    cfg.StrOpt(
+        'openstack_admin_username',
+        default='admin',
+        help=_('The admin username to use for authentication '
+               'with the Keystone service'),
+    ),
+    cfg.StrOpt(
+        'openstack_admin_password',
+        default='[Provide password in config file]',
+        secret=True,
+        help=_('The admin password to use for authentication'
+               ' with the Keystone service')
+    ),
+    cfg.StrOpt(
+        'bigip_management_username',
+        default='admin',
+        help=_('The admin username that the BIG-IQ will use to manage '
+               'discovered BIG-IPs'),
+    ),
+    cfg.StrOpt(
+        'bigip_management_password',
+        default='[Provide password in config file]',
+        secret=True,
+        help=_('The admin password that the BIG-IQ will use to manage '
+               'discovered BIG-IPs')
+    ),
     cfg.StrOpt(
         'f5_device_type', default='external',
         help=_('What type of device onboarding')
@@ -216,7 +264,9 @@ class iControlDriver(object):
         self.fdb_connector = None
         self.bigip_l2_manager = None
         self.network_builder = None
-        self.lbaas_builder = None
+        self.lbaas_builder_bigip_objects = None
+        self.lbaas_builder_bigiq_iapp = None
+
         self._init_bigip_managers()
 
         if self.conf.f5_global_routed_mode:
@@ -249,9 +299,17 @@ class iControlDriver(object):
             self.network_builder = NetworkBuilderDirect(
                 self.conf, self, self.bigip_l2_manager)
 
-        # Direct means creating vips, pools directly rather than via iApp
-        self.lbaas_builder = LBaaSBuilderDirect(
+        # Object signifies creating vips, pools with iControl
+        # rather than using iApp.
+        # Bigip means using the BIG-IP rather than a BIG-IQ.
+        self.lbaas_builder_bigip_objects = LBaaSBuilderBigipObjects(
             self.conf, self, self.bigip_l2_manager)
+        try:
+            self.lbaas_builder_bigiq_iapp = LBaaSBuilderBigiqIApp(
+                self.conf, self)
+        except NeutronException as exc:
+            LOG.debug(_('Not using bigiq: %s' % exc.msg))
+            pass
 
     def _init_bigip_hostnames(self):
         """ Validate and parse bigip credentials """
@@ -730,34 +788,55 @@ class iControlDriver(object):
     def _common_service_handler(self, service, skip_networking=False):
         """ Assure that the service is configured on bigip(s) """
         start_time = time()
-        self.tenant_manager.assure_tenant_created(service)
-        LOG.debug("    _assure_tenant_created took %.5f secs" %
-                  (time() - start_time))
+
+        # Here we look to see if the tenant has big-ips and
+        # so we should use bigiq (if enabled) or fall back
+        # to direct icontrol to the bigip(s).
+        if self.lbaas_builder_bigiq_iapp:
+            builder = self.lbaas_builder_bigiq_iapp
+            readiness = builder.check_tenant_bigiq_readiness(service)
+            use_bigiq = readiness['found_bigips']
+        else:
+            use_bigiq = False
+
+        if use_bigiq:
+            skip_networking = True
+
+        if not use_bigiq:
+            self.tenant_manager.assure_tenant_created(service)
+            LOG.debug("    _assure_tenant_created took %.5f secs" %
+                      (time() - start_time))
 
         traffic_group = self._service_to_traffic_group(service)
 
-        if not skip_networking:
+        if not skip_networking and self.network_builder:
             start_time = time()
             self.network_builder.prep_service_networking(
                 service, traffic_group)
             if time() - start_time > .001:
                 LOG.debug("        _prep_service_networking "
                           "took %.5f secs" % (time() - start_time))
-        all_subnet_hints = self.lbaas_builder.assure_service(
-            service, traffic_group)
 
-        if not skip_networking:
+        if use_bigiq:
+            self.lbaas_builder_bigiq_iapp.assure_service(
+                service, traffic_group)
+        else:
+            all_subnet_hints = self.lbaas_builder_bigip_objects.assure_service(
+                service, traffic_group)
+
+        if not skip_networking and self.network_builder:
             start_time = time()
             self.network_builder.post_service_networking(
                 service, all_subnet_hints)
             LOG.debug("    _post_service_networking took %.5f secs" %
                       (time() - start_time))
 
-        start_time = time()
-        self.tenant_manager.assure_tenant_cleanup(
-            service, all_subnet_hints)
-        LOG.debug("    _assure_tenant_cleanup took %.5f secs" %
-                  (time() - start_time))
+        if not use_bigiq:
+            start_time = time()
+            self.tenant_manager.assure_tenant_cleanup(
+                service, all_subnet_hints)
+            LOG.debug("    _assure_tenant_cleanup took %.5f secs" %
+                      (time() - start_time))
 
         self._update_service_status(service)
 

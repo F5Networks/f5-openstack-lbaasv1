@@ -27,10 +27,9 @@ class LBaaSBuilder(object):
 
         This is an abstract base class.
     """
-    def __init__(self, conf, driver, bigip_l2_manager=None):
+    def __init__(self, conf, driver):
         self.conf = conf
         self.driver = driver
-        self.bigip_l2_manager = bigip_l2_manager
 
     def assure_service(self, service, traffic_group):
         """ Assure that the service is configured """

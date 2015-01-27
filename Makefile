@@ -2,7 +2,7 @@
 # 
 # You need to install these packages on Ubunutu 12.04 to make this work:
 # 
-#     sudo apt-get install make python-stdeb fakeroot python-all rpm
+#     sudo apt-get install -y make python-stdeb fakeroot python-all rpm
 # 
 # 
 PROJECT_DIR := $(shell pwd)
@@ -102,11 +102,13 @@ IDIR := f5/bigip/interfaces
 NDIR := /usr/lib/python2.7/dist-packages/neutron
 pep8:
 	(cd agent; \
+         pep8 f5/bigiq/bigiq.py; \
          pep8 $(BDIR)/fdb_connector.py; \
          pep8 $(BDIR)/fdb_connector_ml2.py; \
          pep8 $(BDIR)/icontrol_driver.py; \
          pep8 $(BDIR)/l2.py; \
          pep8 $(BDIR)/lbaas.py; \
+         pep8 $(BDIR)/lbaas_bigiq_iapp.py; \
          pep8 $(BDIR)/lbaas_direct.py; \
          pep8 $(BDIR)/selfips.py; \
          pep8 $(BDIR)/snats.py; \
@@ -148,10 +150,12 @@ pylint:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
+         $(PYLINT) f5/bigiq/bigiq.py; \
          $(PYLINT) $(BDIR)/fdb_connector.py; \
          $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
          $(PYLINT) $(BDIR)/icontrol_driver.py; \
          $(PYLINT) $(BDIR)/lbaas.py; \
+         $(PYLINT) $(BDIR)/lbaas_bigiq_iapp.py; \
          $(PYLINT) $(BDIR)/lbaas_direct.py; \
          $(PYLINT) $(BDIR)/l2.py; \
          $(PYLINT) $(BDIR)/network_direct.py; \
