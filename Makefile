@@ -164,6 +164,7 @@ pylint:
          $(PYLINT) $(BDIR)/utils.py; \
          $(PYLINT) $(IDIR)/__init__.py; \
          $(PYLINT) $(IDIR)/arp.py; \
+         $(PYLINT) $(IDIR)/l2gre.py; \
          $(PYLINT) $(IDIR)/system.py; \
          echo $(PYLINT) $(IDIR)/virtual_server.py; \
          $(PYLINT) $(IDIR)/vxlan.py; \

@@ -531,7 +531,7 @@ class VXLAN(object):
                 if 'items' in return_obj:
                     for tunnel in return_obj['items']:
                         if tunnel['name'] == tunnel_name:
-                            return strip_folder_and_prefix(tunnel['partition'])
+                            return tunnel['partition']
                 return None
             elif response.status_code != 404:
                 Log.error('VXLAN', response.text)

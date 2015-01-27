@@ -113,8 +113,11 @@ class NetworkBuilderDirect(object):
         """ Ensure snat for subnet exists on bigips """
         tenant_id = service['pool']['tenant_id']
         subnet = subnetinfo['subnet']
-        assure_bigips = [bigip for bigip in assure_bigips
-                         if subnet['id'] not in bigip.assured_snat_subnets]
+        assure_bigips = \
+            [bigip for bigip in assure_bigips
+                if tenant_id not in bigip.assured_tenant_snat_subnets or
+                subnet['id'] not in
+                bigip.assured_tenant_snat_subnets[tenant_id]]
         if len(assure_bigips):
             snat_addrs = self.bigip_snat_manager.get_snat_addrs(
                 subnetinfo, tenant_id)
@@ -297,9 +300,13 @@ class NetworkBuilderDirect(object):
                 gw_name = self.bigip_selfip_manager.delete_gateway_on_subnet(
                     bigip, subnetinfo)
                 deleted_names.add(gw_name)
-            deleted_names = deleted_names.union(
+            my_deleted_names, my_in_use_subnets = \
                 self.bigip_snat_manager.delete_bigip_snats(
-                    bigip, subnetinfo, tenant_id))
+                    bigip, subnetinfo, tenant_id)
+            deleted_names = deleted_names.union(my_deleted_names)
+            for in_use_subnetid in my_in_use_subnets:
+                subnet_hints['check_for_delete_subnets'].pop(
+                    in_use_subnetid, None)
         return deleted_names
 
     def _assure_delete_nets_nonshared(self, bigip, service, subnet_hints):
@@ -364,6 +371,7 @@ def _get_subnets_to_delete(bigip, service, subnet_hints):
             subnets_to_delete.append(subnetinfo)
     return subnets_to_delete
 
+
 def _ips_exist_on_subnet(bigip, service, subnet):
     """ Does the big-ip have any IP addresses on this subnet? """
     ipsubnet = netaddr.IPNetwork(subnet['cidr'])
@@ -385,5 +393,3 @@ def _ips_exist_on_subnet(bigip, service, subnet):
 
     # nothing found
     return False
-
-

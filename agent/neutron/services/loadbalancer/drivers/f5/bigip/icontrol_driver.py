@@ -386,7 +386,7 @@ class iControlDriver(object):
 
         bigip.device_name = bigip.device.get_device_name()
         bigip.assured_networks = []
-        bigip.assured_snat_subnets = []
+        bigip.assured_tenant_snat_subnets = {}
         bigip.assured_gateway_subnets = []
 
         if self.conf.f5_ha_type != 'standalone':
@@ -484,7 +484,7 @@ class iControlDriver(object):
         """Remove cached objects so they can be created if necessary"""
         for bigip in self.get_all_bigips():
             bigip.assured_networks = []
-            bigip.assured_snat_subnets = []
+            bigip.assured_tenant_snat_subnets = {}
             bigip.assured_gateway_subnets = []
 
     # pylint: disable=unused-argument
@@ -871,9 +871,9 @@ class iControlDriver(object):
 
     def _service_to_traffic_group(self, service):
         """ Hash service tenant id to index of traffic group """
-        return self._tenant_to_traffic_group(service['pool']['tenant_id'])
+        return self.tenant_to_traffic_group(service['pool']['tenant_id'])
 
-    def _tenant_to_traffic_group(self, tenant_id):
+    def tenant_to_traffic_group(self, tenant_id):
         """ Hash tenant id to index of traffic group """
         hexhash = hashlib.md5(tenant_id).hexdigest()
         tg_index = int(hexhash, 16) % len(self.__traffic_groups)

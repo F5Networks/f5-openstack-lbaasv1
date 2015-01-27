@@ -20,8 +20,9 @@ class BigipSelfIpManager(object):
                         ' for network with no id... skipping.'))
             return
         subnet = subnetinfo['subnet']
-        if subnet['id'] in bigip.assured_snat_subnets:
-            return
+        for tenant_snat_subnets in bigip.assured_tenant_snat_subnets:
+            if subnet['id'] in tenant_snat_subnets:
+                return
 
         pool = service['pool']
         if self.bigip_l2_manager.is_common_network(network):

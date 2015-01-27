@@ -275,24 +275,28 @@ class L2GRE(object):
             folder = fdb_entries[tunnel_name]['folder']
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
-            existing_records = self.get_fdb_entry(
-                tunnel_name=tunnel_name, mac=None, folder=folder)
+            existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
+                                                  mac=None,
+                                                  folder=folder)
             new_records = []
             new_mac_addresses = []
             new_arp_addresses = {}
 
-            for mac in fdb_entries[tunnel_name]['records']:
+            tunnel_records = fdb_entries[tunnel_name]['records']
+            for mac in tunnel_records:
                 fdb_entry = dict()
                 fdb_entry['name'] = mac
-                fdb_entry['endpoint'] = mac['endpoint']
+                fdb_entry['endpoint'] = tunnel_records[mac]['endpoint']
                 new_records.append(fdb_entry)
                 new_mac_addresses.append(mac)
-                new_arp_addresses[mac] = mac['ip_address']
+                new_arp_addresses[mac] = tunnel_records[mac]['ip_address']
 
             for record in existing_records:
                 if not record['name'] in new_mac_addresses:
                     new_records.append(record)
                 else:
+                    # This fdb entry exists and is not being updated.
+                    # So, do not update the ARP record either.
                     if record['name'] in new_arp_addresses:
                         del new_arp_addresses[record['name']]
 
@@ -307,15 +311,13 @@ class L2GRE(object):
                         try:
                             self.bigip.arp.create(
                                 ip_address=new_arp_addresses[mac],
-                                mac_address=mac, folder=folder)
-                        except Exception as e:
+                                mac_address=mac,
+                                folder=folder)
+                        except Exception as exc:
                             Log.error('L2GRE',
                                       'could not create static arp: %s'
-                                      % e.message)
+                                      % exc.message)
             return True
-        else:
-            Log.error('L2GRE', response.text)
-            raise exceptions.L2GRETunnelUpdateException(response.text)
         return False
 
     @icontrol_rest_folder
@@ -367,8 +369,9 @@ class L2GRE(object):
             folder = fdb_entries[tunnel_name]['folder']
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
-            existing_records = self.get_fdb_entry(
-                tunnel_name=tunnel_name, mac=None, folder=folder)
+            existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
+                                                  mac=None,
+                                                  folder=folder)
             arps_to_delete = {}
             new_records = []
 
@@ -390,13 +393,9 @@ class L2GRE(object):
             if response.status_code < 400:
                 if const.FDB_POPULATE_STATIC_ARP:
                     for mac in arps_to_delete:
-                        self.bigip.arp.delete(
-                            ip_address=arps_to_delete[mac],
-                            folder='Common')
+                        self.bigip.arp.delete(ip_address=arps_to_delete[mac],
+                                              folder='Common')
             return True
-        else:
-            Log.error('L2GRE', response.text)
-            raise exceptions.L2GRETunnelUpdateException(response.text)
         return False
 
     @icontrol_rest_folder
@@ -522,7 +521,7 @@ class L2GRE(object):
                 if 'items' in return_obj:
                     for tunnel in return_obj['items']:
                         if tunnel['name'] == tunnel_name:
-                            return strip_folder_and_prefix(tunnel['partition'])
+                            return tunnel['partition']
                 return None
             elif response.status_code != 404:
                 Log.error('L2GRE', response.text)
