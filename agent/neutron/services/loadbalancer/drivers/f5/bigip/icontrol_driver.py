@@ -307,7 +307,8 @@ class iControlDriver(object):
         try:
             self.lbaas_builder_bigiq_iapp = LBaaSBuilderBigiqIApp(
                 self.conf, self)
-        except:
+        except NeutronException as exc:
+            LOG.debug(_('Not using bigiq: %s' % exc.msg))
             pass
 
     def _init_bigip_hostnames(self):
