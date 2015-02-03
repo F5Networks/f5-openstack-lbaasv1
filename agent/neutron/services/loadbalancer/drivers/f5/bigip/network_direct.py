@@ -212,17 +212,15 @@ class NetworkBuilderDirect(object):
         pool = service['pool']
         for bigip in self.driver.get_all_bigips():
             for member in service['members']:
-                if member['status'] == plugin_const.PENDING_CREATE or \
-                        member['status'] == plugin_const.PENDING_UPDATE:
-                    self.update_bigip_member_l2(bigip, pool, member)
-                elif member['status'] == plugin_const.PENDING_DELETE:
+                if member['status'] == plugin_const.PENDING_DELETE:
                     self.delete_bigip_member_l2(bigip, pool, member)
+                else:
+                    self.update_bigip_member_l2(bigip, pool, member)
             if 'id' in vip:
-                if vip['status'] == plugin_const.PENDING_CREATE or \
-                   vip['status'] == plugin_const.PENDING_UPDATE:
-                    self.update_bigip_vip_l2(bigip, vip)
-                elif vip['status'] == plugin_const.PENDING_DELETE:
+                if vip['status'] == plugin_const.PENDING_DELETE:
                     self.delete_bigip_vip_l2(bigip, vip)
+                else:
+                    self.update_bigip_vip_l2(bigip, vip)
 
     def update_bigip_member_l2(self, bigip, pool, member):
         """ update pool member l2 records """

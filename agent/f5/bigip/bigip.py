@@ -24,6 +24,7 @@ from f5.bigip import interfaces as bigip_interfaces
 
 from f5.bigip.interfaces.cluster import Cluster
 from f5.bigip.interfaces.device import Device
+from f5.bigip.interfaces.iapp import IApp
 from f5.bigip.interfaces.monitor import Monitor
 from f5.bigip.interfaces.pool import Pool
 from f5.bigip.interfaces.route import Route
@@ -63,6 +64,16 @@ class BigIP(object):
         self.interfaces = {}
         self.device_name = None
         self.local_ip = None
+
+    @property
+    def iapp(self):
+        if 'iapp' in self.interfaces:
+            return self.interfaces['iapp']
+        else:
+            iapp = IApp(self)
+            self.interfaces['iapp'] = iapp
+            iapp.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
+            return iapp
 
     @property
     def system(self):
@@ -315,35 +326,6 @@ class BigIP(object):
             low += (1 << 32)
 
         return long((high << 32) | low)
-
-    @staticmethod
-    def int_to_ulong(integer):
-        ulong = type('ULong', (object,), {})
-        ulong.low = 0
-        ulong.high = 0
-        if integer < 0:
-            integer = -1 * integer
-            binval = bin(integer)[2:]
-            bitlen = len(binval)
-            if bitlen > 32:
-                ulong.low = int((binval[(bitlen - 32):]), 2)
-                ulong.high = int((binval[:(bitlen - 32)]), 2)
-            else:
-                ulong.low = int(binval, 2)
-                ulong.high = 0
-            ulong.low = -1 * ulong.low
-            ulong.high = -1 * ulong.high
-            return ulong
-        else:
-            binval = bin(integer)[2:]
-            bitlen = len(binval)
-            if bitlen > 32:
-                ulong.low = int((binval[(bitlen - 32):]), 2)
-                ulong.high = int((binval[:(bitlen - 32)]), 2)
-            else:
-                ulong.low = int(binval, 2)
-                ulong.high = 0
-            return ulong
 
     @staticmethod
     def add_folder(folder, name):
