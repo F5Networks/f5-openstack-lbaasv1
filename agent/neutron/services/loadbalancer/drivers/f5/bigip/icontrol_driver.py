@@ -140,6 +140,17 @@ OPTS = [
         'f5_populate_static_arp', default=True,
         help=_('create static arp entries based on service entries'),
     ),
+    cfg.StrOpt(
+        'l3_binding_driver',
+        default=('neutron.services.loadbalancer.drivers'
+                 '.f5.bigip.l3_binding.AllowedAddressPairs'),
+        help=_('driver class for binding l3 address to l2 ports'),
+    ),
+    cfg.DictOpt(
+        'l3_binding_static_mappings', default={},
+        help=_('static mapping of subnet_id to list of '
+               'port_id, device_id list.')
+    ),
     cfg.BoolOpt(
         'f5_route_domain_strictness', default=False,
         help=_('Strict route domain isolation'),
@@ -257,12 +268,13 @@ class iControlDriver(object):
             f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
 
         self._init_bigip_hostnames()
-        self.init_bigips()
+        self._init_bigips()
 
         self.vcmp_manager = None
         self.tenant_manager = None
         self.fdb_connector = None
         self.bigip_l2_manager = None
+        self.l3_binding = None
         self.network_builder = None
         self.lbaas_builder_bigip_objects = None
         self.lbaas_builder_bigiq_iapp = None
@@ -339,7 +351,7 @@ class iControlDriver(object):
             self.agent_id = str(
                 uuid.uuid5(uuid.NAMESPACE_DNS, self.hostnames[0]))
 
-    def init_bigips(self):
+    def _init_bigips(self):
         """ Connect to all BIG-IPs """
         if self.connected:
             return
@@ -783,7 +795,7 @@ class iControlDriver(object):
         if (now - self.__last_connect_attempt).total_seconds() > \
                 self.conf.icontrol_connection_retry_interval:
             self.connected = False
-            self.init_bigips()
+            self._init_bigips()
 
     def _common_service_handler(self, service, skip_networking=False):
         """ Assure that the service is configured on bigip(s) """
