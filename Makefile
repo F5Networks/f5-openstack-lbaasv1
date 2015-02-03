@@ -108,8 +108,10 @@ pep8:
          pep8 $(BDIR)/icontrol_driver.py; \
          pep8 $(BDIR)/l2.py; \
          pep8 $(BDIR)/lbaas.py; \
-         pep8 $(BDIR)/lbaas_bigiq_iapp.py; \
-         pep8 $(BDIR)/lbaas_direct.py; \
+         pep8 $(BDIR)/lbaas_iapp.py; \
+         pep8 $(BDIR)/lbaas_bigiq.py; \
+         pep8 $(BDIR)/lbaas_bigip.py; \
+         pep8 $(BDIR)/network_direct.py; \
          pep8 $(BDIR)/selfips.py; \
          pep8 $(BDIR)/snats.py; \
          pep8 $(BDIR)/pools.py; \
@@ -121,6 +123,7 @@ pep8:
          pep8 $(IDIR)/arp.py; \
          pep8 $(IDIR)/cluster.py; \
          pep8 $(IDIR)/device.py; \
+         pep8 $(IDIR)/iapp.py; \
          pep8 $(IDIR)/l2gre.py; \
          pep8 $(IDIR)/monitor.py; \
          pep8 $(IDIR)/nat.py; \
@@ -155,8 +158,9 @@ pylint:
          $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
          $(PYLINT) $(BDIR)/icontrol_driver.py; \
          $(PYLINT) $(BDIR)/lbaas.py; \
-         $(PYLINT) $(BDIR)/lbaas_bigiq_iapp.py; \
-         $(PYLINT) $(BDIR)/lbaas_direct.py; \
+         $(PYLINT) $(BDIR)/lbaas_iapp.py; \
+         $(PYLINT) $(BDIR)/lbaas_bigiq.py; \
+         $(PYLINT) $(BDIR)/lbaas_bigip.py; \
          $(PYLINT) $(BDIR)/l2.py; \
          $(PYLINT) $(BDIR)/network_direct.py; \
          $(PYLINT) $(BDIR)/pools.py; \
@@ -168,9 +172,10 @@ pylint:
          $(PYLINT) $(BDIR)/utils.py; \
          $(PYLINT) $(IDIR)/__init__.py; \
          $(PYLINT) $(IDIR)/arp.py; \
+         $(PYLINT) $(IDIR)/iapp.py; \
          $(PYLINT) $(IDIR)/l2gre.py; \
          $(PYLINT) $(IDIR)/system.py; \
-         echo $(PYLINT) $(IDIR)/virtual_server.py; \
+         $(PYLINT) $(IDIR)/virtual_server.py; \
          $(PYLINT) $(IDIR)/vxlan.py; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
@@ -183,3 +188,33 @@ pylint:
          rm -v neutron/__init__.py; \
         )
 
+test:
+	(cd agent; \
+         > neutron/__init__.py; \
+         > neutron/services/__init__.py; \
+         > neutron/services/loadbalancer/__init__.py; \
+         > neutron/services/loadbalancer/drivers/__init__.py; \
+         ln -s $(NDIR)/common neutron/common; \
+         ln -s $(NDIR)/openstack neutron/openstack; \
+         ln -s $(NDIR)/plugins neutron/plugins; \
+         ln -s $(NDIR)/services/constants neutron/services/constants; \
+         ln -s $(NDIR)/services/loadbalancer/constants.py \
+               neutron/services/loadbalancer/constants.py; \
+	 cp ../test/test.py .; \
+	 python test.py; \
+	 rm test.py; \
+         rm -vf neutron/plugins; \
+         rm -vf neutron/openstack; \
+         rm -vf neutron/common; \
+         rm -vf neutron/services/constants; \
+         rm -vf neutron/services/loadbalancer/constants.py; \
+         rm -vf neutron/services/loadbalancer/constants.pyc; \
+         rm -vf neutron/services/loadbalancer/drivers/__init__.py; \
+         rm -vf neutron/services/loadbalancer/drivers/__init__.pyc; \
+         rm -vf neutron/services/loadbalancer/__init__.py; \
+         rm -vf neutron/services/loadbalancer/__init__.pyc; \
+         rm -vf neutron/services/__init__.py; \
+         rm -vf neutron/services/__init__.pyc; \
+         rm -vf neutron/__init__.py; \
+         rm -vf neutron/__init__.pyc; \
+         )

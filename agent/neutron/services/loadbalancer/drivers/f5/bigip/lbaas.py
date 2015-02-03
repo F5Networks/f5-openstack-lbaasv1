@@ -31,7 +31,7 @@ class LBaaSBuilder(object):
         self.conf = conf
         self.driver = driver
 
-    def assure_service(self, service, traffic_group):
+    def assure_service(self, service, traffic_group, all_subnet_hints):
         """ Assure that the service is configured """
         pass
 

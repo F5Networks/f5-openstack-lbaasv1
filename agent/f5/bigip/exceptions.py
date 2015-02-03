@@ -106,6 +106,22 @@ class DeviceDeleteException(Exception):
     pass
 
 
+class IAppCreationException(Exception):
+    pass
+
+
+class IAppQueryException(Exception):
+    pass
+
+
+class IAppUpdateException(Exception):
+    pass
+
+
+class IAppDeleteException(Exception):
+    pass
+
+
 class L2GRETunnelCreationException(Exception):
     pass
 

@@ -32,9 +32,11 @@ from neutron.services.loadbalancer.drivers.f5.bigip.l2 \
     import BigipL2Manager
 from neutron.services.loadbalancer.drivers.f5.bigip.network_direct \
     import NetworkBuilderDirect
-from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_direct \
-    import LBaaSBuilderBigipObjects
-from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_bigiq_iapp \
+import neutron.services.loadbalancer.drivers.f5.bigip.lbaas_iapp \
+    as lbaas_iapp
+from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_bigip \
+    import LBaaSBuilderBigipObjects, LBaaSBuilderBigipIApp
+from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_bigiq \
     import LBaaSBuilderBigiqIApp
 from neutron.services.loadbalancer.drivers.f5.bigip.utils \
     import serialized
@@ -113,7 +115,7 @@ OPTS = [
         help=_('Are we standalone, pair(active/standby), or scalen')
     ),
     cfg.ListOpt(
-        'f5_external_physical_mappings', default='default:1.1:True',
+        'f5_external_physical_mappings', default=['default:1.1:True'],
         help=_('Mapping between Neutron physical_network to interfaces')
     ),
     cfg.StrOpt(
@@ -181,6 +183,10 @@ OPTS = [
         'environment_prefix', default='',
         help=_('The object name prefix for this environment'),
     ),
+    cfg.StrOpt(
+        'icontrol_config_mode', default='objects',
+        help=_('Whether to use iapp or objects for bigip configuration'),
+    ),
 ]
 
 
@@ -206,9 +212,13 @@ def is_connected(method):
 class iControlDriver(object):
     """F5 LBaaS Driver for BIG-IP using iControl"""
 
-    def __init__(self, conf):
+    def __init__(self, conf, registerOpts=True):
+        """ The registerOpts parameter allows a test to
+            turn off config option handling so that it can
+            set the options manually instead. """
         self.conf = conf
-        self.conf.register_opts(OPTS)
+        if registerOpts:
+            self.conf.register_opts(OPTS)
         self.context = None
         self.agent_id = None
         self.hostnames = None
@@ -264,6 +274,7 @@ class iControlDriver(object):
         self.fdb_connector = None
         self.bigip_l2_manager = None
         self.network_builder = None
+        self.lbaas_builder_bigip_iapp = None
         self.lbaas_builder_bigip_objects = None
         self.lbaas_builder_bigiq_iapp = None
 
@@ -299,9 +310,11 @@ class iControlDriver(object):
             self.network_builder = NetworkBuilderDirect(
                 self.conf, self, self.bigip_l2_manager)
 
+        # Directly to the BIG-IP rather than through BIG-IQ.
+        self.lbaas_builder_bigip_iapp = LBaaSBuilderBigipIApp(
+            self.conf, self)
         # Object signifies creating vips, pools with iControl
         # rather than using iApp.
-        # Bigip means using the BIG-IP rather than a BIG-IQ.
         self.lbaas_builder_bigip_objects = LBaaSBuilderBigipObjects(
             self.conf, self, self.bigip_l2_manager)
         try:
@@ -309,7 +322,6 @@ class iControlDriver(object):
                 self.conf, self)
         except NeutronException as exc:
             LOG.debug(_('Not using bigiq: %s' % exc.msg))
-            pass
 
     def _init_bigip_hostnames(self):
         """ Validate and parse bigip credentials """
@@ -441,6 +453,9 @@ class iControlDriver(object):
                 raise f5ex.MissingNetwork(_(
                     'Common network %s on %s does not exist'
                     % (network, bigip.icontrol.hostname)))
+
+        if self.conf.icontrol_config_mode == 'iapp':
+            lbaas_iapp.check_install_iapp(bigip)
 
         bigip.device_name = bigip.device.get_device_name()
         bigip.assured_networks = []
@@ -817,12 +832,27 @@ class iControlDriver(object):
                 LOG.debug("        _prep_service_networking "
                           "took %.5f secs" % (time() - start_time))
 
+        all_subnet_hints = {}
+        for bigip in self.get_config_bigips():
+            # check_for_delete_subnets:
+            #     keep track of which subnets we should check to delete
+            #     for a deleted vip or member
+            # do_not_delete_subnets:
+            #     If we add an IP to a subnet we must not delete the subnet
+            all_subnet_hints[bigip.device_name] = \
+                {'check_for_delete_subnets': {},
+                 'do_not_delete_subnets': []}
+
         if use_bigiq:
             self.lbaas_builder_bigiq_iapp.assure_service(
-                service, traffic_group)
+                service, traffic_group, all_subnet_hints)
         else:
-            all_subnet_hints = self.lbaas_builder_bigip_objects.assure_service(
-                service, traffic_group)
+            if self.conf.icontrol_config_mode == 'iapp':
+                self.lbaas_builder_bigip_iapp.assure_service(
+                    service, traffic_group, all_subnet_hints)
+            else:
+                self.lbaas_builder_bigip_objects.assure_service(
+                    service, traffic_group, all_subnet_hints)
 
         if not skip_networking and self.network_builder:
             start_time = time()
@@ -846,6 +876,10 @@ class iControlDriver(object):
 
     def _update_service_status(self, service):
         """ Update status of objects in OpenStack """
+
+        # plugin_rpc may not be set when unit testing
+        if not self.plugin_rpc:
+            return
         self._update_members_status(service['members'])
         self._update_pool_status(service['pool'])
         self._update_pool_monitors_status(service)
