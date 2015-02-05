@@ -100,13 +100,23 @@ clean-rpms:
 BDIR := neutron/services/loadbalancer/drivers/f5/bigip
 IDIR := f5/bigip/interfaces
 NDIR := /usr/lib/python2.7/dist-packages/neutron
-pep8:
+
+pep8: pep8-driver pep8-agent 
+
+pep8-driver:
+	(cd driver; \
+         pep8 neutron/services/loadbalancer/drivers/f5/agent_scheduler.py; \
+         pep8 neutron/services/loadbalancer/drivers/f5/plugin_driver.py; \
+        )    
+
+pep8-agent:
 	(cd agent; \
          pep8 f5/bigiq/bigiq.py; \
          pep8 $(BDIR)/fdb_connector.py; \
          pep8 $(BDIR)/fdb_connector_ml2.py; \
          pep8 $(BDIR)/icontrol_driver.py; \
          pep8 $(BDIR)/l2.py; \
+         pep8 $(BDIR)/l3_binding.py; \
          pep8 $(BDIR)/lbaas.py; \
          pep8 $(BDIR)/lbaas_iapp.py; \
          pep8 $(BDIR)/lbaas_bigiq.py; \
@@ -156,12 +166,14 @@ pylint:
          $(PYLINT) f5/bigiq/bigiq.py; \
          $(PYLINT) $(BDIR)/fdb_connector.py; \
          $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
+         $(PYLINT) $(BDIR)/lbaas_driver.py; \
          $(PYLINT) $(BDIR)/icontrol_driver.py; \
          $(PYLINT) $(BDIR)/lbaas.py; \
          $(PYLINT) $(BDIR)/lbaas_iapp.py; \
          $(PYLINT) $(BDIR)/lbaas_bigiq.py; \
          $(PYLINT) $(BDIR)/lbaas_bigip.py; \
          $(PYLINT) $(BDIR)/l2.py; \
+         $(PYLINT) $(BDIR)/l3_binding.py; \
          $(PYLINT) $(BDIR)/network_direct.py; \
          $(PYLINT) $(BDIR)/pools.py; \
          $(PYLINT) $(BDIR)/selfips.py; \
