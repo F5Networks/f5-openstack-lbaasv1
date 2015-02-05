@@ -17,11 +17,14 @@
 
 from oslo.config import cfg
 from neutron.openstack.common import log as logging
+from neutron.openstack.common import importutils
 from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import NeutronException, \
     InvalidConfigurationOption
 from neutron.services.loadbalancer import constants as lb_const
 
+from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_driver \
+    import LBaaSBaseDriver
 from neutron.services.loadbalancer.drivers.f5.bigip.vcmp \
     import VcmpManager
 from neutron.services.loadbalancer.drivers.f5.bigip.tenants \
@@ -144,13 +147,13 @@ OPTS = [
     ),
     cfg.StrOpt(
         'l3_binding_driver',
-        default=('neutron.services.loadbalancer.drivers'
-                 '.f5.bigip.l3_binding.AllowedAddressPairs'),
+        default=None,
         help=_('driver class for binding l3 address to l2 ports'),
     ),
-    cfg.DictOpt(
-        'l3_binding_static_mappings', default={},
-        help=_('static mapping of subnet_id to list of '
+    cfg.StrOpt(
+        'l3_binding_static_mappings', default=None,
+        help=_('JSON encoded static mapping of'
+               'subnet_id to list of '
                'port_id, device_id list.')
     ),
     cfg.BoolOpt(
@@ -220,25 +223,21 @@ def is_connected(method):
     return wrapper
 
 
-class iControlDriver(object):
+class iControlDriver(LBaaSBaseDriver):
     """F5 LBaaS Driver for BIG-IP using iControl"""
 
     def __init__(self, conf, registerOpts=True):
         """ The registerOpts parameter allows a test to
             turn off config option handling so that it can
             set the options manually instead. """
+        super(iControlDriver, self).__init__(conf, registerOpts=registerOpts)
         self.conf = conf
         if registerOpts:
             self.conf.register_opts(OPTS)
-        self.context = None
-        self.agent_id = None
         self.hostnames = None
         self.device_type = conf.f5_device_type
         self.plugin_rpc = None
-        self.connected = False
         self.__last_connect_attempt = None
-        self.service_queue = []
-        self.agent_configurations = {}
 
         # BIG-IP containers
         self.__bigips = {}
@@ -304,11 +303,35 @@ class iControlDriver(object):
         LOG.info(_('iControlDriver dynamic agent configurations:%s'
                    % self.agent_configurations))
 
+    def post_init(self):
+        """ Run and Post Initialization Tasks """
+        # run any post initialized tasks, now that the agent
+        # is fully connected
+        if self.l3_binding:
+            LOG.debug('Getting BIG-IP MAC Address for L3 Binding')
+            self.l3_binding.register_bigip_mac_addresses()
+
+    def connect(self):
+        self._init_bigips()
+
     def _init_bigip_managers(self):
         """ Setup the managers that create big-ip configurations. """
         self.vcmp_manager = VcmpManager(self)
         self.tenant_manager = BigipTenantManager(
             self.conf, self)
+
+        if self.conf.l3_binding_driver:
+            try:
+                self.l3_binding = importutils.import_object(
+                    self.conf.l3_binding_driver, self.conf, self)
+            except ImportError:
+                LOG.error(_('Failed to import L3 binding driver: %s'
+                            % self.conf.l3_binding_driver))
+                self.l3_binding = None
+        else:
+            LOG.debug(_('No L3 binding driver configured.'
+                        ' No L3 binding will be done.'))
+            self.l3_binding = None
 
         if self.conf.f5_global_routed_mode:
             self.bigip_l2_manager = None
@@ -320,7 +343,7 @@ class iControlDriver(object):
             # Direct means creating vlans, selfips, directly
             # rather than via iApp
             self.network_builder = NetworkBuilderDirect(
-                self.conf, self, self.bigip_l2_manager)
+                self.conf, self, self.bigip_l2_manager, self.l3_binding)
 
         # Directly to the BIG-IP rather than through BIG-IQ.
         self.lbaas_builder_bigip_iapp = LBaaSBuilderBigipIApp(
@@ -328,7 +351,7 @@ class iControlDriver(object):
         # Object signifies creating vips, pools with iControl
         # rather than using iApp.
         self.lbaas_builder_bigip_objects = LBaaSBuilderBigipObjects(
-            self.conf, self, self.bigip_l2_manager)
+            self.conf, self, self.bigip_l2_manager, self.l3_binding)
         try:
             self.lbaas_builder_bigiq_iapp = LBaaSBuilderBigiqIApp(
                 self.conf, self)
@@ -354,6 +377,10 @@ class iControlDriver(object):
         self.hostnames = [item.strip() for item in self.hostnames]
         self.hostnames = sorted(self.hostnames)
 
+        # Setting an agent_id is the flag to the agent manager
+        # that your plugin has initialized correctly. If you
+        # don't set one, the agent manager will not register
+        # with Neutron as a valid agent.
         if self.conf.environment_prefix:
             self.agent_id = str(
                 uuid.uuid5(uuid.NAMESPACE_DNS,
@@ -470,6 +497,7 @@ class iControlDriver(object):
             lbaas_iapp.check_install_iapp(bigip)
 
         bigip.device_name = bigip.device.get_device_name()
+        bigip.mac_addresses = bigip.interface.get_mac_addresses()
         bigip.assured_networks = []
         bigip.assured_tenant_snat_subnets = {}
         bigip.assured_gateway_subnets = []
@@ -549,6 +577,10 @@ class iControlDriver(object):
         if self.fdb_connector:
             self.fdb_connector.set_context(context)
 
+    def set_plugin_rpc(self, plugin_rpc):
+        """ Provide Plugin RPC access """
+        self.plugin_rpc = plugin_rpc
+
     def set_tunnel_rpc(self, tunnel_rpc):
         """ Provide FDB Connector with ML2 RPC access """
         if self.fdb_connector:
@@ -607,7 +639,7 @@ class iControlDriver(object):
     @is_connected
     def delete_pool(self, pool, service):
         """Delete lb pool"""
-        self._common_service_handler(service, skip_networking=True)
+        self._common_service_handler(service)
 
     @serialized('create_member')
     @is_connected
@@ -772,6 +804,10 @@ class iControlDriver(object):
         """ Update (L2toL3) forwarding database entries """
         for bigip in self.get_all_bigips():
             self.bigip_l2_manager.update_bigip_fdb(bigip, fdb)
+
+    def tunnel_update(self, **kwargs):
+        """ Tunnel Update from Neutron Core RPC """
+        pass
 
     def tunnel_sync(self):
         """ Advertise all bigip tunnel endpoints """

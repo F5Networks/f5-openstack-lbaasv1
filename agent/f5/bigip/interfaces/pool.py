@@ -73,7 +73,7 @@ class Pool(object):
                 if 'items' in return_obj:
                     for member in return_obj['items']:
                         node_addresses.append(member['address'])
-            else:
+            elif response.status_code != 404:
                 Log.error('members', response.text)
                 raise exceptions.PoolQueryException(response.text)
             # delete the pool

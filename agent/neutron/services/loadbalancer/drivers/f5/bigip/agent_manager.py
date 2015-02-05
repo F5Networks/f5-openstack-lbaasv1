@@ -169,7 +169,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
     # Not using __init__ in order to avoid complexities with super().
     # See derived classes after this class
     def do_init(self, conf):
-        LOG.info(_('Initializing LbaasAgentManager with conf %s' % conf))
+        LOG.info(_('Initializing LbaasAgentManager'))
         self.conf = conf
 
         # create the cache of provisioned services
@@ -182,10 +182,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.service_resync_interval = conf.service_resync_interval
         else:
             self.service_resync_interval = constants.RESYNC_INTERVAL
-        LOG.debug('setting service resync interval to %d seconds'
-                                      % self.service_resync_interval)
+        LOG.debug(_('setting service resync interval to %d seconds'
+                                      % self.service_resync_interval))
 
         try:
+            LOG.debug(_('loading LBaaS driver %s'
+                        % conf.f5_bigip_lbaas_device_driver))
             self.lbdriver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
             if self.lbdriver.agent_id:
@@ -196,9 +198,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 LOG.error(_('Driver did not initialize. Fix the driver config '
                             'and restart the agent.'))
                 return
-        except ImportError:
-            msg = _('Error importing loadbalancer device driver: %s')
-            raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
+        except ImportError as ie:
+            msg = _('Error importing loadbalancer device driver: %s error %s'
+                    % (conf.f5_bigip_lbaas_device_driver,  repr(ie)))
+            LOG.error(msg)
+            raise SystemExit(msg)
 
         agent_configurations = \
                {'global_routed_mode': self.conf.f5_global_routed_mode}
@@ -228,6 +232,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
         # setup all rpc and callback objects
         self._setup_rpc()
+
+        # allow driver to run post init process now that
+        # rpc is all setup
+        self.lbdriver.post_init()
+
         # cause a sync of what Neutron believes
         # needs to be handled by this agent
         self.needs_resync = True
@@ -241,7 +250,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.context,
             self.agent_host
         )
-        self.lbdriver.plugin_rpc = self.plugin_rpc
+        self.lbdriver.set_plugin_rpc(self.plugin_rpc)
 
         # Agent state Callbacks API
         self.state_rpc = agent_rpc.PluginReportStateAPI(
@@ -296,7 +305,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             # assure agent is connected:
             if not self.lbdriver.connected:
-                self.lbdriver.init_bigips()
+                self.lbdriver.connect()
 
             service_count = self.cache.size
             self.agent_state['configurations']['services'] = service_count
@@ -643,6 +652,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from core to update tunnel definitions"""
         try:
             LOG.debug(_('received tunnel_update: %s' % kwargs))
+            self.lbdriver.tunnel_update(**kwargs)
         except Exception as e:
             LOG.error(_('could not update tunnel:' + str(e.message)))
 
@@ -679,11 +689,14 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 if preJuno:
     class LbaasAgentManager(LbaasAgentManagerBase):
         RPC_API_VERSION = '1.1'
+
         def __init__(self, conf):
             LbaasAgentManagerBase.do_init(self, conf)
 else:
-    class LbaasAgentManager(n_rpc.RpcCallback, LbaasAgentManagerBase):  # @UndefinedVariable
+    class LbaasAgentManager(n_rpc.RpcCallback,
+                            LbaasAgentManagerBase):  # @UndefinedVariable
         RPC_API_VERSION = '1.1'
+
         def __init__(self, conf):
             super(LbaasAgentManager, self).__init__()
             LbaasAgentManagerBase.do_init(self, conf)

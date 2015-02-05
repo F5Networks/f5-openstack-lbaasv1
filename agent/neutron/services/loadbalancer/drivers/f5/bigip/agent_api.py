@@ -142,6 +142,17 @@ class LbaasAgentApi(n_rpc.RpcProxy):
                         )
 
     @log.log
+    def get_ports_for_mac_addresses(self, mac_addresses=None):
+        return self.call(
+                         self.context,
+                         self.make_msg(
+                                       'get_ports_for_mac_addresses',
+                                       mac_addresses=mac_addresses
+                                       ),
+                         topic=self.topic
+                         )
+
+    @log.log
     def allocate_fixed_address_on_subnet(self, subnet_id=None,
                                port_id=None, name=None,
                                fixed_address_count=1):

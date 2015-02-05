@@ -1,5 +1,19 @@
 """ Classes and routing for configuring snats
     and snat addresses on big-ips """
+# Copyright 2014 F5 Networks Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 from neutron.openstack.common import log as logging
 import os
 
@@ -9,9 +23,10 @@ LOG = logging.getLogger(__name__)
 class BigipSnatManager(object):
     """ Class for managing BIG-IP snats """
 
-    def __init__(self, driver, bigip_l2_manager):
+    def __init__(self, driver, bigip_l2_manager, l3_binding):
         self.driver = driver
         self.bigip_l2_manager = bigip_l2_manager
+        self.l3_binding = l3_binding
 
     def _get_snat_name(self, subnet, tenant_id):
         """ Get the snat name based on HA type """
@@ -104,6 +119,10 @@ class BigipSnatManager(object):
                               folder=snat_info['network_folder'],
                               snat_pool_folder=snat_info['pool_folder'])
 
+            if self.l3_binding:
+                self.l3_binding.bind_address(subnet_id=subnet['id'],
+                                             ip_address=ip_address)
+
         bigip.assured_tenant_snat_subnets[tenant_id].append(subnet['id'])
 
     def delete_bigip_snats(self, bigip, subnetinfo, tenant_id):
@@ -134,6 +153,13 @@ class BigipSnatManager(object):
             else:
                 tmos_snat_name = index_snat_name
 
+            if self.l3_binding:
+                ip_address = bigip.snat.get_snat_ipaddress(
+                    folder=tenant_id,
+                    snataddress_name=index_snat_name)
+                self.l3_binding.unbind_address(subnet_id=subnet['id'],
+                                               ip_address=ip_address)
+
             # Remove translation address from tenant snat pool
             bigip.snat.remove_from_pool(
                 name=tenant_id,
@@ -147,7 +173,6 @@ class BigipSnatManager(object):
                 LOG.debug(_('Snat pool is empty - delete snatpool'))
                 bigip.snat.delete_snatpool(name=tenant_id,
                                            folder=tenant_id)
-
             # Check if subnet in use by any tenants/snatpools. If in use,
             # add subnet to hints list of subnets in use.
             LOG.debug(_('Check cache for subnet in use by other tenant'))

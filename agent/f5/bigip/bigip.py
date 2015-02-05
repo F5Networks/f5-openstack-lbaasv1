@@ -24,6 +24,7 @@ from f5.bigip import interfaces as bigip_interfaces
 
 from f5.bigip.interfaces.cluster import Cluster
 from f5.bigip.interfaces.device import Device
+from f5.bigip.interfaces.interface import Interface
 from f5.bigip.interfaces.iapp import IApp
 from f5.bigip.interfaces.monitor import Monitor
 from f5.bigip.interfaces.pool import Pool
@@ -125,6 +126,16 @@ class BigIP(object):
             self.interfaces['stat'] = stat
             stat.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return stat
+
+    @property
+    def interface(self):
+        if 'interface' in self.interfaces:
+            return self.interfaces['interface']
+        else:
+            interface = Interface(self)
+            self.interfaces['interface'] = interface
+            interface.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
+            return interface
 
     @property
     def vlan(self):
