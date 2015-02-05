@@ -35,11 +35,14 @@ class LBaaSBuilderBigipObjects(LBaaSBuilder):
     """F5 LBaaS Driver using iControl for BIG-IP to
        create objects (vips, pools) - not using an iApp. """
 
-    def __init__(self, conf, driver, bigip_l2_manager=None):
+    def __init__(self, conf, driver, bigip_l2_manager=None, l3_binding=None):
         super(LBaaSBuilderBigipObjects, self).__init__(conf, driver)
         self.bigip_l2_manager = bigip_l2_manager
+        self.l3_binding = l3_binding
         self.bigip_pool_manager = BigipPoolManager(self, self.bigip_l2_manager)
-        self.bigip_vip_manager = BigipVipManager(self, self.bigip_l2_manager)
+        self.bigip_vip_manager = BigipVipManager(self,
+                                                 self.bigip_l2_manager,
+                                                 self.l3_binding)
 
     def assure_service(self, service, traffic_group, all_subnet_hints):
         """ Assure that the service is configured """

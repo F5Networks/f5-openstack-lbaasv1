@@ -1,4 +1,19 @@
 """ Classes and functions for configuring load balancing pools on bigip """
+# Copyright 2014 F5 Networks Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 # pylint: disable=no-self-use,broad-except
 from neutron.plugins.common import constants as plugin_const
 from neutron.services.loadbalancer import constants as lb_const
@@ -177,6 +192,9 @@ class BigipPoolManager(object):
         """ Ensure pool members are on bigip """
         pool = service['pool']
         start_time = time()
+        # Does pool exist... If not don't bother
+        if not bigip.pool.exists(name=pool['id'], folder=pool['tenant_id']):
+            return
         # Current members on the BigIP
         pool['existing_members'] = bigip.pool.get_members(
             name=pool['id'], folder=pool['tenant_id'])

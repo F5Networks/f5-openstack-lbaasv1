@@ -52,7 +52,7 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
             chosen_agent = None
             for candidate in candidates:
                 assigned_pools = plugin.list_pools_on_lbaas_agent(
-                                             context, candidate['id'])
+                    context, candidate['id'])
                 for assigned_pool in assigned_pools['pools']:
                     if pool['tenant_id'] == assigned_pool['tenant_id']:
                         chosen_agent = candidate

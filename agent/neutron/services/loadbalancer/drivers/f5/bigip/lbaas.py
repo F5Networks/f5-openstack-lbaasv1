@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 # pylint: disable=broad-except,star-args,no-self-use
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const

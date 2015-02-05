@@ -13,9 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 # pylint: disable=broad-except,star-args,no-self-use
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
+from f5.bigip import exceptions as f5ex
 from eventlet import greenthread
 import logging as std_logging
 
@@ -86,7 +88,12 @@ class BigipTenantManager(object):
         sudslog.setLevel(std_logging.FATAL)
         bigip.system.force_root_folder()
         sudslog.setLevel(std_logging.ERROR)
-        bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
+        try:
+            bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
+        except f5ex.SystemDeleteException:
+            bigip.system.purge_folder_contents(
+                folder=bigip.decorate_folder(tenant_id))
+            bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
 
     def _remove_tenant_autosync_mode(self, bigip, tenant_id):
         """ Remove tenant in autosync sync-mode """
@@ -103,8 +110,12 @@ class BigipTenantManager(object):
         # is clearly the last change that needs to be synced.
         self.driver.sync_if_clustered()
         greenthread.sleep(5)
-        bigip.system.delete_folder(
-            folder=bigip.decorate_folder(tenant_id))
+        try:
+            bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
+        except f5ex.SystemDeleteException:
+            bigip.system.purge_folder_contents(
+                folder=bigip.decorate_folder(tenant_id))
+            bigip.system.delete_folder(folder=bigip.decorate_folder(tenant_id))
 
         # Need to make sure this folder delete syncs before
         # something else runs and changes the current folder to
