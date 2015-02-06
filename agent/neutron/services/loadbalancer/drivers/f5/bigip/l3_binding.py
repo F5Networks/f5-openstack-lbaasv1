@@ -31,8 +31,6 @@ class L3BindingBase(object):
         self.l3_binding_mappings = {}
         self.__initialized__bigip_ports = False
 
-        LOG.debug(_('driver is %s' % self.driver))
-
         LOG.debug(_('reading static L3 address bindings'))
         if self.conf.l3_binding_static_mappings:
             LOG.debug(_('bindings: %s '
