@@ -23,8 +23,8 @@ import json
 LOG = logging.getLogger(__name__)
 
 
-class AllowedAddressPairs(object):
-    """ Class for configuring L3 address bindings to L2 ports """
+class L3BindingBase(object):
+    """ Base Class for L3 address bindings to L3 port """
     def __init__(self, conf, driver):
         self.conf = conf
         self.driver = driver
@@ -57,8 +57,8 @@ class AllowedAddressPairs(object):
             LOG.debug(_('l3_binding_static_mappings not configured'))
 
     def register_bigip_mac_addresses(self):
-        # Delayed binding BIG-IP ports until requested
-        # because rpc is not ready when class initialized
+        # Delayed binding BIG-IP ports will be called
+        # after BIG-IP endpoints are registered.
         if not self.__initialized__bigip_ports:
             for bigip in self.driver.get_all_bigips():
                 LOG.debug(_('Request Port information for MACs: %s'
@@ -85,6 +85,12 @@ class AllowedAddressPairs(object):
                                             'subnet %s to port: %s, device %s'
                                             % (subnet_id, port_id, device_id)))
             self.__initialized__bigip_ports = True
+
+
+class AllowedAddressPairs(L3BindingBase):
+    """ Class for configuring L3 address bindings to L2 ports """
+    def __init__(self, conf, driver):
+        super(AllowedAddressPairs, self).__init__(conf, driver)
 
     def bind_address(self, subnet_id=None, ip_address=None):
         LOG.debug(_('checking for required port bindings '
@@ -115,66 +121,10 @@ class AllowedAddressPairs(object):
                     pass
 
 
-class NuageL3Binding(object):
+class NuageL3Binding(L3BindingBase):
     """ Class for configuring L3 address bindings to L2 ports """
     def __init__(self, conf, driver):
-        self.conf = conf
-        self.driver = driver
-        self.l3_binding_mappings = {}
-        self.__initialized__bigip_ports = False
-
-        LOG.debug(_('reading static L3 address bindings'))
-        if self.conf.l3_binding_static_mappings:
-            LOG.debug(_('bindings: %s '
-                        % self.conf.l3_binding_static_mappings))
-            l3_binding_static_mappings = \
-                json.loads(self.conf.l3_binding_static_mappings)
-            for subnet_id in l3_binding_static_mappings:
-                binding_list = l3_binding_static_mappings[subnet_id]
-                if isinstance(binding_list, list):
-                    for (port_id, device_id) in binding_list:
-                        if port_id:
-                            if subnet_id in self.l3_binding_mappings:
-                                self.l3_binding_mappings[subnet_id] = \
-                                    self.l3_binding_mappings[subnet_id] + \
-                                    binding_list
-                            else:
-                                self.l3_binding_mappings[subnet_id] = \
-                                    binding_list
-                            LOG.debug(_('bind subnet %s to port: %s, device %s'
-                                        % (subnet_id, port_id, device_id)))
-        else:
-            LOG.debug(_('l3_binding_static_mappings not configured'))
-
-    def register_bigip_mac_addresses(self):
-        # Delayed binding BIG-IP ports until requested
-        # because rpc is not ready when class initialized
-        if not self.__initialized__bigip_ports:
-            for bigip in self.driver.get_all_bigips():
-                LOG.debug(_('Request Port information for MACs: %s'
-                            % bigip.mac_addresses))
-                if self.driver.plugin_rpc:
-                    ports = self.driver.plugin_rpc.get_ports_for_mac_addresses(
-                        mac_addresses=bigip.mac_addresses)
-                    LOG.debug(_('Neutron returned Port Info: %s' % ports))
-                    for port in ports:
-                        port_id = port['id']
-                        device_id = port['device_id']
-                        if 'fixed_ips' in port:
-                            fixed_ips = port['fixed_ips']
-                            for fi in fixed_ips:
-                                subnet_id = fi['subnet_id']
-                                if subnet_id in self.l3_binding_mappings:
-                                    self.l3_binding_mappings[subnet_id] = \
-                                        self.l3_binding_mappings[subnet_id] + \
-                                        [(port_id, device_id)]
-                                else:
-                                    self.l3_binding_mappings[subnet_id] = \
-                                        [(port_id, device_id)]
-                                LOG.debug(_('adding mapping information '
-                                            'subnet %s to port: %s, device %s'
-                                            % (subnet_id, port_id, device_id)))
-            self.__initialized__bigip_ports = True
+        super(NuageL3Binding, self).__init__(conf, driver)
 
     def bind_address(self, subnet_id=None, ip_address=None):
         LOG.debug(_('checking for required port bindings '
