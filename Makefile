@@ -112,7 +112,11 @@ pep8-driver:
 pep8-agent:
 	(cd agent; \
          pep8 f5/bigiq/bigiq.py; \
-         pep8 $(BDIR)/fdb_connector.py; \
+         pep8 $(BDIR)/agent_api.py; \
+         pep8 $(BDIR)/agent_manager.py; \
+         pep8 $(BDIR)/agent.py; \
+         pep8 $(BDIR)/constants.py; \
+         pep8 $(BDIR)/exceptions.py; \
          pep8 $(BDIR)/fdb_connector_ml2.py; \
          pep8 $(BDIR)/icontrol_driver.py; \
          pep8 $(BDIR)/l2.py; \
