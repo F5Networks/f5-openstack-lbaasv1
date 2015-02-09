@@ -107,7 +107,7 @@ class IApp(object):
         """ Delete application service """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/sys/application/service/'
-        request_url += '~' + folder + '~' + name
+        request_url += '~' + folder + '~' + name + '.app~' + name
         response = self.bigip.icr_session.delete(
             request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:

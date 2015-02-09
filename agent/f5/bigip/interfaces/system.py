@@ -245,6 +245,9 @@ class System(object):
         for folder in existing_folders:
             if not folder.startswith(self.OBJ_PREFIX):
                 existing_folders.remove(folder)
+            # iapp folders need to be purged by removing the iapp
+            if folder.endswith('.app'):
+                existing_folders.remove(folder)
         for folder in known_folders:
             decorated_folder = bigip.decorate_folder(folder)
             if decorated_folder in existing_folders:
