@@ -47,17 +47,17 @@ class LbaasAgentApi(n_rpc.RpcProxy):
     @log.log
     def get_active_pool_ids(self):
         return self.call(
-               self.context,
-               self.make_msg('get_active_pool_ids', host=self.host),
-               topic=self.topic
+            self.context,
+            self.make_msg('get_active_pool_ids', host=self.host),
+            topic=self.topic
         )
 
     @log.log
     def get_pending_pool_ids(self):
         return self.call(
-               self.context,
-               self.make_msg('get_pending_pool_ids', host=self.host),
-               topic=self.topic
+            self.context,
+            self.make_msg('get_pending_pool_ids', host=self.host),
+            topic=self.topic
         )
 
     @log.log
@@ -75,135 +75,148 @@ class LbaasAgentApi(n_rpc.RpcProxy):
 
     @log.log
     def create_port_on_subnet(self, subnet_id=None,
-                    mac_address=None, name=None,
-                    fixed_address_count=1):
+                              mac_address=None, name=None,
+                              fixed_address_count=1):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'create_port_on_subnet',
-                                       subnet_id=subnet_id,
-                                       mac_address=mac_address,
-                                       name=name,
-                                       fixed_address_count=fixed_address_count,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'create_port_on_subnet',
+                subnet_id=subnet_id,
+                mac_address=mac_address,
+                name=name,
+                fixed_address_count=fixed_address_count,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def create_port_on_subnet_with_specific_ip(self, subnet_id=None,
                                                mac_address=None, name=None,
                                                ip_address=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                'create_port_on_subnet_with_specific_ip',
-                                       subnet_id=subnet_id,
-                                       mac_address=mac_address,
-                                       name=name,
-                                       ip_address=ip_address,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'create_port_on_subnet_with_specific_ip',
+                subnet_id=subnet_id,
+                mac_address=mac_address,
+                name=name,
+                ip_address=ip_address,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def get_port_by_name(self, port_name=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'get_port_by_name',
-                                       port_name=port_name
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'get_port_by_name',
+                port_name=port_name
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def delete_port(self, port_id=None, mac_address=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'delete_port',
-                                       port_id=port_id,
-                                       mac_address=mac_address
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'delete_port',
+                port_id=port_id,
+                mac_address=mac_address
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def delete_port_by_name(self, port_name=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                        'delete_port_by_name',
-                                        port_name=port_name
-                                       ),
-                         topic=self.topic
-                        )
+            self.context,
+            self.make_msg(
+                'delete_port_by_name',
+                port_name=port_name
+            ),
+            topic=self.topic
+        )
+
+    @log.log
+    def get_ports_for_mac_addresses(self, mac_addresses=None):
+        return self.call(
+            self.context,
+            self.make_msg(
+                'get_ports_for_mac_addresses',
+                mac_addresses=mac_addresses
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def allocate_fixed_address_on_subnet(self, subnet_id=None,
-                               port_id=None, name=None,
-                               fixed_address_count=1):
+                                         port_id=None, name=None,
+                                         fixed_address_count=1):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'allocate_fixed_address_on_subnet',
-                                       subnet_id=subnet_id,
-                                       port_id=port_id,
-                                       name=name,
-                                       fixed_address_count=fixed_address_count,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'allocate_fixed_address_on_subnet',
+                subnet_id=subnet_id,
+                port_id=port_id,
+                name=name,
+                fixed_address_count=fixed_address_count,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def allocate_specific_fixed_address_on_subnet(self, subnet_id=None,
-                               port_id=None, name=None,
-                               ip_address=None):
+                                                  port_id=None, name=None,
+                                                  ip_address=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                'allocate_specific_fixed_address_on_subnet',
-                                       subnet_id=subnet_id,
-                                       port_id=port_id,
-                                       name=name,
-                                       ip_address=ip_address,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'allocate_specific_fixed_address_on_subnet',
+                subnet_id=subnet_id,
+                port_id=port_id,
+                name=name,
+                ip_address=ip_address,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
-    def deallocate_fixed_address_on_subnet(self, fixed_addresses=None,
-                             subnet_id=None, auto_delete_port=False):
+    def deallocate_fixed_address_on_subnet(self,
+                                           fixed_addresses=None,
+                                           subnet_id=None,
+                                           auto_delete_port=False):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'deallocate_fixed_address_on_subnet',
-                                       fixed_addresses=fixed_addresses,
-                                       subnet_id=subnet_id,
-                                       host=self.host,
-                                       auto_delete_port=auto_delete_port
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'deallocate_fixed_address_on_subnet',
+                fixed_addresses=fixed_addresses,
+                subnet_id=subnet_id,
+                host=self.host,
+                auto_delete_port=auto_delete_port
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def update_vip_status(self, vip_id=None,
-                           status=None, status_description=None):
+                          status=None, status_description=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'update_vip_status',
-                                       vip_id=vip_id,
-                                       status=status,
-                                       status_description=status_description,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'update_vip_status',
+                vip_id=vip_id,
+                status=status,
+                status_description=status_description,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def vip_destroyed(self, vip_id=None):
@@ -217,16 +230,16 @@ class LbaasAgentApi(n_rpc.RpcProxy):
     def update_pool_status(self, pool_id=None,
                            status=None, status_description=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'update_pool_status',
-                                       pool_id=pool_id,
-                                       status=status,
-                                       status_description=status_description,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'update_pool_status',
+                pool_id=pool_id,
+                status=status,
+                status_description=status_description,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def pool_destroyed(self, pool_id):
@@ -238,18 +251,18 @@ class LbaasAgentApi(n_rpc.RpcProxy):
 
     @log.log
     def update_member_status(self, member_id=None,
-                           status=None, status_description=None):
+                             status=None, status_description=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'update_member_status',
-                                       member_id=member_id,
-                                       status=status,
-                                       status_description=status_description,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'update_member_status',
+                member_id=member_id,
+                status=status,
+                status_description=status_description,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def member_destroyed(self, member_id):
@@ -266,17 +279,17 @@ class LbaasAgentApi(n_rpc.RpcProxy):
                                      status=None,
                                      status_description=None):
         return self.call(
-                         self.context,
-                         self.make_msg(
-                                       'update_health_monitor_status',
-                                       pool_id=pool_id,
-                                       health_monitor_id=health_monitor_id,
-                                       status=status,
-                                       status_description=status_description,
-                                       host=self.host
-                                      ),
-                         topic=self.topic
-                )
+            self.context,
+            self.make_msg(
+                'update_health_monitor_status',
+                pool_id=pool_id,
+                health_monitor_id=health_monitor_id,
+                status=status,
+                status_description=status_description,
+                host=self.host
+            ),
+            topic=self.topic
+        )
 
     @log.log
     def health_monitor_destroyed(self, health_monitor_id=None,

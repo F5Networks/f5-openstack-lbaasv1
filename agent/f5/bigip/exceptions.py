@@ -106,6 +106,10 @@ class DeviceDeleteException(Exception):
     pass
 
 
+class InterfaceQueryException(Exception):
+    pass
+
+
 class IAppCreationException(Exception):
     pass
 

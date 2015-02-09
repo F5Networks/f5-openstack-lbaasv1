@@ -18,6 +18,7 @@ from f5.common import constants as const
 from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
+from f5.bigip.interfaces import strip_domain_address
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -214,6 +215,26 @@ class SNAT(object):
             Log.error('snat-translation', response.text)
             raise exceptions.SNATQueryException(response.text)
         return return_list
+
+    @icontrol_rest_folder
+    @log
+    def get_snat_ipaddress(self, folder='Common', snataddress_name=None):
+        """ Get SNAT IP by snataddress_name """
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url
+        request_url += '/ltm/snat-translation/~' + folder
+        request_url += '~' + snataddress_name
+        request_url += '?$select=address'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return_obj = json.loads(response.text)
+            if 'address' in return_obj:
+                return strip_domain_address(return_obj['address'])
+        elif response.status_code != 404:
+            Log.error('snat-translation', response.text)
+            raise exceptions.SNATQueryException(response.text)
+        return None
 
     @icontrol_rest_folder
     @log

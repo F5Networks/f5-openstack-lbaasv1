@@ -1,0 +1,153 @@
+""" Module for managing L3 to L2 port bindings on F5 BIG-IP in Neutron """
+# Copyright 2014 F5 Networks Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# pylint: disable=no-self-use
+
+from neutron.openstack.common import log as logging
+
+import json
+
+LOG = logging.getLogger(__name__)
+
+
+class L3BindingBase(object):
+    """ Base Class for L3 address bindings to L3 port """
+    def __init__(self, conf, driver):
+        self.conf = conf
+        self.driver = driver
+        self.l3_binding_mappings = {}
+        self.__initialized__bigip_ports = False
+
+        LOG.debug(_('reading static L3 address bindings'))
+        if self.conf.l3_binding_static_mappings:
+            LOG.debug(_('bindings: %s '
+                        % self.conf.l3_binding_static_mappings))
+            l3_binding_static_mappings = \
+                json.loads(self.conf.l3_binding_static_mappings)
+            for subnet_id in l3_binding_static_mappings:
+                binding_list = l3_binding_static_mappings[subnet_id]
+                if isinstance(binding_list, list):
+                    for (port_id, device_id) in binding_list:
+                        if port_id:
+                            if subnet_id in self.l3_binding_mappings:
+                                self.l3_binding_mappings[subnet_id] = \
+                                    self.l3_binding_mappings[subnet_id] + \
+                                    binding_list
+                            else:
+                                self.l3_binding_mappings[subnet_id] = \
+                                    binding_list
+                            LOG.debug(_('bind subnet %s to port: %s, device %s'
+                                        % (subnet_id, port_id, device_id)))
+        else:
+            LOG.debug(_('l3_binding_static_mappings not configured'))
+
+    def register_bigip_mac_addresses(self):
+        # Delayed binding BIG-IP ports will be called
+        # after BIG-IP endpoints are registered.
+        if not self.__initialized__bigip_ports:
+            for bigip in self.driver.get_all_bigips():
+                LOG.debug(_('Request Port information for MACs: %s'
+                            % bigip.mac_addresses))
+                if self.driver.plugin_rpc:
+                    ports = self.driver.plugin_rpc.get_ports_for_mac_addresses(
+                        mac_addresses=bigip.mac_addresses)
+                    LOG.debug(_('Neutron returned Port Info: %s' % ports))
+                    for port in ports:
+                        port_id = port['id']
+                        device_id = port['device_id']
+                        if 'fixed_ips' in port:
+                            fixed_ips = port['fixed_ips']
+                            for fi in fixed_ips:
+                                subnet_id = fi['subnet_id']
+                                if subnet_id in self.l3_binding_mappings:
+                                    self.l3_binding_mappings[subnet_id] = \
+                                        self.l3_binding_mappings[subnet_id] + \
+                                        [(port_id, device_id)]
+                                else:
+                                    self.l3_binding_mappings[subnet_id] = \
+                                        [(port_id, device_id)]
+                                LOG.debug(_('adding mapping information '
+                                            'subnet %s to port: %s, device %s'
+                                            % (subnet_id, port_id, device_id)))
+            self.__initialized__bigip_ports = True
+
+
+class AllowedAddressPairs(L3BindingBase):
+    """ Class for configuring L3 address bindings to L2 ports """
+    def __init__(self, conf, driver):
+        super(AllowedAddressPairs, self).__init__(conf, driver)
+
+    def bind_address(self, subnet_id=None, ip_address=None):
+        LOG.debug(_('checking for required port bindings '
+                    'subnet_id: %s ip_address %s'
+                    % (subnet_id, ip_address)))
+        if subnet_id in self.l3_binding_mappings:
+            binding_list = self.l3_binding_mappings[subnet_id]
+            for (port_id, device_id) in binding_list:
+                if port_id:
+                    LOG.debug(_('adding allowed address pair '
+                                'address: %s port: %s device: %s'
+                                % (ip_address, port_id, device_id)))
+                    # TO DO: create rpc to add allowed address pairs
+                    pass
+
+    def unbind_address(self, subnet_id=None, ip_address=None):
+        LOG.debug(_('checking for removal of port bindings '
+                    'subnet_id: %s ip_address %s'
+                    % (subnet_id, ip_address)))
+        if subnet_id in self.l3_binding_mappings:
+            binding_list = self.l3_binding_mappings[subnet_id]
+            for (port_id, device_id) in binding_list:
+                if port_id:
+                    LOG.debug(_('removing allowed address pair '
+                                'address: %s port: %s device: %s'
+                                % (ip_address, port_id, device_id)))
+                    # TO DO: create rpc to add allowed address pairs
+                    pass
+
+
+class NuageL3Binding(L3BindingBase):
+    """ Class for configuring L3 address bindings to L2 ports """
+    def __init__(self, conf, driver):
+        super(NuageL3Binding, self).__init__(conf, driver)
+
+    def bind_address(self, subnet_id=None, ip_address=None):
+        LOG.debug(_('checking for required port bindings '
+                    'subnet_id: %s ip_address %s'
+                    % (subnet_id, ip_address)))
+        if subnet_id in self.l3_binding_mappings:
+            binding_list = self.l3_binding_mappings[subnet_id]
+            for (port_id, device_id) in binding_list:
+                if port_id:
+                    LOG.debug(_('adding IP mapping '
+                                'address: %s port: %s device %s'
+                                % (ip_address, port_id, device_id)))
+                    # TO DO: import Nuage class and add mapping
+                    pass
+
+    def unbind_address(self, subnet_id=None, ip_address=None):
+        LOG.debug(_('checking for removal of port bindings '
+                    'subnet_id: %s ip_address %s'
+                    % (subnet_id, ip_address)))
+        if subnet_id in self.l3_binding_mappings:
+            binding_list = self.l3_binding_mappings[subnet_id]
+            for (port_id, device_id) in binding_list:
+                if port_id:
+                    LOG.debug(_('removing IP mapping '
+                                'address: %s port: %s device %s'
+                                % (ip_address, port_id, device_id)))
+                    # TO DO: import Nuage class and remove mapping
+                    pass

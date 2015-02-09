@@ -1,4 +1,18 @@
 """ Classes and routines for managing BIG-IP self-ips """
+# Copyright 2014 F5 Networks Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 from neutron.openstack.common import log as logging
 import netaddr
 
@@ -8,9 +22,10 @@ LOG = logging.getLogger(__name__)
 class BigipSelfIpManager(object):
     """ Class for managing BIG-IP selfips """
 
-    def __init__(self, driver, bigip_l2_manager):
+    def __init__(self, driver, bigip_l2_manager, l3_binding):
         self.driver = driver
         self.bigip_l2_manager = bigip_l2_manager
+        self.l3_binding = l3_binding
 
     def assure_bigip_selfip(self, bigip, service, subnetinfo):
         """ Create selfip on the BIG-IP """
@@ -20,6 +35,7 @@ class BigipSelfIpManager(object):
                         ' for network with no id... skipping.'))
             return
         subnet = subnetinfo['subnet']
+        # If we have already assured this subnet.. return.
         for tenant_snat_subnets in bigip.assured_tenant_snat_subnets:
             if subnet['id'] in tenant_snat_subnets:
                 return
@@ -33,14 +49,21 @@ class BigipSelfIpManager(object):
         (network_name, preserve_network_name) = \
             self.bigip_l2_manager.get_network_name(bigip, network)
 
+        selfip_address = self._get_bigip_selfip_address(bigip, subnet)
+
         bigip.selfip.create(
             name="local-" + bigip.device_name + "-" + subnet['id'],
-            ip_address=self._get_bigip_selfip_address(bigip, subnet),
+            ip_address=selfip_address,
             netmask=netaddr.IPNetwork(subnet['cidr']).netmask,
             vlan_name=network_name,
             floating=False,
             folder=network_folder,
             preserve_vlan_name=preserve_network_name)
+        # TO DO: we need to only bind the local SelfIP to the
+        # local device... not treat it as if it was floating
+        if self.l3_binding:
+            self.l3_binding.bind_address(subnet_id=subnet['id'],
+                                         ip_address=selfip_address)
 
     def _get_bigip_selfip_address(self, bigip, subnet):
         """ Get ip address for selfip to use on BIG-IP """
@@ -86,6 +109,10 @@ class BigipSelfIpManager(object):
                             folder=network_folder,
                             preserve_vlan_name=preserve_network_name)
 
+        if self.l3_binding:
+            self.l3_binding.bind_address(subnet_id=subnet['id'],
+                                         ip_address=subnet['gateway_ip'])
+
         # Setup a wild card ip forwarding virtual service for this subnet
         gw_name = "gw-" + subnet['id']
         bigip.virtual_server.create_ip_forwarder(
@@ -123,6 +150,10 @@ class BigipSelfIpManager(object):
                                        folder=network_folder)
         bigip.selfip.delete(name=floating_selfip_name,
                             folder=network_folder)
+
+        if self.l3_binding:
+            self.l3_binding.unbind_address(subnet_id=subnet['id'],
+                                           ip_address=subnet['gateway_ip'])
 
         gw_name = "gw-" + subnet['id']
         bigip.virtual_server.delete(name=gw_name,

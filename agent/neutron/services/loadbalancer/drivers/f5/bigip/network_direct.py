@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 # pylint: disable=broad-except,star-args,no-self-use
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
@@ -32,14 +33,15 @@ LOG = logging.getLogger(__name__)
 
 class NetworkBuilderDirect(object):
     """Create network connectivity for a bigip """
-    def __init__(self, conf, driver, bigip_l2_manager=None):
+    def __init__(self, conf, driver, bigip_l2_manager=None, l3_binding=None):
         self.conf = conf
         self.driver = driver
         self.bigip_l2_manager = bigip_l2_manager
+        self.l3_binding = l3_binding
         self.bigip_selfip_manager = BigipSelfIpManager(
-            driver, bigip_l2_manager)
+            driver, bigip_l2_manager, l3_binding)
         self.bigip_snat_manager = BigipSnatManager(
-            driver, bigip_l2_manager)
+            driver, bigip_l2_manager, l3_binding)
 
     def initialize_tunneling(self):
         """ setup tunneling
@@ -369,8 +371,15 @@ class NetworkBuilderDirect(object):
                                                folder=network_folder)
                 local_selfip_name = "local-" + bigip.device_name + \
                                     "-" + subnet['id']
+
+                selfip_address = bigip.selfip.get_addr(name=local_selfip_name,
+                                                       folder=network_folder)
                 bigip.selfip.delete(name=local_selfip_name,
                                     folder=network_folder)
+                if self.l3_binding:
+                    self.l3_binding.unbind_address(subnet_id=subnet['id'],
+                                                   ip_address=selfip_address)
+
                 deleted_names.add(local_selfip_name)
 
                 self.bigip_l2_manager.delete_bigip_network(bigip, network)

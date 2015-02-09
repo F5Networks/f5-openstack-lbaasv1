@@ -79,7 +79,7 @@ OPTS = [
         'static_agent_configuration_data',
         default=None,
         help=_(
-    'static name:value entries to add to the agent configurations dictionary')
+            'static name:value entries to add to the agent configurations')
     ),
     cfg.IntOpt(
         'service_resync_interval',
@@ -147,9 +147,6 @@ class LogicalServiceCache(object):
         else:
             return None
 
-    #def get_by_port_id(self, port_id):
-    #    return self.port_lookup.get(port_id)
-
     def get_pool_ids(self):
         return self.services.keys()
 
@@ -170,7 +167,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
     # Not using __init__ in order to avoid complexities with super().
     # See derived classes after this class
     def do_init(self, conf):
-        LOG.info(_('Initializing LbaasAgentManager with conf %s' % conf))
+        LOG.info(_('Initializing LbaasAgentManager'))
         self.conf = conf
 
         # create the cache of provisioned services
@@ -183,10 +180,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.service_resync_interval = conf.service_resync_interval
         else:
             self.service_resync_interval = constants.RESYNC_INTERVAL
-        LOG.debug('setting service resync interval to %d seconds'
-                                      % self.service_resync_interval)
+        LOG.debug(_('setting service resync interval to %d seconds'
+                    % self.service_resync_interval))
 
         try:
+            LOG.debug(_('loading LBaaS driver %s'
+                        % conf.f5_bigip_lbaas_device_driver))
             self.lbdriver = importutils.import_object(
                 conf.f5_bigip_lbaas_device_driver, self.conf)
             if self.lbdriver.agent_id:
@@ -197,16 +196,18 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 LOG.error(_('Driver did not initialize. Fix the driver config '
                             'and restart the agent.'))
                 return
-        except ImportError:
-            msg = _('Error importing loadbalancer device driver: %s')
-            raise SystemExit(msg % conf.f5_bigip_lbaas_device_driver)
+        except ImportError as ie:
+            msg = _('Error importing loadbalancer device driver: %s error %s'
+                    % (conf.f5_bigip_lbaas_device_driver,  repr(ie)))
+            LOG.error(msg)
+            raise SystemExit(msg)
 
         agent_configurations = \
-               {'global_routed_mode': self.conf.f5_global_routed_mode}
+            {'global_routed_mode': self.conf.f5_global_routed_mode}
 
         if self.conf.static_agent_configuration_data:
             entries = \
-              str(self.conf.static_agent_configuration_data).split(',')
+                str(self.conf.static_agent_configuration_data).split(',')
             for entry in entries:
                 nv = entry.strip().split(':')
                 if len(nv) > 1:
@@ -229,6 +230,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
 
         # setup all rpc and callback objects
         self._setup_rpc()
+
+        # allow driver to run post init process now that
+        # rpc is all setup
+        self.lbdriver.post_init()
+
         # cause a sync of what Neutron believes
         # needs to be handled by this agent
         self.needs_resync = True
@@ -242,7 +248,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.context,
             self.agent_host
         )
-        self.lbdriver.plugin_rpc = self.plugin_rpc
+        self.lbdriver.set_plugin_rpc(self.plugin_rpc)
 
         # Agent state Callbacks API
         self.state_rpc = agent_rpc.PluginReportStateAPI(
@@ -273,9 +279,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             # or use some other mechanism (i.e. flooding) to
             # learn about port updates.
             if self.conf.l2_population:
-                consumers.append([topics.L2POPULATION,
-                                  topics.UPDATE,
-                                  self.agent_host])
+                consumers.append(
+                    [topics.L2POPULATION, topics.UPDATE, self.agent_host]
+                )
 
             if preJuno:
                 self.dispatcher = dispatcher.RpcDispatcher([self])
@@ -285,28 +291,33 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             LOG.debug(_('registering to %s consumer on RPC topic: %s'
                         % (consumers, topics.AGENT)))
             if preJuno:
-                self.connection = agent_rpc.create_consumers(self.dispatcher,
-                                                         topics.AGENT,
-                                                         consumers)
+                self.connection = agent_rpc.create_consumers(
+                    self.dispatcher,
+                    topics.AGENT,
+                    consumers
+                )
             else:
-                self.connection = agent_rpc.create_consumers(self.endpoints,
-                                                         topics.AGENT,
-                                                         consumers)
+                self.connection = agent_rpc.create_consumers(
+                    self.endpoints,
+                    topics.AGENT,
+                    consumers
+                )
 
     def _report_state(self):
         try:
             # assure agent is connected:
             if not self.lbdriver.connected:
-                self.lbdriver.init_bigips()
+                self.lbdriver.connect()
 
             service_count = self.cache.size
             self.agent_state['configurations']['services'] = service_count
             if hasattr(self.lbdriver, 'service_queue'):
                 self.agent_state['configurations']['request_queue_depth'] = \
-                      len(self.lbdriver.service_queue)
+                    len(self.lbdriver.service_queue)
             if self.lbdriver.agent_configurations:
                 self.agent_state['configurations'].update(
-                                    self.lbdriver.agent_configurations)
+                    self.lbdriver.agent_configurations
+                )
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)
@@ -323,7 +334,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         # Only force resync if the agent thinks it is
         # synchronized and the resync timer has exired
         if (now - self.last_resync).seconds > \
-                            self.service_resync_interval:
+                self.service_resync_interval:
             if not self.needs_resync:
                 self.needs_resync = True
                 LOG.debug(
@@ -332,7 +343,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 self.cache.services = {}
                 self.last_resync = now
                 self.lbdriver.flush_cache()
-        LOG.debug("tunnel_sync: periodic_resync need_resync: %s" % str(self.needs_resync))
+        LOG.debug("tunnel_sync: periodic_resync need_resync: %s"
+                  % str(self.needs_resync))
         # resync if we need to
         if self.needs_resync:
             self.needs_resync = False
@@ -350,8 +362,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         for pool_id in pool_ids:
             try:
                 stats = self.lbdriver.get_stats(
-                        self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                        self.conf.f5_global_routed_mode))
+                    self.plugin_rpc.get_service_by_pool_id(
+                        pool_id,
+                        self.conf.f5_global_routed_mode
+                    )
+                )
                 if stats:
                     self.plugin_rpc.update_pool_stats(pool_id, stats)
             except Exception as e:
@@ -401,8 +416,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         if not self.plugin_rpc:
             return
         try:
-            service = self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                        self.conf.f5_global_routed_mode)
+            service = self.plugin_rpc.get_service_by_pool_id(
+                pool_id,
+                self.conf.f5_global_routed_mode
+            )
             self.cache.put(service)
             if not self.lbdriver.exists(service):
                 LOG.error(_('active pool %s is not on BIG-IP.. syncing'
@@ -413,15 +430,17 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as e:
             LOG.exception(_('Unable to validate service for pool: %s' +
-                          str(e.message)), pool_id)
+                            str(e.message)), pool_id)
 
     @log.log
     def refresh_service(self, pool_id):
         if not self.plugin_rpc:
             return
         try:
-            service = self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                         self.conf.f5_global_routed_mode)
+            service = self.plugin_rpc.get_service_by_pool_id(
+                pool_id,
+                self.conf.f5_global_routed_mode
+            )
             self.cache.put(service)
             # update is create or update
             self.lbdriver.sync(service)
@@ -435,8 +454,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
     def destroy_service(self, pool_id):
         if not self.plugin_rpc:
             return
-        service = self.plugin_rpc.get_service_by_pool_id(pool_id,
-                                          self.conf.f5_global_routed_mode)
+        service = self.plugin_rpc.get_service_by_pool_id(
+            pool_id,
+            self.conf.f5_global_routed_mode
+        )
         if not service:
             return
         try:
@@ -537,9 +558,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_pool(pool, service)
             self.cache.remove_by_pool_id(pool['id'])
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("delete_pool: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("delete_pool: Exception: %s" % exc.message)
 
     @log.log
     def create_member(self, context, member, service):
@@ -548,9 +569,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.create_member(member, service)
             self.cache.put(service)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("create_member: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("create_member: Exception: %s" % exc.message)
 
     @log.log
     def update_member(self, context, old_member, member, service):
@@ -558,11 +579,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.update_member(old_member, member, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not update member:' + str(e.message)
-            self.plugin_rpc.update_member_status(old_member['id'],
-                                               member['status'],
-                                               message)
+        except NeutronException as exc:
+            LOG.error("update_member: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("update_member: Exception: %s" % exc.message)
 
     @log.log
     def delete_member(self, context, member, service):
@@ -571,9 +591,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_member(member, service)
             self.cache.put(service)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("delete_member: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("delete_member: Exception: %s" % exc.message)
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor,
@@ -581,12 +601,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to create_pool_health_monitor"""
         try:
             self.lbdriver.create_pool_health_monitor(health_monitor,
-                                                   pool, service)
+                                                     pool, service)
             self.cache.put(service)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("create_pool_health_monitor: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("create_pool_health_monitor: Exception: %s" % exc.message)
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
@@ -594,13 +614,13 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to update_health_monitor"""
         try:
             self.lbdriver.update_health_monitor(old_health_monitor,
-                                                 health_monitor,
-                                                 pool, service)
+                                                health_monitor,
+                                                pool, service)
             self.cache.put(service)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("update_health_monitor: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("update_health_monitor: Exception: %s" % exc.message)
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor,
@@ -608,11 +628,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_pool_health_monitor"""
         try:
             self.lbdriver.delete_pool_health_monitor(health_monitor,
-                                                      pool, service)
+                                                     pool, service)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("delete_pool_health_monitor: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("delete_pool_health_monitor: Exception: %s" % exc.message)
 
     @log.log
     def agent_updated(self, context, payload):
@@ -631,10 +651,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from core to update tunnel definitions"""
         try:
             LOG.debug(_('received tunnel_update: %s' % kwargs))
+            self.lbdriver.tunnel_update(**kwargs)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("tunnel_update: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("tunnel_update: Exception: %s" % exc.message)
 
     @log.log
     def add_fdb_entries(self, context, fdb_entries, host=None):
@@ -644,9 +665,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         % (fdb_entries, host)))
             self.lbdriver.fdb_add(fdb_entries)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("fdb_add: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("fdb_add: Exception: %s" % exc.message)
 
     @log.log
     def remove_fdb_entries(self, context, fdb_entries, host=None):
@@ -656,9 +677,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         % (fdb_entries, host)))
             self.lbdriver.fdb_remove(fdb_entries)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("remove_fdb_entries: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("remove_fdb_entries: Exception: %s" % exc.message)
 
     @log.log
     def update_fdb_entries(self, context, fdb_entries, host=None):
@@ -668,18 +689,21 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         % (fdb_entries, host)))
             self.lbdriver.fdb_update(fdb_entries)
         except NeutronException as exc:
-            LOG.error("NeutronException: %s" % exc.msg)
+            LOG.error("update_fdb_entrie: NeutronException: %s" % exc.msg)
         except Exception as exc:
-            LOG.error("Exception: %s" % exc.message)
+            LOG.error("update_fdb_entrie: Exception: %s" % exc.message)
 
 if preJuno:
     class LbaasAgentManager(LbaasAgentManagerBase):
         RPC_API_VERSION = '1.1'
+
         def __init__(self, conf):
             LbaasAgentManagerBase.do_init(self, conf)
 else:
-    class LbaasAgentManager(n_rpc.RpcCallback, LbaasAgentManagerBase):  # @UndefinedVariable
+    class LbaasAgentManager(n_rpc.RpcCallback,
+                            LbaasAgentManagerBase):  # @UndefinedVariable
         RPC_API_VERSION = '1.1'
+
         def __init__(self, conf):
             super(LbaasAgentManager, self).__init__()
             LbaasAgentManagerBase.do_init(self, conf)

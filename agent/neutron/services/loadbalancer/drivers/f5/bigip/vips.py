@@ -1,4 +1,19 @@
 """ Classes and functions for configuring virtual servers on BIG-IP """
+# Copyright 2014 F5 Networks Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 # pylint: disable=no-self-use
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
@@ -11,9 +26,10 @@ RPS_THROTTLE_RULE_PREFIX = 'rps_throttle_'
 
 class BigipVipManager(object):
     """ Class for managing vips on bigip """
-    def __init__(self, driver, bigip_l2_manager):
+    def __init__(self, driver, bigip_l2_manager, l3_binding):
         self.driver = driver
         self.bigip_l2_manager = bigip_l2_manager
+        self.l3_binding = l3_binding
 
     def assure_bigip_create_vip(self, bigip, service, traffic_group):
         """ Called for every bigip only in replication mode,
@@ -54,6 +70,9 @@ class BigipVipManager(object):
            vip['status'] == plugin_const.PENDING_UPDATE or \
            just_added_vip:
             self._update_bigip_vip(bigip, service)
+            if self.l3_binding:
+                self.l3_binding.bind_address(subnet_id=vip['subnet']['id'],
+                                             ip_address=ip_address)
 
     def assure_bigip_delete_vip(self, bigip, service):
         """ Remove vip from big-ip """
@@ -77,6 +96,9 @@ class BigipVipManager(object):
         bigip.rule.delete(name=APP_COOKIE_RULE_PREFIX +
                           vip['id'],
                           folder=vip['tenant_id'])
+        if self.l3_binding:
+            self.l3_binding.unbind_address(subnet_id=vip['subnet']['id'],
+                                           ip_address=vip['address'])
 
     def _create_bigip_vip(self, bigip, service, vip_info):
         """ Create vip on big-ip """
