@@ -222,7 +222,6 @@ class BigipPoolManager(object):
                                      folder=pool['tenant_id'])
 
         # if members are using weights, change the LB to RATIO
-        start_time = time()
         if any_using_ratio:
             #LOG.debug(_("Pool: %s changing to ratio based lb"
             #        % pool['id']))
