@@ -14,9 +14,9 @@
 #
 
 try:
-    from neutron.openstack.common.rpc import proxy as n_rpc
+    from neutron.openstack.common.rpc import proxy as n_rpc  # @UnusedImport
 except:
-    from neutron.common import rpc as n_rpc
+    from neutron.common import rpc as n_rpc  # @Reimport
 from neutron.agent import rpc as agent_rpc
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron.common import log

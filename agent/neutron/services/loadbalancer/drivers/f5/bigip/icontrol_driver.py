@@ -338,23 +338,28 @@ class iControlDriver(LBaaSBaseDriver):
         else:
             self.fdb_connector = FDBConnectorML2(self.conf)
             self.bigip_l2_manager = BigipL2Manager(
-                self.conf, self.vcmp_manager, self.fdb_connector)
+                self.conf, self.vcmp_manager, self.fdb_connector
+            )
 
             # Direct means creating vlans, selfips, directly
             # rather than via iApp
             self.network_builder = NetworkBuilderDirect(
-                self.conf, self, self.bigip_l2_manager, self.l3_binding)
+                self.conf, self, self.bigip_l2_manager, self.l3_binding
+            )
 
         # Directly to the BIG-IP rather than through BIG-IQ.
         self.lbaas_builder_bigip_iapp = LBaaSBuilderBigipIApp(
-            self.conf, self)
+            self.conf, self
+        )
         # Object signifies creating vips, pools with iControl
         # rather than using iApp.
         self.lbaas_builder_bigip_objects = LBaaSBuilderBigipObjects(
-            self.conf, self, self.bigip_l2_manager, self.l3_binding)
+            self.conf, self, self.bigip_l2_manager, self.l3_binding
+        )
         try:
             self.lbaas_builder_bigiq_iapp = LBaaSBuilderBigiqIApp(
-                self.conf, self)
+                self.conf, self
+            )
         except NeutronException as exc:
             LOG.debug(_('Not using bigiq: %s' % exc.msg))
 
@@ -363,15 +368,18 @@ class iControlDriver(LBaaSBaseDriver):
         if not self.conf.icontrol_hostname:
             raise InvalidConfigurationOption(
                 opt_name='icontrol_hostname',
-                opt_value='valid hostname or IP address')
+                opt_value='valid hostname or IP address'
+            )
         if not self.conf.icontrol_username:
             raise InvalidConfigurationOption(
                 opt_name='icontrol_username',
-                opt_value='valid username')
+                opt_value='valid username'
+            )
         if not self.conf.icontrol_password:
             raise InvalidConfigurationOption(
                 opt_name='icontrol_password',
-                opt_value='valid password')
+                opt_value='valid password'
+            )
 
         self.hostnames = self.conf.icontrol_hostname.split(',')
         self.hostnames = [item.strip() for item in self.hostnames]
@@ -385,10 +393,12 @@ class iControlDriver(LBaaSBaseDriver):
             self.agent_id = str(
                 uuid.uuid5(uuid.NAMESPACE_DNS,
                            self.conf.environment_prefix +
-                           '.' + self.hostnames[0]))
+                           '.' + self.hostnames[0])
+                )
         else:
             self.agent_id = str(
-                uuid.uuid5(uuid.NAMESPACE_DNS, self.hostnames[0]))
+                uuid.uuid5(uuid.NAMESPACE_DNS, self.hostnames[0])
+            )
 
     def _init_bigips(self):
         """ Connect to all BIG-IPs """
@@ -709,18 +719,17 @@ class iControlDriver(LBaaSBaseDriver):
         return True
     # pylint: enable=unused-argument
 
-    @serialized('get_stats')
     @is_connected
     def get_stats(self, service):
         """Get service stats"""
         # use pool stats because the pool_id is the
-        # the service definition... not the vip
-        #
+        # the service definition...
         stats = {}
         stats[lb_const.STATS_IN_BYTES] = 0
         stats[lb_const.STATS_OUT_BYTES] = 0
         stats[lb_const.STATS_ACTIVE_CONNECTIONS] = 0
         stats[lb_const.STATS_TOTAL_CONNECTIONS] = 0
+        # add a members stats return dictionary
         members = {}
         for hostbigip in self.get_all_bigips():
             # It appears that stats are collected for pools in a pending delete
@@ -731,37 +740,83 @@ class iControlDriver(LBaaSBaseDriver):
                bigip_interfaces.OBJ_PREFIX + service['pool']['tenant_id']):
                 return None
             pool = service['pool']
-            pool_get_stats = hostbigip.pool.get_statistics
-            bigip_stats = pool_get_stats(name=pool['id'],
-                                         folder=pool['tenant_id'])
-            if 'STATISTIC_SERVER_SIDE_BYTES_IN' in bigip_stats:
+            pool_stats = hostbigip.pool.get_statistics(
+                name=pool['id'],
+                folder=pool['tenant_id']
+            )
+            if 'STATISTIC_SERVER_SIDE_BYTES_IN' in pool_stats:
                 stats[lb_const.STATS_IN_BYTES] += \
-                    bigip_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
+                    pool_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
                 stats[lb_const.STATS_OUT_BYTES] += \
-                    bigip_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
+                    pool_stats['STATISTIC_SERVER_SIDE_BYTES_OUT']
                 stats[lb_const.STATS_ACTIVE_CONNECTIONS] += \
-                    bigip_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
+                    pool_stats['STATISTIC_SERVER_SIDE_CURRENT_CONNECTIONS']
                 stats[lb_const.STATS_TOTAL_CONNECTIONS] += \
-                    bigip_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
-                if hasattr(service, 'members'):
-                    # need to get members for this pool and update their status
-                    get_mon_status = hostbigip.pool.get_members_monitor_status
-                    states = get_mon_status(name=pool['id'],
-                                            folder=pool['tenant_id'])
+                    pool_stats['STATISTIC_SERVER_SIDE_TOTAL_CONNECTIONS']
+                # are there members to update status
+                if 'members' in service:
+                    # only query BIG-IP pool members if they
+                    # not in a state indicating provisioning or error
+                    # provisioning the pool member
+                    some_members_require_status_update = False
+                    update_if_status = [plugin_const.ACTIVE,
+                                        plugin_const.DOWN,
+                                        plugin_const.CREATED,
+                                        plugin_const.INACTIVE]
                     for member in service['members']:
-                        for state in states:
-                            if member['address'] == state['addr'] and\
-                               member['protocol_port'] == state['port']:
-                                if state['state'] == 'MONITOR_STATUS_UP':
-                                    if member['id'] in members:
-                                        # member has to be up on all host
-                                        # in the the BIG-IP cluster
-                                        if members[member['id']] != 'DOWN':
-                                            members[member['id']] = 'ACTIVE'
-                                else:
-                                    members[member['id']] = 'DOWN'
-        stats['members'] = {'members': members}
-        return stats
+                        if member['status'] in update_if_status:
+                            some_members_require_status_update = True
+                    # are we have members who are in a
+                    # state to update there status
+                    if some_members_require_status_update:
+                        # query pool members on each BIG-IP
+                        monitor_states = \
+                            hostbigip.pool.get_members_monitor_status(
+                                name=pool['id'],
+                                folder=pool['tenant_id']
+                            )
+                        for member in service['members']:
+                            if member['status'] in update_if_status:
+                                # create the entry for this
+                                # member in the return status
+                                # dictionary set to ACTIVE
+                                if not member['id'] in members:
+                                    members[member['id']] = \
+                                        {'status': plugin_const.ACTIVE}
+                                # check if it down or up by monitor
+                                # and update the status
+                                for state in monitor_states:
+                                    # matched the pool member
+                                    # by address and port number
+                                    if member['address'] == state['addr'] and \
+                                            int(member['protocol_port']) == \
+                                            int(state['port']):
+                                        # if the monitor says member is up
+                                        if state['state'] == \
+                                                'MONITOR_STATUS_UP' or \
+                                            state['state'] == \
+                                                'MONITOR_STATUS_UNCHECKED':
+                                            # set ACTIVE as long as the
+                                            # status was not set to 'DOWN'
+                                            # on another BIG-IP
+                                            if members[
+                                                member['id']]['status'] != \
+                                                    'DOWN':
+                                                if member['admin_state_up']:
+                                                    members[member['id']][
+                                                        'status'] = \
+                                                        plugin_const.ACTIVE
+                                                else:
+                                                    members[member['id']][
+                                                        'status'] = \
+                                                        plugin_const.INACTIVE
+                                        else:
+                                            members[member['id']]['status'] = \
+                                                plugin_const.DOWN
+                stats['members'] = members
+                return stats
+            else:
+                return None
 
     @serialized('remove_orphans')
     def remove_orphans(self, services):
@@ -787,19 +842,16 @@ class iControlDriver(LBaaSBaseDriver):
         for bigip in self.get_all_bigips():
             bigip.system.purge_orphaned_folders(existing_tenants)
 
-    @serialized('fdb_add')
     def fdb_add(self, fdb):
         """ Add (L2toL3) forwarding database entries """
         for bigip in self.get_all_bigips():
             self.bigip_l2_manager.add_bigip_fdb(bigip, fdb)
 
-    @serialized('fdb_remove')
     def fdb_remove(self, fdb):
         """ Remove (L2toL3) forwarding database entries """
         for bigip in self.get_all_bigips():
             self.bigip_l2_manager.remove_bigip_fdb(bigip, fdb)
 
-    @serialized('fdb_update')
     def fdb_update(self, fdb):
         """ Update (L2toL3) forwarding database entries """
         for bigip in self.get_all_bigips():
@@ -940,15 +992,19 @@ class iControlDriver(LBaaSBaseDriver):
                 start_time = time()
                 self.plugin_rpc.update_member_status(
                     member['id'],
-                    status=plugin_const.ACTIVE,
+                    status=plugin_const.CREATED,
                     status_description='member created')
                 LOG.debug("            update_member_status"
                           " took %.5f secs" % (time() - start_time))
             elif member['status'] == plugin_const.PENDING_UPDATE:
                 start_time = time()
+                status = plugin_const.ACTIVE
+                if 'admin_state_up' in member and \
+                        not member['admin_state_up']:
+                    status = plugin_const.INACTIVE
                 self.plugin_rpc.update_member_status(
                     member['id'],
-                    status=plugin_const.ACTIVE,
+                    status=status,
                     status_description='member updated')
                 LOG.debug("            update_member_status"
                           " took %.5f secs" % (time() - start_time))
@@ -961,15 +1017,18 @@ class iControlDriver(LBaaSBaseDriver):
 
     def _update_pool_status(self, pool):
         """ Update pool status in OpenStack """
+        status = plugin_const.ACTIVE
+        if 'admin_state_up' in pool and not pool['admin_state_up']:
+            status = plugin_const.INACTIVE
         if pool['status'] == plugin_const.PENDING_UPDATE:
             self.plugin_rpc.update_pool_status(
                 pool['id'],
-                status=plugin_const.ACTIVE,
+                status=status,
                 status_description='pool updated')
         elif pool['status'] == plugin_const.PENDING_CREATE:
             self.plugin_rpc.update_pool_status(
                 pool['id'],
-                status=plugin_const.ACTIVE,
+                status=status,
                 status_description='pool created')
         elif pool['status'] == plugin_const.PENDING_DELETE:
             try:
@@ -1011,17 +1070,20 @@ class iControlDriver(LBaaSBaseDriver):
 
     def _update_vip_status(self, vip):
         """ Update vip status in OpenStack """
+        status = plugin_const.ACTIVE
+        if 'admin_state_up' in vip and not vip['admin_state_up']:
+            status = plugin_const.INACTIVE
         if 'id' not in vip:
             return
         if vip['status'] == plugin_const.PENDING_CREATE:
             self.plugin_rpc.update_vip_status(
                 vip['id'],
-                status=plugin_const.ACTIVE,
+                status=status,
                 status_description='vip created')
         elif vip['status'] == plugin_const.PENDING_UPDATE:
             self.plugin_rpc.update_vip_status(
                 vip['id'],
-                status=plugin_const.ACTIVE,
+                status=status,
                 status_description='vip updated')
         elif vip['status'] == plugin_const.PENDING_DELETE:
             try:
