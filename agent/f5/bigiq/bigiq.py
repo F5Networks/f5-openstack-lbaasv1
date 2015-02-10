@@ -113,13 +113,13 @@ class BIGIQ(object):
 
         :param string url: The URL to perform a HTTP DELETE on
 
-        :return: The JSON response body
         """
         response = self.http_session.delete(url)
 
         response.raise_for_status()
 
-        return response.json()
+        # no json to parse on delete response
+        return
 
     def get(self, url):
         """Makes a HTTP GET request

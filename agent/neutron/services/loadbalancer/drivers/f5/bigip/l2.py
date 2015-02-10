@@ -88,6 +88,13 @@ class BigipL2Manager(object):
              network['router:external'] and
              (network['id'] in self.conf.common_external_networks))
 
+    def get_network_route_domain(self, bigip, tenant_id, network=None):
+        """ Return route domain for a network """
+        if self.is_common_network(network):
+            return '%0'
+        else:
+            return '%' + str(bigip.route.get_domain(folder=tenant_id))
+
     def get_vlan_name(self, network, hostname):
         """ Construct a consistent vlan name """
         net_key = network['provider:physical_network']
@@ -119,7 +126,7 @@ class BigipL2Manager(object):
     def assure_bigip_network(self, bigip, network):
         """ Ensure bigip has configured network object """
         if not network:
-            LOG.error(_('assure_bigip_network: '
+            LOG.error(_('    assure_bigip_network: '
                         'Attempted to assure a network with no id..skipping.'))
             return
 
@@ -127,11 +134,11 @@ class BigipL2Manager(object):
             return
 
         if network['id'] in self.conf.common_network_ids:
-            LOG.debug(_('assure_bigip_network: '
+            LOG.debug(_('    assure_bigip_network: '
                         'Network is a common global network... skipping.'))
             return
 
-        LOG.debug("assure_bigip_network network: %s" % str(network))
+        LOG.debug("        assure_bigip_network network: %s" % str(network))
         start_time = time()
         if self.is_common_network(network):
             network_folder = 'Common'

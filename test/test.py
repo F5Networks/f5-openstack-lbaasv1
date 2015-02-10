@@ -42,6 +42,5 @@ service = {'pool': {'id': 'pool_id_1',
                    'address': '10.20.1.99',
                    'network': {'id': 'net_id_1', 'shared': False}}}
 
-print 'driver.sync'
-#driver.sync(service)
+driver.sync(service)
 

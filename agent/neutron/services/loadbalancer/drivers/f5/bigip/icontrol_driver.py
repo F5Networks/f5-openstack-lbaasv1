@@ -214,12 +214,12 @@ def is_connected(method):
                 return method(*args, **kwargs)
             except IOError as ioe:
                 LOG.error(_('IO Error detected: %s' % method.__name__))
-                instance.non_connected()
+                instance.connect_bigips()
                 raise ioe
         else:
-            LOG.error(_('Cannot execute %s. Not connected.'
+            LOG.error(_('Cannot execute %s. Not connected. Connecting.'
                         % method.__name__))
-            instance.non_connected()
+            instance.connect_bigips()
     return wrapper
 
 
@@ -277,7 +277,6 @@ class iControlDriver(LBaaSBaseDriver):
             f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
 
         self._init_bigip_hostnames()
-        self._init_bigips()
 
         self.vcmp_manager = None
         self.tenant_manager = None
@@ -290,18 +289,20 @@ class iControlDriver(LBaaSBaseDriver):
         self.lbaas_builder_bigiq_iapp = None
 
         self._init_bigip_managers()
-
-        if self.conf.f5_global_routed_mode:
-            local_ips = []
-        else:
-            local_ips = self.network_builder.initialize_tunneling()
-
-        self._init_agent_config(local_ips)
+        self.connect_bigips()
 
         LOG.info(_('iControlDriver initialized to %d bigips with username:%s'
                    % (len(self.__bigips), self.conf.icontrol_username)))
         LOG.info(_('iControlDriver dynamic agent configurations:%s'
                    % self.agent_configurations))
+
+    def connect_bigips(self):
+        self._init_bigips()
+        if self.conf.f5_global_routed_mode:
+            local_ips = []
+        else:
+            local_ips = self.network_builder.initialize_tunneling()
+        self._init_agent_config(local_ips)
 
     def post_init(self):
         """ Run and Post Initialization Tasks """
@@ -310,9 +311,6 @@ class iControlDriver(LBaaSBaseDriver):
         if self.l3_binding:
             LOG.debug('Getting BIG-IP MAC Address for L3 Binding')
             self.l3_binding.register_bigip_mac_addresses()
-
-    def connect(self):
-        self._init_bigips()
 
     def _init_bigip_managers(self):
         """ Setup the managers that create big-ip configurations. """
@@ -349,7 +347,7 @@ class iControlDriver(LBaaSBaseDriver):
 
         # Directly to the BIG-IP rather than through BIG-IQ.
         self.lbaas_builder_bigip_iapp = LBaaSBuilderBigipIApp(
-            self.conf, self
+            self.conf, self, self.bigip_l2_manager
         )
         # Object signifies creating vips, pools with iControl
         # rather than using iApp.
@@ -562,8 +560,7 @@ class iControlDriver(LBaaSBaseDriver):
         return device_group_name
 
     def _init_agent_config(self, local_ips):
-        """ setup tunneling
-            setup VTEP tunnels if needed """
+        """ Init agent config """
         icontrol_endpoints = {}
         for host in self.__bigips:
             hostbigip = self.__bigips[host]
@@ -892,14 +889,6 @@ class iControlDriver(LBaaSBaseDriver):
         return bigip.pool.exists(name=service['pool']['id'],
                                  folder=service['pool']['tenant_id'])
 
-    def non_connected(self):
-        """ Reconnect devices """
-        now = datetime.datetime.now()
-        if (now - self.__last_connect_attempt).total_seconds() > \
-                self.conf.icontrol_connection_retry_interval:
-            self.connected = False
-            self._init_bigips()
-
     def _common_service_handler(self, service, skip_networking=False):
         """ Assure that the service is configured on bigip(s) """
         start_time = time()
@@ -929,24 +918,24 @@ class iControlDriver(LBaaSBaseDriver):
             self.network_builder.prep_service_networking(
                 service, traffic_group)
             if time() - start_time > .001:
-                LOG.debug("        _prep_service_networking "
+                LOG.debug("    _prep_service_networking "
                           "took %.5f secs" % (time() - start_time))
 
         all_subnet_hints = {}
-        for bigip in self.get_config_bigips():
-            # check_for_delete_subnets:
-            #     keep track of which subnets we should check to delete
-            #     for a deleted vip or member
-            # do_not_delete_subnets:
-            #     If we add an IP to a subnet we must not delete the subnet
-            all_subnet_hints[bigip.device_name] = \
-                {'check_for_delete_subnets': {},
-                 'do_not_delete_subnets': []}
-
         if use_bigiq:
             self.lbaas_builder_bigiq_iapp.assure_service(
                 service, traffic_group, all_subnet_hints)
         else:
+            for bigip in self.get_config_bigips():
+                # check_for_delete_subnets:
+                #     keep track of which subnets we should check to delete
+                #     for a deleted vip or member
+                # do_not_delete_subnets:
+                #     If we add an IP to a subnet we must not delete the subnet
+                all_subnet_hints[bigip.device_name] = \
+                    {'check_for_delete_subnets': {},
+                     'do_not_delete_subnets': []}
+
             if self.conf.icontrol_config_mode == 'iapp':
                 self.lbaas_builder_bigip_iapp.assure_service(
                     service, traffic_group, all_subnet_hints)
@@ -956,8 +945,15 @@ class iControlDriver(LBaaSBaseDriver):
 
         if not skip_networking and self.network_builder:
             start_time = time()
-            self.network_builder.post_service_networking(
-                service, all_subnet_hints)
+            try:
+                self.network_builder.post_service_networking(
+                    service, all_subnet_hints)
+            except NeutronException as exc:
+                LOG.error("post_service_networking exception: %s"
+                          % str(exc.msg))
+            except Exception as exc:
+                LOG.error("post_service_networking exception: %s"
+                          % str(exc.message))
             LOG.debug("    _post_service_networking took %.5f secs" %
                       (time() - start_time))
 
@@ -1049,17 +1045,21 @@ class iControlDriver(LBaaSBaseDriver):
                 monitor['status']
 
         for monitor in service['health_monitors']:
-            if monitor['id'] in health_monitors_status and \
-                    health_monitors_status[monitor['id']] == \
-                    plugin_const.PENDING_DELETE:
-                monitors_destroyed.append({'health_monitor_id': monitor['id'],
-                                           'pool_id': pool['id']})
-            else:
-                monitors_updated.append(
-                    {'pool_id': pool['id'],
-                     'health_monitor_id': monitor['id'],
-                     'status': plugin_const.ACTIVE,
-                     'status_description': 'monitor active'})
+            if monitor['id'] in health_monitors_status:
+                if health_monitors_status[monitor['id']] == \
+                        plugin_const.PENDING_DELETE:
+                    monitors_destroyed.append(
+                        {'health_monitor_id': monitor['id'],
+                         'pool_id': pool['id']})
+                elif health_monitors_status[monitor['id']] == \
+                        plugin_const.PENDING_UPDATE or \
+                        health_monitors_status[monitor['id']] == \
+                        plugin_const.PENDING_CREATE:
+                    monitors_updated.append(
+                        {'pool_id': pool['id'],
+                         'health_monitor_id': monitor['id'],
+                         'status': plugin_const.ACTIVE,
+                         'status_description': 'monitor active'})
 
         for monitor_destroyed in monitors_destroyed:
             self.plugin_rpc.health_monitor_destroyed(

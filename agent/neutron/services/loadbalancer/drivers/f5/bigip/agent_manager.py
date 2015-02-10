@@ -29,6 +29,7 @@ from neutron import context
 from neutron.openstack.common import importutils
 from neutron.common import log
 from neutron.common import topics
+from neutron.common.exceptions import NeutronException
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
@@ -425,6 +426,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                             % pool_id))
                 # update is create or update
                 self.lbdriver.sync(service)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
         except Exception as e:
             LOG.exception(_('Unable to validate service for pool: %s' +
                             str(e.message)), pool_id)
@@ -441,9 +444,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.cache.put(service)
             # update is create or update
             self.lbdriver.sync(service)
-        except Exception as e:
-            LOG.exception(_('Unable to refresh service for pool: %s: ' +
-                            str(e.message)), pool_id)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
             self.needs_resync = True
 
     @log.log
@@ -458,9 +462,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             return
         try:
             self.lbdriver.delete_pool(pool_id, service)
-        except Exception as e:
-            LOG.exception(_('Unable to destroy service for pool: %s' +
-                            str(e.message)), pool_id)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
             self.needs_resync = True
         self.cache.remove_by_pool_id(pool_id)
 
@@ -486,11 +491,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             stats = self.lbdriver.get_stats(pool, service)
             if stats:
                     self.plugin_rpc.update_pool_stats(pool['id'], stats)
-        except Exception as e:
-            message = 'could not get pool stats:' + str(e.message)
-            self.plugin_rpc.update_pool_status(pool['id'],
-                                               plugin_const.ERROR,
-                                               message)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
 
     @log.log
     def create_vip(self, context, vip, service):
@@ -498,11 +502,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.create_vip(vip, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not create VIP:' + str(e.message)
-            self.plugin_rpc.update_vip_status(vip['id'],
-                                              plugin_const.ERROR,
-                                              message)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
 
     @log.log
     def update_vip(self, context, old_vip, vip, service):
@@ -510,11 +513,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.update_vip(old_vip, vip, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not update VIP: ' + str(e.message)
-            self.plugin_rpc.update_vip_status(vip['id'],
-                                              plugin_const.ERROR,
-                                              message)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
 
     @log.log
     def delete_vip(self, context, vip, service):
@@ -522,11 +524,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.delete_vip(vip, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not delete VIP:' + str(e.message)
-            self.plugin_rpc.update_vip_status(vip['id'],
-                                              plugin_const.ERROR,
-                                              message)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
 
     @log.log
     def create_pool(self, context, pool, service):
@@ -534,11 +535,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.create_pool(pool, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not create pool:' + str(e.message)
-            self.plugin_rpc.update_pool_status(pool['id'],
-                                               plugin_const.ERROR,
-                                               message)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
 
     @log.log
     def update_pool(self, context, old_pool, pool, service):
@@ -546,11 +546,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.update_pool(old_pool, pool, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not update pool:' + str(e.message)
-            self.plugin_rpc.update_pool_status(old_pool['id'],
-                                               plugin_const.ERROR,
-                                               message)
+        except NeutronException as exc:
+            LOG.error("NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("Exception: %s" % exc.message)
 
     @log.log
     def delete_pool(self, context, pool, service):
@@ -558,11 +557,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.delete_pool(pool, service)
             self.cache.remove_by_pool_id(pool['id'])
-        except Exception as e:
-            message = 'could not delete pool:' + str(e.message)
-            self.plugin_rpc.update_pool_status(pool['id'],
-                                               plugin_const.ERROR,
-                                               message)
+        except NeutronException as exc:
+            LOG.error("delete_pool: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("delete_pool: Exception: %s" % exc.message)
 
     @log.log
     def create_member(self, context, member, service):
@@ -570,11 +568,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.create_member(member, service)
             self.cache.put(service)
-        except IOError as e:
-            message = 'could not create member:' + str(e.message)
-            self.plugin_rpc.update_member_status(member['id'],
-                                                 plugin_const.ERROR,
-                                                 message)
+        except NeutronException as exc:
+            LOG.error("create_member: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("create_member: Exception: %s" % exc.message)
 
     @log.log
     def update_member(self, context, old_member, member, service):
@@ -582,11 +579,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.update_member(old_member, member, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not update member:' + str(e.message)
-            self.plugin_rpc.update_member_status(old_member['id'],
-                                                 plugin_const.ERROR,
-                                                 message)
+        except NeutronException as exc:
+            LOG.error("update_member: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("update_member: Exception: %s" % exc.message)
 
     @log.log
     def delete_member(self, context, member, service):
@@ -594,11 +590,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.delete_member(member, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not delete member:' + str(e.message)
-            self.plugin_rpc.update_member_status(member['id'],
-                                                 plugin_const.ERROR,
-                                                 message)
+        except NeutronException as exc:
+            LOG.error("delete_member: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("delete_member: Exception: %s" % exc.message)
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor,
@@ -608,14 +603,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.create_pool_health_monitor(health_monitor,
                                                      pool, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not create health monitor:' + str(e.message)
-            self.plugin_rpc.update_health_monitor_status(
-                pool['id'],
-                health_monitor['id'],
-                plugin_const.ERROR,
-                message
-            )
+        except NeutronException as exc:
+            LOG.error(_("create_pool_health_monitor: NeutronException: %s"
+                        % exc.msg))
+        except Exception as exc:
+            LOG.error(_("create_pool_health_monitor: Exception: %s"
+                        % exc.message))
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
@@ -626,14 +619,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                                                 health_monitor,
                                                 pool, service)
             self.cache.put(service)
-        except Exception as e:
-            message = 'could not update health monitor:' + str(e.message)
-            self.plugin_rpc.update_health_monitor_status(
-                pool['id'],
-                old_health_monitor['id'],
-                plugin_const.ERROR,
-                message
-            )
+        except NeutronException as exc:
+            LOG.error("update_health_monitor: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("update_health_monitor: Exception: %s" % exc.message)
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor,
@@ -642,14 +631,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.delete_pool_health_monitor(health_monitor,
                                                      pool, service)
-        except Exception as e:
-            message = 'could not delete health monitor:' + str(e.message)
-            self.plugin_rpc.update_health_monitor_status(
-                pool['id'],
-                health_monitor['id'],
-                plugin_const.ERROR,
-                message
-            )
+        except NeutronException as exc:
+            LOG.error(_("delete_pool_health_monitor: NeutronException: %s"
+                        % exc.msg))
+        except Exception as exc:
+            LOG.error(_("delete_pool_health_monitor: Exception: %s"
+                      % exc.message))
 
     @log.log
     def agent_updated(self, context, payload):
@@ -669,8 +656,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             LOG.debug(_('received tunnel_update: %s' % kwargs))
             self.lbdriver.tunnel_update(**kwargs)
-        except Exception as e:
-            LOG.error(_('could not update tunnel:' + str(e.message)))
+        except NeutronException as exc:
+            LOG.error("tunnel_update: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("tunnel_update: Exception: %s" % exc.message)
 
     @log.log
     def add_fdb_entries(self, context, fdb_entries, host=None):
@@ -679,8 +668,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             LOG.debug(_('received add_fdb_entries: %s host: %s'
                         % (fdb_entries, host)))
             self.lbdriver.fdb_add(fdb_entries)
-        except Exception as e:
-            LOG.error(_('could not add fdb entries:' + str(e.message)))
+        except NeutronException as exc:
+            LOG.error("fdb_add: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("fdb_add: Exception: %s" % exc.message)
 
     @log.log
     def remove_fdb_entries(self, context, fdb_entries, host=None):
@@ -689,8 +680,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             LOG.debug(_('received remove_fdb_entries: %s host: %s'
                         % (fdb_entries, host)))
             self.lbdriver.fdb_remove(fdb_entries)
-        except Exception as e:
-            LOG.error(_('could not remove fdb entries:' + str(e.message)))
+        except NeutronException as exc:
+            LOG.error("remove_fdb_entries: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("remove_fdb_entries: Exception: %s" % exc.message)
 
     @log.log
     def update_fdb_entries(self, context, fdb_entries, host=None):
@@ -699,8 +692,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             LOG.debug(_('received update_fdb_entries: %s host: %s'
                         % (fdb_entries, host)))
             self.lbdriver.fdb_update(fdb_entries)
-        except Exception as e:
-            LOG.error(_('could not update tunnel:' + str(e.message)))
+        except NeutronException as exc:
+            LOG.error("update_fdb_entrie: NeutronException: %s" % exc.msg)
+        except Exception as exc:
+            LOG.error("update_fdb_entrie: Exception: %s" % exc.message)
 
 if preJuno:
     class LbaasAgentManager(LbaasAgentManagerBase):

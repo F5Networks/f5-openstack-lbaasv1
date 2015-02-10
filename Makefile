@@ -216,9 +216,9 @@ test:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
-	 cp ../test/test.py .; \
-	 python test.py; \
-	 rm test.py; \
+         cp ../test/test.py .; \
+         python test.py; \
+         rm test.py; \
          rm -vf neutron/plugins; \
          rm -vf neutron/openstack; \
          rm -vf neutron/common; \

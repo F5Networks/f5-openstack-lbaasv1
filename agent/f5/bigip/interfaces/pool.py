@@ -254,6 +254,9 @@ class Pool(object):
                 del existing_pools[decorated_pool]
         # anything left should be purged
         for pool in existing_pools:
+            Log.debug('purge_orphaned_pools',
+                      "Purging pool %s in folder %s" %
+                      (pool, existing_pools[pool]))
             vs_name = \
                 self.bigip.virtual_server.get_virtual_servers_by_pool_name(
                     pool_name=pool, folder=existing_pools[pool])
