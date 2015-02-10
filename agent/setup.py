@@ -48,6 +48,8 @@ if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
 
 setup(name='f5-bigip-lbaas-agent',
       description='F5 LBaaS Agent for OpenStack',
+      long_description='F5 LBaaS Agent for OpenStack',
+      license='Apache License, Version 2.0',
       version=version,
       author='F5 DevCentral',
       author_email='devcentral@f5.com',
@@ -82,5 +84,8 @@ setup(name='f5-bigip-lbaas-agent',
          'f5.bigip.interfaces',
          'f5.bigip.pycontrol',
          'f5.bigiq'],
-         data_files=data_files
+      data_files=data_files,
+      package_data={
+          'f5.bigip': ['iapps/*']
+      }
      )

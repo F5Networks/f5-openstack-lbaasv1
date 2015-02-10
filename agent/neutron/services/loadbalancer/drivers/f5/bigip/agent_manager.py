@@ -24,7 +24,6 @@ except ImportError:
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
-from neutron.plugins.common import constants as plugin_const
 from neutron import context
 from neutron.openstack.common import importutils
 from neutron.common import log

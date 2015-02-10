@@ -37,6 +37,8 @@ if 'bdist_deb' in sys.argv:
 setup(name='f5-lbaas-driver',
       version=version,
       description='F5 LBaaS Driver for OpenStack',
+      long_description='F5 LBaaS Driver for OpenStack',
+      license='Apache License, Version 2.0',
       author='F5 DevCentral',
       author_email='devcentral@f5.com',
       url='http://devcentral.f5.com/openstack',
