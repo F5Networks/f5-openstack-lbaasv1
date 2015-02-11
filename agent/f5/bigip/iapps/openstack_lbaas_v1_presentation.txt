@@ -1,0 +1,53 @@
+section intro {
+    message blank " "
+}
+
+section vip {
+    string addr        display "large" validator "IpAddress" required
+    string port        display "large" validator "PortNumber" default "80"
+    choice protocol    display "medium" default "http"
+        { "http", "tcp" }
+    choice persist     display "medium" default "http-cookie"
+        { "source-ip", "http-cookie", "app-cookie", "none" }
+    optional ( persist == "app-cookie" ) {
+        string cookie  display "medium" default "jsessionid"
+    }
+    choice state       display "medium" default "enabled"
+        { "enabled", "disabled" }
+}
+
+section pool {
+    table members {
+        string addr    display "large" validator "IpAddress"
+        string port    display "small" validator "PortNumber" default "80"
+        string connection_limit display "small" validator "NonNegativeNumber" default "10000"
+        choice state   display "medium" default "enabled"
+            { "enabled", "drain-disabled", "force-disabled" }
+    }
+    choice lb_method   display "xlarge" default "round-robin"
+        { "round-robin", "least-connections-member" }
+    choice monitor     display "xlarge" default "http"
+        { "http", "tcp", "ping" }
+}
+
+text {
+    intro "Load Balancer As A Service Template for BIG-IQ"
+    intro.blank " "
+
+    vip "Virtual Server"
+    vip.addr "What is the virtual IP address?"
+    vip.port "What is the virtual port number? (default: 80)"
+    vip.protocol "What protocol optimization should be used on this VIP?"
+    vip.persist "What persistence type should be used on this VIP?"
+    vip.cookie "What application cookie should BIG-IP persist on?"
+    vip.state "What is the VIP state?"
+
+    pool "Pool"
+    pool.members "Enter an address and TCP port number for each pool member. (default: 80)"
+    pool.members.addr "IP"
+    pool.members.port "Port"
+    pool.members.connection_limit "Connection Limit"
+    pool.members.state "State"
+    pool.lb_method "What load balancing method should be used?"
+    pool.monitor "What type of monitor should be used to determine pool health?"
+}

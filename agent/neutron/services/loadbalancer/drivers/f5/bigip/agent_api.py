@@ -14,9 +14,9 @@
 #
 
 try:
-    from neutron.openstack.common.rpc import proxy as n_rpc
+    from neutron.openstack.common.rpc import proxy as n_rpc  # @UnusedImport
 except:
-    from neutron.common import rpc as n_rpc
+    from neutron.common import rpc as n_rpc  # @Reimport
 from neutron.agent import rpc as agent_rpc
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron.common import log
@@ -148,6 +148,30 @@ class LbaasAgentApi(n_rpc.RpcProxy):
             self.make_msg(
                 'get_ports_for_mac_addresses',
                 mac_addresses=mac_addresses
+            ),
+            topic=self.topic
+        )
+
+    @log.log
+    def add_allowed_address(self, port_id=None, ip_address=None):
+        return self.call(
+            self.context,
+            self.make_msg(
+                'add_allowed_address',
+                port_id=port_id,
+                ip_address=ip_address
+            ),
+            topic=self.topic
+        )
+
+    @log.log
+    def remove_allowed_address(self, port_id=None, ip_address=None):
+        return self.call(
+            self.context,
+            self.make_msg(
+                'remove_allowed_address',
+                port_id=port_id,
+                ip_address=ip_address
             ),
             topic=self.topic
         )

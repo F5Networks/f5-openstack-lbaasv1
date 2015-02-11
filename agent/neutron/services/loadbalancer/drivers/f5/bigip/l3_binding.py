@@ -101,8 +101,17 @@ class AllowedAddressPairs(L3BindingBase):
                     LOG.debug(_('adding allowed address pair '
                                 'address: %s port: %s device: %s'
                                 % (ip_address, port_id, device_id)))
-                    # TO DO: create rpc to add allowed address pairs
-                    pass
+                    if self.driver.plugin_rpc:
+                        self.driver.plugin_rpc.add_allowed_address(
+                            port_id=port_id,
+                            ip_address=ip_address
+                        )
+                    else:
+                        LOG.error(_(
+                            'No RPC to plugin available to add '
+                            'allowed address %s to port: %s.'
+                            % (ip_address, port_id)
+                        ))
 
     def unbind_address(self, subnet_id=None, ip_address=None):
         LOG.debug(_('checking for removal of port bindings '
@@ -115,8 +124,17 @@ class AllowedAddressPairs(L3BindingBase):
                     LOG.debug(_('removing allowed address pair '
                                 'address: %s port: %s device: %s'
                                 % (ip_address, port_id, device_id)))
-                    # TO DO: create rpc to add allowed address pairs
-                    pass
+                    if self.driver.plugin_rpc:
+                        self.driver.plugin_rpc.remove_allowed_address(
+                            port_id=port_id,
+                            ip_address=ip_address
+                        )
+                    else:
+                        LOG.error(_(
+                            'No RPC to plugin available to remove '
+                            'allowed address %s to port: %s.'
+                            % (ip_address, port_id)
+                        ))
 
 
 class NuageL3Binding(L3BindingBase):

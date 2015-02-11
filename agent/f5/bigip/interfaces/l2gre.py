@@ -18,6 +18,7 @@ from f5.common import constants as const
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
 from f5.bigip.interfaces import strip_domain_address
+from f5.bigip.interfaces import prefixed
 from f5.bigip.interfaces import log
 from f5.bigip import exceptions
 
@@ -272,7 +273,7 @@ class L2GRE(object):
     def add_fdb_entries(self, tunnel_name=None, fdb_entries=None):
         """ Add fdb entries for a tunnel """
         for tunnel_name in fdb_entries:
-            folder = fdb_entries[tunnel_name]['folder']
+            folder = prefixed(fdb_entries[tunnel_name]['folder'])
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
@@ -366,7 +367,7 @@ class L2GRE(object):
     def delete_fdb_entries(self, tunnel_name=None, fdb_entries=None):
         """ Delete fdb entries for a tunnel """
         for tunnel_name in fdb_entries:
-            folder = fdb_entries[tunnel_name]['folder']
+            folder = prefixed(fdb_entries[tunnel_name]['folder'])
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,

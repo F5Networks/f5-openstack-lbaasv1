@@ -24,7 +24,6 @@ except ImportError:
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
-from neutron.plugins.common import constants as plugin_const
 from neutron import context
 from neutron.openstack.common import importutils
 from neutron.common import log
@@ -603,9 +602,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                                                      pool, service)
             self.cache.put(service)
         except NeutronException as exc:
-            LOG.error("create_pool_health_monitor: NeutronException: %s" % exc.msg)
+            LOG.error(_("create_pool_health_monitor: NeutronException: %s"
+                        % exc.msg))
         except Exception as exc:
-            LOG.error("create_pool_health_monitor: Exception: %s" % exc.message)
+            LOG.error(_("create_pool_health_monitor: Exception: %s"
+                        % exc.message))
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
@@ -629,9 +630,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.delete_pool_health_monitor(health_monitor,
                                                      pool, service)
         except NeutronException as exc:
-            LOG.error("delete_pool_health_monitor: NeutronException: %s" % exc.msg)
+            LOG.error(_("delete_pool_health_monitor: NeutronException: %s"
+                        % exc.msg))
         except Exception as exc:
-            LOG.error("delete_pool_health_monitor: Exception: %s" % exc.message)
+            LOG.error(_("delete_pool_health_monitor: Exception: %s"
+                      % exc.message))
 
     @log.log
     def agent_updated(self, context, payload):

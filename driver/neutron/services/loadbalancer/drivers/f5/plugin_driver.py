@@ -871,6 +871,50 @@ class LoadBalancerCallbacks(object):
                         self.delete_port(context, port)
 
     @log.log
+    def add_allowed_address(self, context, port_id=None, ip_address=None):
+        if port_id and ip_address:
+            try:
+                core = self.plugin._core_plugin
+                port = core.get_port(context=context, id=port_id)
+                address_pairs = []
+                if 'allowed_address_pairs' in port:
+                    for aap in port['allowed_address_pairs']:
+                        if aap['ip_address'] == ip_address and \
+                                aap['mac_address'] == port['mac_address']:
+                            return True
+                        address_pairs.append(aap)
+                address_pairs.append(
+                    {
+                        'ip_address': ip_address,
+                        'mac_address': port['mac_address']
+                    }
+                )
+                port = {'port': {'allowed_address_pairs': address_pairs}}
+                core.update_port(context, port_id, port)
+            except Exception as e:
+                LOG.error('could not add allowed address pair: %s'
+                          % e.message)
+
+    @log.log
+    def remove_allowed_address(self, context, port_id=None, ip_address=None):
+        if port_id and ip_address:
+            try:
+                core = self.plugin._core_plugin
+                port = core.get_port(context=context, id=port_id)
+                address_pairs = []
+                if 'allowed_address_pairs' in port:
+                    for aap in port['allowed_address_pairs']:
+                        if aap['ip_address'] == ip_address and \
+                                aap['mac_address'] == port['mac_address']:
+                            continue
+                        address_pairs.append(aap)
+                port = {'port': {'allowed_address_pairs': address_pairs}}
+                core.update_port(context, port_id, port)
+            except Exception as e:
+                LOG.error('could not add allowed address pair: %s'
+                          % e.message)
+
+    @log.log
     def update_vip_status(self, context, vip_id=None,
                           status=constants.ERROR,
                           status_description=None,

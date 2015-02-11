@@ -19,7 +19,7 @@ class LBaaSBaseDriver(object):
     """ Abstract base LBaaS Driver class for interfacing
         with the Agent Manager """
 
-    def __init__(self, conf, registerOpts=True):
+    def __init__(self, conf):
         self.agent_id = None
         self.plugin_rpc = None
         self.connected = False
