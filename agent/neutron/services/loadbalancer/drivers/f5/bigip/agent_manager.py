@@ -424,7 +424,6 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             if not self.lbdriver.exists(service):
                 LOG.error(_('active pool %s is not on BIG-IP.. syncing'
                             % pool_id))
-                # update is create or update
                 self.lbdriver.sync(service)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)

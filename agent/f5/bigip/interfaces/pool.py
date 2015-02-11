@@ -242,41 +242,53 @@ class Pool(object):
         Log.debug('pool', 'purging pools - existing : %s, known : %s'
                   % (existing_pools.keys(), known_pools))
 
-        # remove all pools which are not managed
-        # with this object prefix
+        # we start with all pools and remove the ones that are
+        # completely unrelated to the plugin or are OK to be there.
+        cleanup_list = dict(existing_pools)
+
+        # remove all pools which are not managed by this plugin
         for pool in existing_pools:
             if not pool.startswith(self.OBJ_PREFIX):
-                del existing_pools[pool]
+                del cleanup_list[pool]
 
         for pool in known_pools:
             decorated_pool = self.OBJ_PREFIX + pool
-            if decorated_pool in existing_pools:
-                del existing_pools[decorated_pool]
+            Log.debug('pool', 'excluding %s from %s' %
+                      (str(decorated_pool), str(cleanup_list)))
+            if decorated_pool in cleanup_list:
+                del cleanup_list[decorated_pool]
+            # Exclude known iapp pool
+            decorated_pool += '_pool'
+            Log.debug('pool', 'excluding %s from %s' %
+                      (str(decorated_pool), str(cleanup_list)))
+            if decorated_pool in cleanup_list:
+                del cleanup_list[decorated_pool]
+
         # anything left should be purged
-        for pool in existing_pools:
+        for pool in cleanup_list:
             Log.debug('purge_orphaned_pools',
                       "Purging pool %s in folder %s" %
-                      (pool, existing_pools[pool]))
+                      (pool, cleanup_list[pool]))
             vs_name = \
                 self.bigip.virtual_server.get_virtual_servers_by_pool_name(
-                    pool_name=pool, folder=existing_pools[pool])
+                    pool_name=pool, folder=cleanup_list[pool])
             if vs_name:
                 try:
                     self.bigip.virtual_server.delete(
-                        name=vs_name, folder=existing_pools[pool])
+                        name=vs_name, folder=cleanup_list[pool])
                     self.bigip.virtual_server.delete_persist_profile_like(
-                        match=vs_name, folder=existing_pools[pool])
+                        match=vs_name, folder=cleanup_list[pool])
                     self.bigip.rule.delete_like(
-                        match=vs_name, folder=existing_pools[pool])
+                        match=vs_name, folder=cleanup_list[pool])
                     self.bigip.virtual_server.delete_profile_like(
-                        match=vs_name, folder=existing_pools[pool])
+                        match=vs_name, folder=cleanup_list[pool])
                 except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)
             try:
                 Log.debug('purge_orphaned_pools',
                           "Deleting pool %s in folder %s" %
-                          (pool, existing_pools[pool]))
-                self.delete(name=pool, folder=existing_pools[pool])
+                          (pool, cleanup_list[pool]))
+                self.delete(name=pool, folder=cleanup_list[pool])
             except Exception as e:
                     Log.error('purge_orphaned_pools', e.message)
 
@@ -957,6 +969,22 @@ class Pool(object):
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/pool/'
         request_url += '~' + folder + '~' + name
+        request_url += '?$select=name'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return True
+        elif response.status_code != 404:
+            Log.error('pool', response.text)
+            raise exceptions.PoolQueryException(response.text)
+        return False
+
+    @icontrol_rest_folder
+    @log
+    def exists_in_iapp(self, name=None, folder='Common'):
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/ltm/pool/'
+        request_url += '~' + folder + '~' + name + '.app~' + name + '_pool'
         request_url += '?$select=name'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
