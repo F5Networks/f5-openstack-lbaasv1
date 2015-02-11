@@ -153,6 +153,30 @@ class LbaasAgentApi(n_rpc.RpcProxy):
         )
 
     @log.log
+    def add_allowed_address(self, port_id=None, ip_address=None):
+        return self.call(
+            self.context,
+            self.make_msg(
+                'add_allowed_address',
+                port_id=port_id,
+                ip_address=ip_address
+            ),
+            topic=self.topic
+        )
+
+    @log.log
+    def remove_allowed_address(self, port_id=None, ip_address=None):
+        return self.call(
+            self.context,
+            self.make_msg(
+                'remove_allowed_address',
+                port_id=port_id,
+                ip_address=ip_address
+            ),
+            topic=self.topic
+        )
+
+    @log.log
     def allocate_fixed_address_on_subnet(self, subnet_id=None,
                                          port_id=None, name=None,
                                          fixed_address_count=1):
