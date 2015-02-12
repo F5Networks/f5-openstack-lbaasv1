@@ -230,7 +230,7 @@ class iControlDriver(LBaaSBaseDriver):
         """ The registerOpts parameter allows a test to
             turn off config option handling so that it can
             set the options manually instead. """
-        super(iControlDriver, self).__init__(conf, registerOpts=registerOpts)
+        super(iControlDriver, self).__init__(conf)
         self.conf = conf
         if registerOpts:
             self.conf.register_opts(OPTS)
@@ -881,11 +881,22 @@ class iControlDriver(LBaaSBaseDriver):
 
     def _service_exists(self, service):
         """ Returns whether the bigip has a pool for the service """
-        bigip = self.get_bigip()
         if not service['pool']:
             return False
-        return bigip.pool.exists(name=service['pool']['id'],
-                                 folder=service['pool']['tenant_id'])
+        if self.lbaas_builder_bigiq_iapp:
+            builder = self.lbaas_builder_bigiq_iapp
+            readiness = builder.check_tenant_bigiq_readiness(service)
+            use_bigiq = readiness['found_bigips']
+        else:
+            use_bigiq = False
+        if use_bigiq:
+            return self.lbaas_builder_bigiq_iapp.exists(service)
+        else:
+            bigip = self.get_bigip()
+            return bigip.pool.exists(name=service['pool']['id'],
+                                     folder=service['pool']['tenant_id']) or \
+                bigip.pool.exists_in_iapp(name=service['pool']['id'],
+                                          folder=service['pool']['tenant_id'])
 
     def _common_service_handler(self, service, skip_networking=False):
         """ Assure that the service is configured on bigip(s) """
