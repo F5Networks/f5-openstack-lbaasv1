@@ -230,7 +230,7 @@ class iControlDriver(LBaaSBaseDriver):
         """ The registerOpts parameter allows a test to
             turn off config option handling so that it can
             set the options manually instead. """
-        super(iControlDriver, self).__init__(conf, registerOpts=registerOpts)
+        super(iControlDriver, self).__init__(conf)
         self.conf = conf
         if registerOpts:
             self.conf.register_opts(OPTS)
