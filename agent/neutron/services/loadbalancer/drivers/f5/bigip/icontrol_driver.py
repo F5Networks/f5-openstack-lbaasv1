@@ -779,7 +779,7 @@ class iControlDriver(LBaaSBaseDriver):
                                 # dictionary set to ACTIVE
                                 if not member['id'] in members:
                                     members[member['id']] = \
-                                        {'status': plugin_const.ACTIVE}
+                                        {'status': plugin_const.INACTIVE}
                                 # check if it down or up by monitor
                                 # and update the status
                                 for state in monitor_states:
@@ -810,10 +810,8 @@ class iControlDriver(LBaaSBaseDriver):
                                         else:
                                             members[member['id']]['status'] = \
                                                 plugin_const.DOWN
-                stats['members'] = members
-                return stats
-            else:
-                return None
+        stats['members'] = members
+        return stats
 
     @serialized('remove_orphans')
     def remove_orphans(self, services):
