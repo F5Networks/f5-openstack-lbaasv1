@@ -31,17 +31,17 @@ class BigipTenantManager(object):
         self.driver = driver
 
     def assure_tenant_created(self, service):
-        """ Delete tenant partition.
-            Called for every bigip only in replication mode,
-            otherwise called once.
-        """
+        """ Create tenant partition. """
         tenant_id = service['pool']['tenant_id']
+        traffic_group = self.driver._service_to_traffic_group(service)
+        traffic_group = '/Common/' + traffic_group
 
         # create tenant folder
         for bigip in self.driver.get_config_bigips():
             folder = bigip.decorate_folder(tenant_id)
             if not bigip.system.folder_exists(folder):
-                bigip.system.create_folder(folder, change_to=True)
+                bigip.system.create_folder(
+                    folder, change_to=True, traffic_group=traffic_group)
 
         # folder must sync before route domains are created.
         self.driver.sync_if_clustered()

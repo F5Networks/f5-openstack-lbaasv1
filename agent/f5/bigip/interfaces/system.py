@@ -86,7 +86,7 @@ class System(object):
         return False
 
     @log
-    def create_folder(self, folder, change_to=False):
+    def create_folder(self, folder, change_to=False, traffic_group=None):
         """ Create folder """
         if folder:
             folder = str(folder).replace('/', '')
@@ -97,7 +97,11 @@ class System(object):
             payload['fullPath'] = '/' + folder
             payload['hidden'] = False
             payload['inheritedDevicegroup'] = True
-            payload['inheritedTrafficGroup'] = True
+            if traffic_group:
+                payload['trafficGroup'] = traffic_group
+                payload['inheritedTrafficGroup'] = False
+            else:
+                payload['inheritedTrafficGroup'] = True
 
             response = self.bigip.icr_session.post(
                 request_url, data=json.dumps(payload),

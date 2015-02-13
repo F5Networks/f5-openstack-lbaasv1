@@ -1147,8 +1147,7 @@ class iControlDriver(LBaaSBaseDriver):
         """ Count vips and gws on traffic groups """
         self.__traffic_groups = bigip.cluster.get_traffic_groups()
         if 'traffic-group-local-only' in self.__traffic_groups:
-            self.__traffic_groups.remove(
-                'traffic-group-local-only')
+            self.__traffic_groups.remove('traffic-group-local-only')
         self.__traffic_groups.sort()
 
     def sync_if_clustered(self):
