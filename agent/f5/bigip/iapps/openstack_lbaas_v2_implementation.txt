@@ -22,7 +22,7 @@ array set var_defaults {
     vip__addr Error
     vip__port 80
     vip__protocol http
-    vip__persist http-cookie
+    vip__persist none
     vip__cookie jsessionid
     pool__lb_method round-robin
     pool__monitor http
