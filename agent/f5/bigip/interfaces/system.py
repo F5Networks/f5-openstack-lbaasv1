@@ -131,7 +131,7 @@ class System(object):
         self.sys_session.set_active_folder('/')
         self.current_folder = '/'
         self.mgmt_folder.get_list()
-        fakename = '/set-folder-workaround-'+str(uuid.uuid4())[0:8]
+        fakename = '/set-folder-workaround-' + str(uuid.uuid4())[0:8]
         try:
             self.mgmt_folder.delete_folder([fakename])
         except WebFault:
