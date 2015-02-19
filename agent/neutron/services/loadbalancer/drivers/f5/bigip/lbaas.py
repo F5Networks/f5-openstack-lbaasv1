@@ -49,7 +49,7 @@ class LBaaSBuilder(object):
 
 
 _LTM_LB_METHODS = {
-    os_lb_consts.LB_METHOD_LEAST_CONNECTIONS: 'least-connections-members',
+    os_lb_consts.LB_METHOD_LEAST_CONNECTIONS: 'least-connections-member',
     os_lb_consts.LB_METHOD_ROUND_ROBIN: 'round-robin',
     os_lb_consts.LB_METHOD_SOURCE_IP: 'least-connections-node'}
 
