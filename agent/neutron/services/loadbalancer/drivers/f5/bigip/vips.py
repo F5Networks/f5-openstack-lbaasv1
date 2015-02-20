@@ -127,15 +127,15 @@ class BigipVipManager(object):
         # vip and then create a new one.  That way
         # the end user expects the service outage.
 
-        #virtual_type = 'fastl4'
-        #if 'protocol' in vip:
-        #    if vip['protocol'] == 'HTTP' or \
-        #       vip['protocol'] == 'HTTPS':
-        #        virtual_type = 'standard'
-        #if 'session_persistence' in vip:
-        #    if vip['session_persistence'] == \
-        #       'APP_COOKIE':
-        #        virtual_type = 'standard'
+        virtual_type = 'fastl4'
+        if 'protocol' in vip:
+            if vip['protocol'] == 'HTTP' or \
+               vip['protocol'] == 'HTTPS':
+                virtual_type = 'standard'
+        if 'session_persistence' in vip:
+            if vip['session_persistence'] == \
+               'APP_COOKIE':
+                virtual_type = 'standard'
 
         # Hard code to standard until we decide if we
         # want to handle the check/delete before create
@@ -148,35 +148,39 @@ class BigipVipManager(object):
         # we don't need unless we decided to handle
         # shifting from L4 to L7 or from L7 to L4
 
-        virtual_type = 'standard'
+        #virtual_type = 'standard'
 
         folder = vip['tenant_id']
         if virtual_type == 'standard':
-            if bigip_vs.create(name=vip['id'],
-                               ip_address=ip_address,
-                               mask='255.255.255.255',
-                               port=int(vip['protocol_port']),
-                               protocol=vip['protocol'],
-                               vlan_name=network_name,
-                               traffic_group=vip_tg,
-                               use_snat=self.driver.conf.f5_snat_mode,
-                               snat_pool=snat_pool_name,
-                               folder=folder,
-                               preserve_vlan_name=preserve_network_name):
+            if bigip_vs.create(
+                name=vip['id'],
+                ip_address=ip_address,
+                mask='255.255.255.255',
+                port=int(vip['protocol_port']),
+                protocol=vip['protocol'],
+                vlan_name=network_name,
+                traffic_group=vip_tg,
+                use_snat=self.driver.conf.f5_snat_mode,
+                snat_pool=snat_pool_name,
+                folder=folder,
+                preserve_vlan_name=preserve_network_name
+            ):
                 return True
         else:
-            preserve_name = preserve_network_name
-            if bigip_vs.create_fastl4(name=vip['id'],
-                                      ip_address=ip_address,
-                                      mask='255.255.255.255',
-                                      port=int(vip['protocol_port']),
-                                      protocol=vip['protocol'],
-                                      vlan_name=network_name,
-                                      traffic_group=vip_tg,
-                                      use_snat=self.driver.conf.f5_snat_mode,
-                                      snat_pool=snat_pool_name,
-                                      folder=folder,
-                                      preserve_vlan_name=preserve_name):
+
+            if bigip_vs.create_fastl4(
+                name=vip['id'],
+                ip_address=ip_address,
+                mask='255.255.255.255',
+                port=int(vip['protocol_port']),
+                protocol=vip['protocol'],
+                vlan_name=network_name,
+                traffic_group=vip_tg,
+                use_snat=self.driver.conf.f5_snat_mode,
+                snat_pool=snat_pool_name,
+                folder=folder,
+                preserve_vlan_name=preserve_network_name
+            ):
                 return True
 
     def _update_bigip_vip(self, bigip, service):
