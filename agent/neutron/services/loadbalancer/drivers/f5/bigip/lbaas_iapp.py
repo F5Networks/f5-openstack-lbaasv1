@@ -23,7 +23,7 @@ PRESENTATION = pkgutil.get_data(
 
 IMPLEMENTATION = pkgutil.get_data(
     'f5.bigip',
-    'iapps/openstack_lbaas_v2_implementation.txt'
+    'iapps/openstack_lbaas_v1_implementation.txt'
 )
 
 IAPP = {

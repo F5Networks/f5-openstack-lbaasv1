@@ -278,12 +278,12 @@ class VXLAN(object):
 
     @icontrol_rest_folder
     @log
-    def add_fdb_entries(self, tunnel_name=None, fdb_entries=None):
+    def add_fdb_entries(self, fdb_entries=None):
         """ Add vxlan fdb entries """
         for tunnel_name in fdb_entries:
             folder = prefixed(fdb_entries[tunnel_name]['folder'])
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-            request_url += '~' + folder + '~' + tunnel_name
+            request_url += '~' + folder + '~' + self.OBJ_PREFIX + tunnel_name
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
                                                   mac=None,
                                                   folder=folder)
