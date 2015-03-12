@@ -758,7 +758,6 @@ class iControlDriver(LBaaSBaseDriver):
                     some_members_require_status_update = False
                     update_if_status = [plugin_const.ACTIVE,
                                         plugin_const.DOWN,
-                                        plugin_const.CREATED,
                                         plugin_const.INACTIVE]
                     for member in service['members']:
                         if member['status'] in update_if_status:
@@ -997,7 +996,7 @@ class iControlDriver(LBaaSBaseDriver):
                 start_time = time()
                 self.plugin_rpc.update_member_status(
                     member['id'],
-                    status=plugin_const.CREATED,
+                    status=plugin_const.ACTIVE,
                     status_description='member created')
                 LOG.debug("            update_member_status"
                           " took %.5f secs" % (time() - start_time))
