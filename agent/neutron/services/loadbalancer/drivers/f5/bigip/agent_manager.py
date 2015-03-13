@@ -327,11 +327,13 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         # Prior to Juno.2, multiple listeners were created, including
         # topic.host, but that was removed. We manually restore that
         # listener here if we see only one topic listener on this connection.
-        if len(started_by.conn.servers) == 1:
+        if hasattr(started_by.conn, 'servers') and \
+                len(started_by.conn.servers) == 1:
             node_topic = '%s.%s' % (started_by.topic, started_by.host)
             LOG.debug("Listening on rpc topic %s" % node_topic)
             endpoints = [started_by.manager]
-            started_by.conn.create_consumer(node_topic, endpoints, fanout=False)
+            started_by.conn.create_consumer(
+                node_topic, endpoints, fanout=False)
         self.sync_state()
 
     @periodic_task.periodic_task
