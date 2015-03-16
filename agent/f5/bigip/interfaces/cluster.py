@@ -269,7 +269,7 @@ class Cluster(object):
                                   'root_device_mgmt_address':
                                   local_mgmt_address}
                 local_md = self.bigip.device.get_metadata()
-                if 'root_device_name' in local_md.keys():
+                if local_md and 'root_device_name' in local_md.keys():
                     md_device_name = os.path.basename(
                         local_md['root_device_name'])
                     if md_device_name:
@@ -279,7 +279,7 @@ class Cluster(object):
                                 + ' was already itself peered from root'
                                 + ' device: %s'
                                 % local_md['root_device_name'])
-                self.bigip.device.update_metadata(root_mgmt_dict)
+                self.bigip.device.update_metadata(None, root_mgmt_dict)
                 Log.info('Cluster', 'Device %s - adding peer %s'
                                     % (local_device, name))
 
