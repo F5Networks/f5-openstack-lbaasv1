@@ -352,7 +352,7 @@ class Device(object):
         return []
 
     @log
-    def set_failover_address(self, ip_address=None, folder='/Common'):
+    def set_failover_addrs(self, ip_addrs=None, folder='/Common'):
         """ Get device failover ips """
         dev_name = self.get_device_name()
         dev_ip = self.get_mgmt_addr()
@@ -360,15 +360,16 @@ class Device(object):
         request_url += '~Common~' + dev_name
         payload = dict()
         unicast_addresses = []
-        if ip_address:
+        if len(ip_addrs):
             unicast_addresses.append({'effectiveIp': dev_ip,
                                       'effectivePort': 1026,
                                       'ip': dev_ip,
                                       'port': 1026})
-            unicast_addresses.append({'effectiveIp': ip_address,
-                                      'effectivePort': 1026,
-                                      'ip': ip_address,
-                                      'port': 1026})
+            for ip_address in ip_addrs:
+                unicast_addresses.append({'effectiveIp': ip_address,
+                                          'effectivePort': 1026,
+                                          'ip': ip_address,
+                                          'port': 1026})
         payload['unicastAddress'] = unicast_addresses
         response = self.bigip.icr_session.put(
             request_url, data=json.dumps(payload),

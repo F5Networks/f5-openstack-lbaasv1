@@ -120,10 +120,10 @@ class Vlan(object):
     @log
     def get_vlans(self, folder='Common'):
         """ Get vlans """
-        folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/vlan/'
         request_url += '?$select=name'
         if folder:
+            folder = str(folder).replace('/', '')
             request_filter = 'partition eq ' + folder
             request_url += '&$filter=' + request_filter
         response = self.bigip.icr_session.get(

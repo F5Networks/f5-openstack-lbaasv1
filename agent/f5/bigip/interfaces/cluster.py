@@ -50,6 +50,23 @@ class Cluster(object):
         return None
 
     @log
+    def get_sync_color(self):
+        """ Get the sync color for the bigip """
+        request_url = self.bigip.icr_url + '/cm/sync-status?$select=color'
+        response = self.bigip.icr_session.get(request_url,
+                                              timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            entries = response_obj['entries']
+            status = entries['https://localhost/mgmt/tm/cm/sync-status/0']
+            desc = status['nestedStats']['entries']['color']['description']
+            return desc
+        else:
+            Log.error('sync-info', response.text)
+            raise exceptions.ClusterQueryException(response.text)
+        return None
+
+    @log
     def save_config(self):
         """ Save the bigip configuration """
         request_url = self.bigip.icr_url + '/sys/config'
@@ -661,13 +678,12 @@ class Cluster(object):
                              failbacktimer=60, loadfactor=1,
                              floating=True, ha_order=None):
         """ Create traffic group """
-        if name:
-            request_url = self.bigip.icr_url + '/cm/traffic-group/'
+        request_url = self.bigip.icr_url + '/cm/traffic-group'
         payload = dict()
-        payload['name']
-        payload['autoFailbackEnabled'] = autofailback,
-        payload['autoFailbackTime'] = failbacktimer,
-        payload['haLoadFactor'] = loadfactor,
+        payload['name'] = name
+        payload['autoFailbackEnabled'] = autofailback
+        payload['autoFailbackTime'] = failbacktimer
+        payload['haLoadFactor'] = loadfactor
         payload['isFloating'] = floating
         if ha_order:
             ha_order_list = []
@@ -687,6 +703,44 @@ class Cluster(object):
         else:
             Log.error('traffic-group', response.text)
             raise exceptions.ClusterCreationException(response.text)
+
+    @log
+    def update_traffic_group(self,
+                             name=None, autofailback=False,
+                             failbacktimer=60, loadfactor=1,
+                             floating=True, ha_order=None):
+        """ Update traffic group """
+        request_url = self.bigip.icr_url + '/cm/traffic-group/'
+        request_url += '~Common~' + name
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code >= 400:
+            Log.error('traffic-group', response.text)
+            raise exceptions.ClusterUpdateException(response.text)
+        payload = json.loads(response.text)
+
+        payload['autoFailbackEnabled'] = autofailback
+        payload['autoFailbackTime'] = failbacktimer
+        payload['haLoadFactor'] = loadfactor
+        payload['isFloating'] = floating
+        if ha_order:
+            ha_order_list = []
+            devices = self.bigip.device.get_all_device_names()
+            for device in ha_order:
+                dev_name = os.path.basename(device)
+                if dev_name in devices:
+                    ha_order_list.append('/Common/' + dev_name)
+            payload['haOrder'] = ha_order_list
+        response = self.bigip.icr_session.put(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return True
+        elif response.status_code == 409:
+            return True
+        else:
+            Log.error('traffic-group', response.text)
+            raise exceptions.ClusterUpdateException(response.text)
 
     @log
     def delete_traffic_group(self, name):

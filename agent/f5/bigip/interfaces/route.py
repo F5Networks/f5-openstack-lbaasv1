@@ -317,3 +317,22 @@ class Route(object):
                 lowest_available_index = lowest_available_index + 1
         else:
             return lowest_available_index
+
+    @log
+    def set_strict_state(self, name=None, folder='Common', state='disabled'):
+        """ Route domain strict attribute """
+        if name:
+            folder = str(folder).replace('/', '')
+            request_url = self.bigip.icr_url + '/net/route-domain/'
+            request_url += '~' + folder + '~' + name
+            payload = dict()
+            payload['strict'] = state
+            response = self.bigip.icr_session.put(
+                request_url, data=json.dumps(payload),
+                timeout=const.CONNECTION_TIMEOUT)
+            if response.status_code < 400:
+                return True
+            else:
+                Log.error('route', response.text)
+                raise exceptions.RouteUpdateException(response.text)
+        return False

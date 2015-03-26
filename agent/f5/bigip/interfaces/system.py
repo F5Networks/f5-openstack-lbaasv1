@@ -38,6 +38,8 @@ class System(object):
         self.bigip.icontrol.add_interfaces(['Management.Folder',
                                             'System.Session',
                                             'System.SystemInfo',
+                                            'System.SoftwareManagement',
+                                            'System.ConfigSync',
                                             'System.VCMP']
                                            )
 
@@ -45,6 +47,8 @@ class System(object):
         self.mgmt_folder = self.bigip.icontrol.Management.Folder
         self.sys_session = self.bigip.icontrol.System.Session
         self.sys_info = self.bigip.icontrol.System.SystemInfo
+        self.sys_swmgmt = self.bigip.icontrol.System.SoftwareManagement
+        self.sys_config_sync = self.bigip.icontrol.System.ConfigSync
         self.sys_vcmp = self.bigip.icontrol.System.VCMP
 
         # create stubs to hold static system params to avoid redundant calls
@@ -417,6 +421,24 @@ class System(object):
         return self.get_version().split('_v')[1].split('.')[1]
 
     @log
+    def get_license_operational(self):
+        """ Get license operational """
+        request_url = self.bigip.icr_url + '/sys/db/license.operational'
+        request_url += '?$select=value'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'value' in response_obj:
+                return response_obj['value'] == 'true'
+            return None
+        elif response.status_code == 404:
+            return None
+        else:
+            raise exceptions.SystemQueryException(response.text)
+
+    @log
     def get_provision_extramb(self):
         """ Get provisioned extramb for large management memory """
         request_url = self.bigip.icr_url + '/sys/db/provision.extramb'
@@ -477,3 +499,22 @@ class System(object):
             return None
         elif response.status_code != 404:
             raise exceptions.SystemUpdateException(response.text)
+
+    @log
+    def force_to_standby(self, traffic_group):
+        """ Force traffic group to standby """
+        request_url = self.bigip.icr_url + '/sys/failover'
+
+        payload = dict()
+        payload['command'] = 'run'
+        payload['standby'] = None
+        payload['trafficGroup'] = traffic_group
+
+        response = self.bigip.icr_session.post(
+            request_url, data=json.dumps(payload),
+            timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return True
+
+        Log.error('traffic-group', response.text)
+        raise exceptions.SystemUpdateException(response.text)
