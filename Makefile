@@ -155,7 +155,9 @@ pep8-agent:
 PYHOOK := 'import sys;sys.path.insert(1,".")'
 PYLINT := pylint --additional-builtins=_ --init-hook=$(PYHOOK)
 
-pylint:
+pylint: pylint-agent pylint-driver
+
+pylint-agent:
 	(cd agent; \
          > neutron/__init__.py; \
          > neutron/services/__init__.py; \
@@ -196,6 +198,38 @@ pylint:
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
          rm -v neutron/common; \
+         rm -v neutron/services/constants; \
+         rm -v neutron/services/loadbalancer/constants.py; \
+         rm -v neutron/services/loadbalancer/drivers/__init__.py; \
+         rm -v neutron/services/loadbalancer/__init__.py; \
+         rm -v neutron/services/__init__.py; \
+         rm -v neutron/__init__.py; \
+        )
+
+pylint-driver:
+	(cd driver; \
+         > neutron/__init__.py; \
+         > neutron/services/__init__.py; \
+         > neutron/services/loadbalancer/__init__.py; \
+         > neutron/services/loadbalancer/drivers/__init__.py; \
+         ln -s $(NDIR)/api neutron/api; \
+         ln -s $(NDIR)/common neutron/common; \
+         ln -s $(NDIR)/context.py neutron/context.py; \
+         ln -s $(NDIR)/db neutron/db; \
+         ln -s $(NDIR)/extensions neutron/extensions; \
+         ln -s $(NDIR)/openstack neutron/openstack; \
+         ln -s $(NDIR)/plugins neutron/plugins; \
+         ln -s $(NDIR)/services/constants neutron/services/constants; \
+         ln -s $(NDIR)/services/loadbalancer/constants.py \
+               neutron/services/loadbalancer/constants.py; \
+         $(PYLINT) neutron/services/loadbalancer/drivers/f5/plugin_driver.py; \
+         rm -v neutron/api; \
+         rm -v neutron/plugins; \
+         rm -v neutron/openstack; \
+         rm -v neutron/common; \
+         rm -v neutron/context.py; \
+         rm -v neutron/db; \
+         rm -v neutron/extensions; \
          rm -v neutron/services/constants; \
          rm -v neutron/services/loadbalancer/constants.py; \
          rm -v neutron/services/loadbalancer/drivers/__init__.py; \

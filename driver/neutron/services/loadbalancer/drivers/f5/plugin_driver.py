@@ -1,9 +1,10 @@
+""" F5 LBaaS Driver """
 ##############################################################################
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# Copyright 2014 by F5 Networks and/or its suppliers. All rights reserved.
+# Copyright 2015 by F5 Networks and/or its suppliers. All rights reserved.
 ##############################################################################
 
 import uuid
@@ -21,11 +22,11 @@ from neutron.extensions import lbaas_agentscheduler
 from neutron.openstack.common import importutils
 from neutron.common import log
 from neutron.openstack.common import log as logging
-preJuno = False
+PREJUNO = False
 try:
     from neutron.openstack.common import rpc
     from neutron.openstack.common.rpc import proxy
-    preJuno = True
+    PREJUNO = True
 except ImportError:
     from neutron.common import rpc as proxy
 from neutron.plugins.common import constants
@@ -80,8 +81,13 @@ class LoadBalancerCallbacks(object):
 
         self.last_cache_update = datetime.datetime.now()
 
+    def _core_plugin(self):
+        """ Get the core plugin """
+        return self.plugin._core_plugin
+
     @log.log
     def get_active_pool_ids(self, context, host=None):
+        """ Get pools that are active """
         with context.session.begin(subtransactions=True):
             if not host:
                 return []
@@ -94,14 +100,13 @@ class LoadBalancerCallbacks(object):
             pools = self.plugin.list_pools_on_lbaas_agent(context,
                                                           agents[0].id)
             pool_ids = [pool['id'] for pool in pools['pools']]
-            up = True
             active_pool_ids = set()
             pools = self.plugin.get_pools(
                 context,
                 filters={
                     'status': [constants.ACTIVE],
                     'id': pool_ids,
-                    'admin_state_up': [up]
+                    'admin_state_up': [True]
                 },
                 fields=['id'])
             for pool in pools:
@@ -110,6 +115,7 @@ class LoadBalancerCallbacks(object):
 
     @log.log
     def get_pending_pool_ids(self, context, host=None):
+        """ Get pools that are not active """
         with context.session.begin(subtransactions=True):
             if not host:
                 return []
@@ -176,7 +182,6 @@ class LoadBalancerCallbacks(object):
             if not pool:
                 return service
 
-
             # populate pool members
             adminctx = get_admin_context()
             if not 'members' in pool or len(pool['members']) == 0:
@@ -184,8 +189,12 @@ class LoadBalancerCallbacks(object):
             service['members'] = []
             for member_id in pool['members']:
                 member = self.plugin.get_member(context, member_id)
-                self._extend_member(
-                    adminctx, context, pool, member, global_routed_mode)
+                member['network'] = None
+                member['subnet'] = None
+                member['port'] = None
+                if not global_routed_mode:
+                    self._extend_member(
+                        adminctx, context, pool, member)
                 service['members'].append(member)
 
             # populate health monitors
@@ -223,17 +232,15 @@ class LoadBalancerCallbacks(object):
 
     def _get_subnet_cached(self, context, subnet_id):
         """ subnet from cache or get from neutron """
-        core = self.plugin._core_plugin
         if subnet_id not in self.subnet_cache:
-            subnet_dict = core.get_subnet(context, subnet_id)
+            subnet_dict = self._core_plugin().get_subnet(context, subnet_id)
             self.subnet_cache[subnet_id] = subnet_dict
         return self.subnet_cache[subnet_id]
 
     def _get_network_cached(self, context, network_id):
         """ network from cache or get from neutron """
-        core = self.plugin._core_plugin
         if network_id not in self.net_cache:
-            net_dict = core.get_network(context, network_id)
+            net_dict = self._core_plugin().get_network(context, network_id)
             if not 'provider:network_type' in net_dict:
                 net_dict['provider:network_type'] = 'undefined'
             if not 'provider:segmentation_id' in net_dict:
@@ -255,15 +262,15 @@ class LoadBalancerCallbacks(object):
             vip['port']['subnet'] = None
             return vip
 
-        core = self.plugin._core_plugin
-        vip['port'] = core.get_port(context, vip['port_id'])
+        vip['port'] = self._core_plugin().get_port(context, vip['port_id'])
         vip['network'] = self._get_network_cached(
             context, vip['port']['network_id'])
         self._populate_vip_network_vteps(context, vip)
 
         # there should only be one fixed_ip
         for fixed_ip in vip['port']['fixed_ips']:
-            vip['subnet'] = core.get_subnet(context, fixed_ip['subnet_id'])
+            vip['subnet'] = self._core_plugin().get_subnet(
+                context, fixed_ip['subnet_id'])
             vip['address'] = fixed_ip['ip_address']
 
         return vip
@@ -304,14 +311,8 @@ class LoadBalancerCallbacks(object):
                     vip['gre_vteps'] = vip['gre_vteps'] + endpoints
 
     def _extend_member(
-            self, adminctx, context, pool, member, global_routed_mode):
+            self, adminctx, context, pool, member):
         """ Add networking info to member """
-
-        member['network'] = None
-        member['subnet'] = None
-        member['port'] = None
-        if global_routed_mode:
-            return
 
         from neutron.db import models_v2 as core_db
         alloc_qry = adminctx.session.query(core_db.IPAllocation)
@@ -347,14 +348,14 @@ class LoadBalancerCallbacks(object):
         # that match the pool member and check those subnets
         # first because we prefer to use a subnet that actually has
         # a matching ip address on it.
-        if self._found_and_used_matching_neutron_addr(
+        if self._found_and_used_neutron_addr(
                 adminctx, context, member, allocated, matching_keys):
             return True
 
         # Perhaps the neutron network was deleted but the pool member
         # was not. If we find a cached subnet definition that matches the
         # deleted network it might help us tear down our configuration.
-        if self._found_and_used_matching_cached_subnet(
+        if self._found_and_used_cached_subnet(
                 adminctx, member, matching_keys):
             return True
 
@@ -362,17 +363,16 @@ class LoadBalancerCallbacks(object):
         # was not. Maybe the subnet was deleted and then added back
         # with a different id. If we can find a matching subnet, it
         # might help us tear down our configuration.
-        if self._found_and_used_matching_neutron_subnet(
+        if self._found_and_used_neutron_subnet(
                 adminctx, member, matching_keys):
             return True
 
         return False
 
-    def _found_and_used_matching_neutron_addr(
+    def _found_and_used_neutron_addr(
             self, adminctx, context, member, allocated, matching_keys):
         """ Find a matching address that matches keys """
 
-        core = self.plugin._core_plugin
         for alloc in allocated:
             if matching_keys['subnet_id'] and \
                     alloc['subnet_id'] != matching_keys['subnet_id']:
@@ -392,14 +392,14 @@ class LoadBalancerCallbacks(object):
             member['subnet'] = self._get_subnet_cached(
                 context, alloc['subnet_id'])
 
-            member['port'] = core.get_port(adminctx, alloc['port_id'])
+            member['port'] = self._core_plugin().get_port(
+                adminctx, alloc['port_id'])
             self._populate_member_network(context, member)
             return True
 
-    def _found_and_used_matching_cached_subnet(
+    def _found_and_used_cached_subnet(
             self, adminctx, member, matching_keys):
-        # member network / subnet not set
-        # Let's see if we have it cached.
+        """ check our cache for missing network """
         subnets_matched = []
         na_add = netaddr.IPAddress(member['address'])
         for subnet in self.subnet_cache:
@@ -423,25 +423,25 @@ class LoadBalancerCallbacks(object):
             return True
         return False
 
-    def _found_and_used_matching_neutron_subnet(
+    def _found_and_used_neutron_subnet(
             self, adminctx, member, matching_keys):
+        """ check neutron for matching network """
 
-        core = self.plugin._core_plugin
         na_add = netaddr.IPAddress(member['address'])
 
         subnets_matched = []
-        for subnet in core._get_all_subnets(adminctx):
-            subnet_dict = core._make_subnet_dict(subnet)
+        for subnet in self._core_plugin()._get_all_subnets(adminctx):
+            subnet_dict = self._core_plugin()._make_subnet_dict(subnet)
             self.subnet_cache[subnet_dict['id']] = subnet_dict
             na_net = netaddr.IPNetwork(subnet_dict['cidr'])
             if na_add in na_net:
                 if matching_keys['subnet_id'] and \
                         subnet_dict['id'] != \
-                            matching_keys['subnet_id']:
+                        matching_keys['subnet_id']:
                     continue
                 if matching_keys['tenant_id'] and \
                         subnet_dict['tenant_id'] != \
-                            matching_keys['tenant_id']:
+                        matching_keys['tenant_id']:
                     continue
                 if matching_keys['shared'] and not subnet_dict['shared']:
                     continue
@@ -455,6 +455,7 @@ class LoadBalancerCallbacks(object):
                 adminctx, member['subnet']['network_id'])
 
     def _populate_member_network(self, context, member):
+        """ Add networking info to pool member """
         member['vxlan_vteps'] = []
         member['gre_vteps'] = []
         if 'provider:network_type' in member['network']:
@@ -478,30 +479,33 @@ class LoadBalancerCallbacks(object):
     def create_network(self, context, tenant_id=None, name=None, shared=False,
                        admin_state_up=True, network_type=None,
                        physical_network=None, segmentation_id=None):
+        """ Create neutron network """
         network_data = {
             'tenant_id': tenant_id,
             'name': name,
             'admin_state_up': admin_state_up,
             'shared': shared
         }
-        core = self.plugin._core_plugin
         if network_type:
             network_data['provider:network_type'] = network_type
         if physical_network:
             network_data['provider:physical_network'] = physical_network
         if segmentation_id:
             network_data['provider:segmentation_id'] = segmentation_id
-        return core.create_network(context, {'network': network_data})
+        return self._core_plugin().create_network(
+            context, {'network': network_data})
 
     @log.log
     def delete_network(self, context, network_id):
-        self.plugin._core_plugin.delete_network(context, network_id)
+        """ Delete neutron network """
+        self._core_plugin().delete_network(context, network_id)
 
     @log.log
     def create_subnet(self, context, tenant_id=None, network_id=None,
                       name=None, shared=False, cidr=None, enable_dhcp=False,
                       gateway_ip=None, allocation_pools=None,
                       dns_nameservers=None, host_routes=None):
+        """ Create neutron subnet """
         subnet_data = {'tenant_id': tenant_id,
                        'network_id': network_id,
                        'name': name,
@@ -516,21 +520,23 @@ class LoadBalancerCallbacks(object):
             subnet_data['dns_nameservers'] = dns_nameservers
         if host_routes:
             subnet_data['host_routes'] = host_routes
-        return self.plugin._core_plugin.create_subnet(
+        return self._core_plugin().create_subnet(
             context,
             {'subenet': subnet_data}
         )
 
     @log.log
     def delete_subnet(self, context, subnet_id):
-        self.plugin._core_plugin.delete_subnet(context, subnet_id)
+        """ Delete neutron subnet """
+        self._core_plugin().delete_subnet(context, subnet_id)
 
     @log.log
     def get_ports_for_mac_addresses(self, context, mac_addresses=None):
+        """ Get ports for mac addresses """
         if not isinstance(mac_addresses, list):
             mac_addresses = [mac_addresses]
         filters = {'mac_address': mac_addresses}
-        return self.plugin._core_plugin.get_ports(
+        return self._core_plugin().get_ports(
             context,
             filters=filters
         )
@@ -539,9 +545,9 @@ class LoadBalancerCallbacks(object):
     def create_port_on_subnet(self, context, subnet_id=None,
                               mac_address=None, name=None,
                               fixed_address_count=1, host=None):
+        """ Create port on subnet """
         if subnet_id:
-            core = self.plugin._core_plugin
-            subnet = core.get_subnet(context, subnet_id)
+            subnet = self._core_plugin().get_subnet(context, subnet_id)
             if not mac_address:
                 mac_address = attributes.ATTR_NOT_SPECIFIED
             fixed_ip = {'subnet_id': subnet['id']}
@@ -571,21 +577,23 @@ class LoadBalancerCallbacks(object):
             if 'binding:capabilities' in \
                     portbindings.EXTENDED_ATTRIBUTES_2_0['ports']:
                 port_data['binding:capabilities'] = {'port_filter': False}
-            port = core.create_port(context, {'port': port_data})
+            port = self._core_plugin().create_port(
+                context, {'port': port_data})
             # Because ML2 marks ports DOWN by default on creation
             update_data = {
                 'status': q_const.PORT_STATUS_ACTIVE
             }
-            core.update_port(context, port['id'], {'port': update_data})
+            self._core_plugin().update_port(
+                context, port['id'], {'port': update_data})
             return port
 
     @log.log
     def create_port_on_subnet_with_specific_ip(self, context, subnet_id=None,
                                                mac_address=None, name=None,
                                                ip_address=None, host=None):
+        """ Create port on subnet with specific ip address """
         if subnet_id and ip_address:
-            core = self.plugin._core_plugin
-            subnet = core.get_subnet(context, subnet_id)
+            subnet = self._core_plugin().get_subnet(context, subnet_id)
             if not mac_address:
                 mac_address = attributes.ATTR_NOT_SPECIFIED
             fixed_ip = {'subnet_id': subnet['id'], 'ip_address': ip_address}
@@ -609,50 +617,53 @@ class LoadBalancerCallbacks(object):
             if 'binding:capabilities' in \
                     portbindings.EXTENDED_ATTRIBUTES_2_0['ports']:
                 port_data['binding:capabilities'] = {'port_filter': False}
-            port = core.create_port(context, {'port': port_data})
+            port = self._core_plugin().create_port(
+                context, {'port': port_data})
             # Because ML2 marks ports DOWN by default on creation
             update_data = {
                 'status': q_const.PORT_STATUS_ACTIVE
             }
-            core.update_port(context, port['id'], {'port': update_data})
+            self._core_plugin().update_port(
+                context, port['id'], {'port': update_data})
             return port
 
     @log.log
     def get_port_by_name(self, context, port_name=None):
+        """ Get port by name """
         if port_name:
             filters = {'name': [port_name]}
-            return self.plugin._core_plugin.get_ports(
+            return self._core_plugin().get_ports(
                 context,
                 filters=filters
             )
 
     @log.log
     def delete_port(self, context, port_id=None, mac_address=None):
-        core = self.plugin._core_plugin
+        """ Delete port """
         if port_id:
-            core.delete_port(context, port_id)
+            self._core_plugin().delete_port(context, port_id)
         elif mac_address:
             filters = {'mac_address': [mac_address]}
-            ports = core.get_ports(context, filters=filters)
+            ports = self._core_plugin().get_ports(context, filters=filters)
             for port in ports:
-                core.delete_port(context, port['id'])
+                self._core_plugin().delete_port(context, port['id'])
 
     @log.log
     def delete_port_by_name(self, context, port_name=None):
+        """ Delete port by name """
         if port_name:
-            core = self.plugin._core_plugin
             filters = {'name': [port_name]}
-            ports = core.get_ports(context, filters=filters)
+            ports = self._core_plugin().get_ports(context, filters=filters)
             for port in ports:
-                core.delete_port(context, port['id'])
+                self._core_plugin().delete_port(context, port['id'])
 
     @log.log
     def allocate_fixed_address_on_subnet(self, context, subnet_id=None,
                                          port_id=None, name=None,
                                          fixed_address_count=1, host=None):
+        """ Allocate a fixed ip address on subnet """
         if subnet_id:
-            core = self.plugin._core_plugin
-            subnet = core.get_subnet(context, subnet_id)
+            subnet = self._core_plugin().get_subnet(context, subnet_id)
             if not port_id:
                 port = self.create_port_on_subnet(
                     context,
@@ -663,7 +674,7 @@ class LoadBalancerCallbacks(object):
                     host=host
                 )
             else:
-                port = core.get_port(context, port_id)
+                port = self._core_plugin().get_port(context, port_id)
                 existing_fixed_ips = port['fixed_ips']
                 fixed_ip = {'subnet_id': subnet['id']}
                 if fixed_address_count > 1:
@@ -673,7 +684,7 @@ class LoadBalancerCallbacks(object):
                 else:
                     fixed_ips = [fixed_ip]
             port['fixed_ips'] = existing_fixed_ips + fixed_ips
-            port = core.update_port(context, {'port': port})
+            port = self._core_plugin().update_port(context, {'port': port})
             new_fixed_ips = port['fixed_ips']
             port['new_fixed_ips'] = []
             for new_fixed_ip in new_fixed_ips:
@@ -692,9 +703,9 @@ class LoadBalancerCallbacks(object):
                                                   port_id=None, name=None,
                                                   ip_address=None,
                                                   host=None):
+        """ Allocate specific fixed ip address on subnet """
         if subnet_id and ip_address:
-            core = self.plugin._core_plugin
-            subnet = core.get_subnet(context, subnet_id)
+            subnet = self._core_plugin().get_subnet(context, subnet_id)
             if not port_id:
                 port = self.create_port_on_subnet_with_specific_ip(
                     context,
@@ -705,20 +716,20 @@ class LoadBalancerCallbacks(object):
                     host=host
                 )
             else:
-                port = core.get_port(context, port_id)
+                port = self._core_plugin().get_port(context, port_id)
                 existing_fixed_ips = port['fixed_ips']
                 fixed_ip = {'subnet_id': subnet['id'],
                             'ip_address': ip_address}
             port['fixed_ips'] = existing_fixed_ips + [fixed_ip]
-            port = core.update_port(context, {'port': port})
+            port = self._core_plugin().update_port(context, {'port': port})
             return port
 
     @log.log
     def deallocate_fixed_address_on_subnet(self, context, fixed_addresses=None,
                                            subnet_id=None, host=None,
                                            auto_delete_port=False):
+        """ Allocate fixed ip address on subnet """
         if fixed_addresses:
-            core = self.plugin._core_plugin
             if not isinstance(fixed_addresses, list):
                 fixed_addresses = [fixed_addresses]
             # strip all route domain decorations if they exist
@@ -728,14 +739,14 @@ class LoadBalancerCallbacks(object):
                     fixed_addresses[i] = fixed_addresses[i][:decorator_index]
                 except:
                     pass
-            subnet = core.get_subnet(context, subnet_id)
+            subnet = self._core_plugin().get_subnet(context, subnet_id)
             # get all ports for this host on the subnet
             filters = {
                 'network_id': [subnet['network_id']],
                 'tenant_id': [subnet['tenant_id']],
                 'device_id': [str(uuid.uuid5(uuid.NAMESPACE_DNS, str(host)))]
             }
-            ports = core.get_ports(context, filters=filters)
+            ports = self._core_plugin().get_ports(context, filters=filters)
             fixed_ips = {}
             ok_to_delete_port = {}
             for port in ports:
@@ -745,7 +756,7 @@ class LoadBalancerCallbacks(object):
             # only get rid of associated fixed_ips
             for fixed_ip in fixed_ips:
                 if fixed_ip in fixed_addresses:
-                    core._delete_ip_allocation(
+                    self._core_plugin()._delete_ip_allocation(
                         context,
                         subnet['network_id'],
                         subnet_id,
@@ -761,10 +772,11 @@ class LoadBalancerCallbacks(object):
 
     @log.log
     def add_allowed_address(self, context, port_id=None, ip_address=None):
+        """ Add allowed addresss """
         if port_id and ip_address:
             try:
-                core = self.plugin._core_plugin
-                port = core.get_port(context=context, id=port_id)
+                port = self._core_plugin().get_port(
+                    context=context, id=port_id)
                 address_pairs = []
                 if 'allowed_address_pairs' in port:
                     for aap in port['allowed_address_pairs']:
@@ -779,17 +791,18 @@ class LoadBalancerCallbacks(object):
                     }
                 )
                 port = {'port': {'allowed_address_pairs': address_pairs}}
-                core.update_port(context, port_id, port)
-            except Exception as e:
+                self._core_plugin().update_port(context, port_id, port)
+            except Exception as exc:
                 LOG.error('could not add allowed address pair: %s'
-                          % e.message)
+                          % exc.message)
 
     @log.log
     def remove_allowed_address(self, context, port_id=None, ip_address=None):
+        """ Remove allowed addresss """
         if port_id and ip_address:
             try:
-                core = self.plugin._core_plugin
-                port = core.get_port(context=context, id=port_id)
+                port = self._core_plugin().get_port(
+                    context=context, id=port_id)
                 address_pairs = []
                 if 'allowed_address_pairs' in port:
                     for aap in port['allowed_address_pairs']:
@@ -798,10 +811,10 @@ class LoadBalancerCallbacks(object):
                             continue
                         address_pairs.append(aap)
                 port = {'port': {'allowed_address_pairs': address_pairs}}
-                core.update_port(context, port_id, port)
-            except Exception as e:
+                self._core_plugin().update_port(context, port_id, port)
+            except Exception as exc:
                 LOG.error('could not add allowed address pair: %s'
-                          % e.message)
+                          % exc.message)
 
     @log.log
     def update_vip_status(self, context, vip_id=None,
@@ -911,6 +924,7 @@ class LoadBalancerCallbacks(object):
 
     @log.log
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
+        """ Update pool stats """
         try:
             self.plugin.update_pool_stats(context, pool_id, stats)
         except PoolNotFound:
@@ -919,13 +933,15 @@ class LoadBalancerCallbacks(object):
             LOG.error(_('error updating pool stats: %s' % ex.message))
 
     def create_rpc_dispatcher(self):
+        """ Create rpc dispatcher """
         return q_rpc.PluginRpcDispatcher(  # @UndefinedVariable
             [self, agents_db.AgentExtRpcCallback(self.plugin)])
 
     @log.log
     def _get_vxlan_endpoints(self, context, host=None):
+        """ Get vxlan endpoints """
         endpoints = []
-        for agent in self.plugin._core_plugin.get_agents(context):
+        for agent in self._core_plugin().get_agents(context):
             if 'configurations' in agent:
                 if 'tunnel_types' in agent['configurations']:
                     if 'vxlan' in agent['configurations']['tunnel_types']:
@@ -940,18 +956,19 @@ class LoadBalancerCallbacks(object):
                                         agent['configurations']['tunneling_ip']
                                     )
                         if 'tunneling_ips' in agent['configurations']:
-                            for ip in \
+                            for ip_addr in \
                                     agent['configurations']['tunneling_ips']:
                                 if not host:
-                                    endpoints.append(ip)
+                                    endpoints.append(ip_addr)
                                 else:
                                     if agent['host'] == host:
-                                        endpoints.append(ip)
+                                        endpoints.append(ip_addr)
         return endpoints
 
     def _get_gre_endpoints(self, context, host=None):
+        """ Get gre endpoints """
         endpoints = []
-        for agent in self.plugin._core_plugin.get_agents(context):
+        for agent in self._core_plugin().get_agents(context):
             if 'configurations' in agent:
                 if 'tunnel_types' in agent['configurations']:
                     if 'gre' in agent['configurations']['tunnel_types']:
@@ -966,21 +983,20 @@ class LoadBalancerCallbacks(object):
                                         agent['configurations']['tunneling_ip']
                                     )
                         if 'tunneling_ips' in agent['configurations']:
-                            for ip in \
+                            for ip_addr in \
                                     agent['configurations']['tunneling_ips']:
                                 if not host:
-                                    endpoints.append(ip)
+                                    endpoints.append(ip_addr)
                                 else:
                                     if agent['host'] == host:
-                                        endpoints.append(ip)
+                                        endpoints.append(ip_addr)
         return endpoints
 
 
 class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     """Plugin side of plugin to agent RPC API.
 
-       This class publishes RPC messages for
-       agents to consume.
+       This class publishes RPC messages for agents to consume.
     """
 
     BASE_RPC_API_VERSION = '1.0'
@@ -995,6 +1011,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def create_vip(self, context, vip, service, host):
+        """ Send message to agent to create vip """
         return self.cast(
             context,
             self.make_msg('create_vip', vip=vip, service=service),
@@ -1003,6 +1020,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def update_vip(self, context, old_vip, vip, service, host):
+        """ Send message to agent to update vip """
         return self.cast(
             context,
             self.make_msg('update_vip', old_vip=old_vip, vip=vip,
@@ -1012,6 +1030,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def delete_vip(self, context, vip, service, host):
+        """ Send message to agent to create vip """
         return self.cast(
             context,
             self.make_msg('delete_vip', vip=vip, service=service),
@@ -1020,6 +1039,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def create_pool(self, context, pool, service, host):
+        """ Send message to agent to create pool """
         return self.cast(
             context,
             self.make_msg('create_pool', pool=pool, service=service),
@@ -1028,6 +1048,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def update_pool(self, context, old_pool, pool, service, host):
+        """ Send message to agent to update pool """
         return self.cast(
             context,
             self.make_msg('update_pool', old_pool=old_pool, pool=pool,
@@ -1037,6 +1058,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def delete_pool(self, context, pool, service, host):
+        """ Send message to agent to delete pool """
         return self.cast(
             context,
             self.make_msg('delete_pool', pool=pool, service=service),
@@ -1045,6 +1067,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def create_member(self, context, member, service, host):
+        """ Send message to agent to create member """
         return self.cast(
             context,
             self.make_msg('create_member', member=member, service=service),
@@ -1053,6 +1076,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def update_member(self, context, old_member, member, service, host):
+        """ Send message to agent to update member """
         return self.cast(
             context,
             self.make_msg('update_member', old_member=old_member,
@@ -1062,6 +1086,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def delete_member(self, context, member, service, host):
+        """ Send message to agent to delete member """
         return self.cast(
             context,
             self.make_msg('delete_member', member=member, service=service),
@@ -1071,6 +1096,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool,
                                    service, host):
+        """ Send message to agent to create pool health monitor """
         return self.cast(
             context,
             self.make_msg('create_pool_health_monitor',
@@ -1082,6 +1108,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool, service, host):
+        """ Send message to agent to update pool health monitor """
         return self.cast(
             context,
             self.make_msg('update_health_monitor',
@@ -1094,6 +1121,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool,
                                    service, host):
+        """ Send message to agent to delete pool health monitor """
         return self.cast(
             context,
             self.make_msg('delete_pool_health_monitor',
@@ -1104,6 +1132,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def agent_updated(self, context, admin_state_up, host):
+        """ Send message to update agent """
         return self.cast(
             context,
             self.make_msg('agent_updated',
@@ -1114,6 +1143,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
 
     @log.log
     def get_pool_stats(self, context, pool, service, host):
+        """ Send message to agent to get pool stats """
         return self.cast(
             context,
             self.make_msg('get_pool_stats', pool=pool, service=service),
@@ -1146,10 +1176,15 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         self.pool_scheduler = importutils.import_object(
             cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
 
+    def _core_plugin(self):
+        """ Get the core plugin """
+        return self.plugin._core_plugin
+
     def _set_callbacks(self):
+        """ Setup callbacks to receive calls from agent """
         self.callbacks = LoadBalancerCallbacks(self.plugin)
 
-        if preJuno:
+        if PREJUNO:
             self.conn = rpc.create_connection(new=True)
             # register the callback consumer
             self.conn.create_consumer(
@@ -1166,6 +1201,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             self.conn.consume_in_threads()
 
     def get_pool_agent(self, context, pool_id):
+        """ Get agent for a pool """
         # define which agent to communicate with to handle provision
         # for this pool.  This is in the plugin extension for loadbalancer.
         # It references the agent_scheduler and the scheduler class
@@ -1177,6 +1213,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def create_vip(self, context, vip):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, vip['pool_id'])
         vip['pool'] = self._get_pool(context, vip['pool_id'])
@@ -1200,7 +1237,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             'status': q_const.PORT_STATUS_ACTIVE
         }
         port_data[portbindings.HOST_ID] = agent['host']
-        self.plugin._core_plugin.update_port(
+        self._core_plugin().update_port(
             context,
             vip['port_id'],
             {'port': port_data}
@@ -1210,6 +1247,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def update_vip(self, context, old_vip, vip):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, vip['pool_id'])
 
@@ -1231,6 +1269,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_vip(self, context, vip):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, vip['pool_id'])
 
@@ -1249,11 +1288,12 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def create_pool(self, context, pool):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.pool_scheduler.schedule(self.plugin, context, pool)
         if not agent:
             raise lbaas_agentscheduler.NoEligibleLbaasAgent(pool_id=pool['id'])
-        if not preJuno:
+        if not PREJUNO:
             agent = self.plugin._make_agent_dict(agent)
 
         # get the complete service definition from the data model
@@ -1268,6 +1308,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def update_pool(self, context, old_pool, pool):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool['id'])
 
@@ -1290,6 +1331,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_pool(self, context, pool):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         try:
             agent = self.get_pool_agent(context, pool['id'])
@@ -1312,6 +1354,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def create_member(self, context, member):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, member['pool_id'])
 
@@ -1355,6 +1398,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def update_member(self, context, old_member, member):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, member['pool_id'])
 
@@ -1401,6 +1445,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_member(self, context, member):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, member['pool_id'])
 
@@ -1423,6 +1468,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool_id)
 
@@ -1445,6 +1491,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def update_pool_health_monitor(self, context, old_health_monitor,
                                    health_monitor, pool_id):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool_id)
 
@@ -1467,6 +1514,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
                               health_monitor, pool_id):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool_id)
 
@@ -1488,6 +1536,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def delete_pool_health_monitor(self, context, health_monitor, pool_id):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool_id)
 
@@ -1509,6 +1558,7 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
 
     @log.log
     def stats(self, context, pool_id):
+        """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
         agent = self.get_pool_agent(context, pool_id)
 
@@ -1526,7 +1576,9 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         # call the RPC proxy with the constructed message
         self.agent_rpc.get_pool_stats(context, pool, service, agent['host'])
 
-    def _is_global_routed(self, agent):
+    @staticmethod
+    def _is_global_routed(agent):
+        """ Is the agent in global routed mode? """
         if 'configurations' in agent:
             if 'global_routed_mode' in agent['configurations']:
                 return agent['configurations']['global_routed_mode']
@@ -1535,12 +1587,12 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
     def _get_pool(self, context, pool_id):
         pool = self.plugin.get_pool(context, pool_id)
         if 'subnet_id' in pool:
-            pool['subnet'] = self.plugin._core_plugin.get_subnet(
+            pool['subnet'] = self._core_plugin().get_subnet(
                 context,
                 pool['subnet_id']
             )
         pool['subnet']['network'] = \
-            self.plugin._core_plugin.get_network(
+            self._core_plugin().get_network(
                 context,
                 pool['subnet']['network_id']
             )
@@ -1548,12 +1600,14 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         return pool
 
     def _get_vip(self, context, vip_id):
+        """ Get vip from neutron """
         return self.plugin.get_vip(context, vip_id)
 
     def _get_vxlan_endpoints(self, context):
+        """ Get vxlan tunneling endpoints from all agents """
         endpoints = []
-        if hasattr(self.plugin._core_plugin, 'get_agents'):
-            agents = self.plugin._core_plugin.get_agents(context)
+        if hasattr(self._core_plugin(), 'get_agents'):
+            agents = self._core_plugin().get_agents(context)
             for agent in agents:
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
@@ -1565,9 +1619,10 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         return endpoints
 
     def _get_gre_endpoints(self, context):
+        """ Get gre tunneling endpoints from all agents """
         endpoints = []
-        if hasattr(self.plugin._core_plugin, 'get_agents'):
-            agents = self.plugin._core_plugin.get_agents(context)
+        if hasattr(self._core_plugin(), 'get_agents'):
+            agents = self._core_plugin().get_agents(context)
             for agent in agents:
                 if 'configurations' in agent:
                     if 'tunnel_types' in agent['configurations']:
