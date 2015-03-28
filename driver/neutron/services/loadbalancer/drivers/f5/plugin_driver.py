@@ -156,434 +156,323 @@ class LoadBalancerCallbacks(object):
             return list(pools_to_update)
 
     @log.log
-    def get_service_by_pool_id(self, context, pool_id=None,
-                               global_routed_mode=False,
-                               activate=False, host=None,
-                               **kwargs):
+    def get_service_by_pool_id(
+            self, context, pool_id=None, global_routed_mode=False, host=None):
+        """ Get full service definition from pool id """
         # invalidate cache if it is too old
         if (datetime.datetime.now() - self.last_cache_update).seconds \
                 > NET_CACHE_SECONDS:
             self.net_cache = {}
             self.subnet_cache = {}
 
+        service = {}
         with context.session.begin(subtransactions=True):
-            core = self.plugin._core_plugin
-            try:
-                retpool = self.plugin.get_pool(context, pool_id)
-            except:
-                return {'pool': None}
-            retval = {}
-            retval['pool'] = retpool
-            LOG.debug(_('getting service definition entry for %s'
-                        % retval['pool']['id']))
-            if not global_routed_mode:
-                # get pool subnet
-                pool_subnet_id = retpool['subnet_id']
-                if pool_subnet_id in self.subnet_cache:
-                    retpool['subnet'] = self.subnet_cache[pool_subnet_id]
-                else:
-                    subnet_dict = core.get_subnet(
-                        context,
-                        pool_subnet_id
-                    )
-                    retpool['subnet'] = subnet_dict
-                    self.subnet_cache[pool_subnet_id] = retpool['subnet']
-                # get pool network
-                pool_network_id = retpool['subnet']['network_id']
-                if pool_network_id in self.net_cache:
-                    retpool['network'] = self.net_cache[pool_network_id]
-                else:
-                    retpool['network'] = core.get_network(
-                        context, pool_network_id
-                    )
-                    if not 'provider:network_type' in retpool['network']:
-                        retpool['network']['provider:network_type'] = \
-                            'undefined'
-                    if not 'provider:segmentation_id' in retpool['network']:
-                        retpool['network']['provider:segmentation_id'] = 0
-                    self.net_cache[pool_network_id] = retpool['network']
-            else:
-                retpool['subnet_id'] = None
-                retpool['network'] = None
+            LOG.debug(_('Building service definition entry for %s' % pool_id))
 
-            # is a Vip defined for this pool
-            # if pool.vip:
-            if 'vip_id' in retpool and retpool['vip_id']:
-                retvip = self.plugin.get_vip(context, retpool['vip_id'])
-                retval['vip'] = retvip
-                if not global_routed_mode:
-                    retvip['port'] = core.get_port(
-                        context,
-                        retvip['port_id']
-                    )
-                    if retvip['port']['network_id'] in self.net_cache:
-                        retvip['network'] = \
-                            self.net_cache[retvip['port']['network_id']]
-                    else:
-                        retvip['network'] = \
-                            core.get_network(
-                                context,
-                                retvip['port']['network_id']
-                            )
-                        self.net_cache[retvip['port']['network_id']] = \
-                            retvip['network']
-                    retvip['vxlan_vteps'] = []
-                    retvip['gre_vteps'] = []
-                    if 'provider:network_type' in retvip['network']:
-                        nettype = \
-                            retvip['network']['provider:network_type']
-                        if nettype == 'vxlan':
-                            # get resources needed to find port to host
-                            # binding so we can defined vteps and fdb entries
-                            # for this Vip's port
-                            from neutron.plugins.ml2 import models as ml2_db
-                            segment_qry = context.session.query(
-                                ml2_db.NetworkSegment
-                            )
-                            segment = segment_qry.filter_by(
-                                network_id=retvip['network']['id']
-                            ).first()
-                            segment_id = segment['id']
-                            host_qry = context.session.query(
-                                ml2_db.PortBinding
-                            )
-                            hosts = host_qry.filter_by(
-                                segment=segment_id
-                            ).all()
-                            host_ids = set()
-                            for host in hosts:
-                                host_ids.add(host['host'])
-                            for host_id in host_ids:
-                                endpoints = \
-                                    self._get_vxlan_endpoints(context, host_id)
-                                if len(endpoints) > 0:
-                                    retvip['vxlan_vteps'] = \
-                                        retvip['vxlan_vteps'] + \
-                                        endpoints
-                        if nettype == 'gre':
-                            # get resources needed to find port to host
-                            # binding so we can defined vteps and fdb entries
-                            # for this Vip's port
-                            from neutron.plugins.ml2 import \
-                                models as ml2_db  # @Reimport
-                            segment_qry = context.session.query(
-                                ml2_db.NetworkSegment
-                            )
-                            segment = segment_qry.filter_by(
-                                network_id=retvip['network']['id']
-                            ).first()
-                            segment_id = segment['id']
-                            host_qry = context.session.query(
-                                ml2_db.PortBinding
-                            )
-                            hosts = host_qry.filter_by(
-                                segment=segment_id
-                            ).all()
-                            host_ids = set()
-                            for host in hosts:
-                                host_ids.add(host['host'])
-                            for host_id in host_ids:
-                                endpoints = \
-                                    self._get_gre_endpoints(context, host_id)
-                                if len(endpoints) > 0:
-                                    retvip['gre_vteps'] = \
-                                        retvip['gre_vteps'] + endpoints
-                    else:
-                        retvip['network']['provider:network_type'] = \
-                            'undefined'
-                    if not 'provider:segmentation_id' in \
-                            retvip['network']:
-                        retvip['network']['provider:segmentation_id'] = 0
-                    # there should only be one fixed_ip
-                    for fixed_ip in retvip['port']['fixed_ips']:
-                        retvip['subnet'] = (
-                            core.get_subnet(
-                                context,
-                                fixed_ip['subnet_id']
-                            )
-                        )
-                        retvip['address'] = fixed_ip['ip_address']
-                else:
-                    retvip['network'] = None
-                    retvip['subnet'] = None
-                    retvip['port'] = {}
-                    retvip['port']['network'] = None
-                    retvip['port']['subnet'] = None
-            else:
-                retval['vip'] = {}
-                retval['vip']['port'] = {}
-                retval['vip']['port']['network'] = None
-                retval['vip']['port']['subnet'] = None
+            # populate pool
+            pool = self._get_extended_pool(
+                context, pool_id, global_routed_mode)
+            service['pool'] = pool
+            if not pool:
+                return service
 
-            retval['members'] = []
+
+            # populate pool members
             adminctx = get_admin_context()
-
-            # if we have members defined, make resources
-            # available to find their network, subnet, ports
-            if 'members' in retpool and (len(retpool['members']) > 0):
-                from neutron.db import models_v2 as core_db
-            else:
-                retpool['members'] = []
-
-            for member_id in retpool['members']:
+            if not 'members' in pool or len(pool['members']) == 0:
+                pool['members'] = []
+            service['members'] = []
+            for member_id in pool['members']:
                 member = self.plugin.get_member(context, member_id)
-                if not global_routed_mode:
-                    alloc_qry = adminctx.session.query(core_db.IPAllocation)
-                    allocated = alloc_qry.filter_by(
-                        ip_address=member['address']
-                    ).all()
-                    for alloc in allocated:
-                        # It is normal to find a duplicate IP for another
-                        # tenant, so first see if we find its network under
-                        # this tenant context. A NotFound exception is normal
-                        # if the IP belongs to another tenant.
-                        try:
-                            if alloc['network_id'] in self.net_cache:
-                                net = self.net_cache[alloc['network_id']]
-                            else:
-                                net = core.get_network(
-                                    adminctx, alloc['network_id']
-                                )
-                                self.net_cache[alloc['network_id']] = net
-                        except:
-                            continue
-                        if net['tenant_id'] != retpool['tenant_id']:
-                            continue
-                        member['network'] = net
-                        self.set_member_subnet_info(context, host,
-                                                    member,
-                                                    alloc['subnet_id'])
-                        member['port'] = core.get_port(
-                            adminctx, alloc['port_id']
-                        )
-                        member['vxlan_vteps'] = []
-                        member['gre_vteps'] = []
-                        if 'provider:network_type' in member['network']:
-                            nettype = \
-                                member['network']['provider:network_type']
-                            if nettype == 'vxlan':
-                                if 'binding:host_id' in member['port']:
-                                    host = member['port']['binding:host_id']
-                                    member['vxlan_vteps'] = \
-                                        self._get_vxlan_endpoints(
-                                            context,
-                                            host
-                                        )
-                            if nettype == 'gre':
-                                if 'binding:host_id' in member['port']:
-                                    host = member['port']['binding:host_id']
-                                    member['gre_vteps'] = \
-                                        self._get_gre_endpoints(
-                                            context,
-                                            host
-                                        )
-                        else:
-                            member['network']['provider:network_type'] = \
-                                'undefined'
-                        if not 'provider:segmentation_id' in member['network']:
-                            member['network']['provider:segmentation_id'] = 0
-                        break
-                    else:
-                        # tenant member not found. accept any
-                        # allocated ip on a shared network
-                        for alloc in allocated:
-                            try:
-                                net = core.get_network(
-                                    adminctx,
-                                    alloc['network_id']
-                                )
-                            except:
-                                continue
-                            if not net['shared']:
-                                continue
-                            member['network'] = net
-                            self.set_member_subnet_info(
-                                context,
-                                host,
-                                member,
-                                alloc['subnet_id']
-                            )
-                            member['port'] = core.get_port(
-                                adminctx,
-                                alloc['port_id']
-                            )
-                            member['vxlan_vteps'] = []
-                            member['gre_vteps'] = []
-                            if 'provider:network_type' in member['network']:
-                                nettype = \
-                                    member['network']['provider:network_type']
-                                if nettype == 'vxlan':
-                                    if 'binding:host_id' in member['port']:
-                                        host = \
-                                            member['port']['binding:host_id']
-                                        member['vxlan_vteps'] = \
-                                            self._get_vxlan_endpoints(
-                                                context,
-                                                host
-                                            )
-                                if nettype == 'gre':
-                                    if 'binding:host_id' in member['port']:
-                                        host = \
-                                            member['port']['binding:host_id']
-                                        member['gre_vteps'] = \
-                                            self._get_gre_endpoints(
-                                                context,
-                                                host
-                                            )
-                            else:
-                                member['network']['provider:network_type'] = \
-                                    'undefined'
-                            if not 'provider:segmentation_id' in \
-                                    member['network']:
-                                member[
-                                    'network'
-                                    ][
-                                    'provider:segmentation_id'
-                                    ] = 0
-                            break
-                        else:
-                            LOG.debug(_('member without port for address %s'
-                                        % member['address']))
-                            # member network / subnet not set
-                            member['network'] = None
-                            member['subnet'] = None
-                            member['port'] = None
-                            # Let's see if we have it cached.
-                            nets_matched = []
-                            na_add = netaddr.IPAddress(member['address'])
-                            for subnet in self.subnet_cache:
-                                c_subnet = self.subnet_cache[subnet]
-                                na_net = netaddr.IPNetwork(c_subnet['cidr'])
-                                if na_add in na_net:
-                                    if c_subnet['tenant_id'] == \
-                                       member['tenant_id']:
-                                        LOG.debug(_(
-                                            '%s in subnet %s in cache'
-                                            % (member['address'], subnet)
-                                        ))
-                                        member['subnet'] = \
-                                            self.set_member_subnet_info(
-                                                adminctx,
-                                                host,
-                                                member,
-                                                subnet
-                                            )
-                                        if c_subnet['network_id'] in \
-                                                self.net_cache:
-                                            member['network'] = \
-                                                self.net_cache[
-                                                    c_subnet['network_id']]
-                                        break
-                                    else:
-                                        nets_matched.append(subnet)
-                            if not member['subnet']:
-                                # did we only have one match - use it
-                                if len(nets_matched) == 1:
-                                    LOG.debug(_(
-                                        '%s in subnet %s in cache'
-                                        % (member['address'], nets_matched[0])
-                                    ))
-                                    member['subnet'] = \
-                                        self.set_member_subnet_info(
-                                            adminctx,
-                                            host,
-                                            member,
-                                            nets_matched[0]
-                                        )
-                                    if c_subnet['network_id'] in \
-                                            self.net_cache:
-                                        member['network'] = \
-                                            self.net_cache[
-                                                c_subnet['network_id']]
-                            # found a subnet, now get a network
-                            if member['subnet'] and (not member['network']):
-                                member['network'] = \
-                                    core.get_network(
-                                        adminctx,
-                                        member['subnet']['network_id']
-                                    )
-                                self.net_cache[member['network']['id']] = \
-                                    member['network']
-                            # No cached values either - let's search
-                            if not member['subnet']:
-                                LOG.debug(_('no match for %s query all subnets'
-                                            % member['address']))
-                                subnets = \
-                                    core._get_all_subnets(
-                                        adminctx
-                                    )
-                                for subnet in subnets:
-                                    subnet_dict = \
-                                        core._make_subnet_dict(
-                                            subnet
-                                        )
-                                    self.subnet_cache[subnet_dict['id']] = \
-                                        subnet_dict
-                                    na_net = netaddr.IPNetwork(
-                                        subnet_dict['cidr']
-                                    )
-                                    if na_add in na_net:
-                                        if c_subnet['tenant_id'] == \
-                                           member['tenant_id']:
-                                            LOG.debug(_(
-                                                '%s in subnet %s in cache'
-                                                % (member['address'],
-                                                   subnet['id'])
-                                            ))
-                                            member['subnet'] = subnet_dict
-                                            if c_subnet['network_id'] in \
-                                                    self.net_cache:
-                                                member['network'] = \
-                                                    self.net_cache[
-                                                        c_subnet['network_id']]
-                                        else:
-                                            nets_matched.append(subnet_dict)
-                                if not member['subnet']:
-                                    # did we only have one match - use it
-                                    if len(nets_matched) == 1:
-                                        LOG.debug(_('%s in subnet %s in cache'
-                                                    % (member['address'],
-                                                       nets_matched[0]['id'])))
-                                        member['subnet'] = nets_matched[0]
-                                        if c_subnet['network_id'] in \
-                                                self.net_cache:
-                                            member['network'] = \
-                                                self.net_cache[
-                                                    c_subnet['network_id']]
-                                # found a subnet, now get a network
-                                if member['subnet'] and \
-                                   (not member['network']):
-                                    member['network'] = \
-                                        core.get_network(
-                                            adminctx,
-                                            member['subnet']['network_id']
-                                        )
-                                    self.net_cache[member['network']['id']] = \
-                                        member['network']
-                                # This should be unreachable because of
-                                # core neutron network dependancies and
-                                # the fact that we have ports on this
-                                # subnet.
-                    retval['members'].append(member)
-                else:
-                    member['network'] = None
-                    member['subnet'] = None
-                    member['port'] = None
-                    retval['members'].append(member)
-            retval['health_monitors'] = []
-            for hm in retval['pool']['health_monitors']:
-                retval['health_monitors'].append(
-                    self.plugin.get_health_monitor(context, hm)
-                )
-            return retval
+                self._extend_member(
+                    adminctx, context, pool, member, global_routed_mode)
+                service['members'].append(member)
 
-    def set_member_subnet_info(self, context, host, member, subnet_id):
-        if subnet_id in self.subnet_cache:
-            member['subnet'] = self.subnet_cache[subnet_id]
+            # populate health monitors
+            service['health_monitors'] = []
+            for health_mon in service['pool']['health_monitors']:
+                service['health_monitors'].append(
+                    self.plugin.get_health_monitor(context, health_mon)
+                )
+
+            # populate vip
+            service['vip'] = self._get_extended_vip(
+                context, pool, global_routed_mode)
+
+        return service
+
+    def _get_extended_pool(self, context, pool_id, global_routed_mode):
+        """ Get Pool from Neutron and add extended data """
+        # Start with neutron pool definition
+        try:
+            pool = self.plugin.get_pool(context, pool_id)
+        except:
+            return None
+
+        # Populate extended pool attributes
+        if not global_routed_mode:
+            pool['subnet'] = self._get_subnet_cached(
+                context, pool['subnet_id'])
+            pool['network'] = self._get_network_cached(
+                context, pool['subnet']['network_id'])
         else:
-            core = self.plugin._core_plugin
-            member['subnet'] = core.get_subnet(context, subnet_id)
-            self.subnet_cache[subnet_id] = member['subnet']
+            pool['subnet_id'] = None
+            pool['network'] = None
+
+        return pool
+
+    def _get_subnet_cached(self, context, subnet_id):
+        """ subnet from cache or get from neutron """
+        core = self.plugin._core_plugin
+        if subnet_id not in self.subnet_cache:
+            subnet_dict = core.get_subnet(context, subnet_id)
+            self.subnet_cache[subnet_id] = subnet_dict
+        return self.subnet_cache[subnet_id]
+
+    def _get_network_cached(self, context, network_id):
+        """ network from cache or get from neutron """
+        core = self.plugin._core_plugin
+        if network_id not in self.net_cache:
+            net_dict = core.get_network(context, network_id)
+            if not 'provider:network_type' in net_dict:
+                net_dict['provider:network_type'] = 'undefined'
+            if not 'provider:segmentation_id' in net_dict:
+                net_dict['provider:segmentation_id'] = 0
+            self.net_cache[network_id] = net_dict
+        return self.net_cache[network_id]
+
+    def _get_extended_vip(self, context, pool, global_routed_mode):
+        """ add network data to vip """
+        if not 'vip_id' in pool or not pool['vip_id']:
+            return {'port': {'network': None, 'subnet': None}}
+
+        vip = self.plugin.get_vip(context, pool['vip_id'])
+        if global_routed_mode:
+            vip['network'] = None
+            vip['subnet'] = None
+            vip['port'] = {}
+            vip['port']['network'] = None
+            vip['port']['subnet'] = None
+            return vip
+
+        core = self.plugin._core_plugin
+        vip['port'] = core.get_port(context, vip['port_id'])
+        vip['network'] = self._get_network_cached(
+            context, vip['port']['network_id'])
+        self._populate_vip_network_vteps(context, vip)
+
+        # there should only be one fixed_ip
+        for fixed_ip in vip['port']['fixed_ips']:
+            vip['subnet'] = core.get_subnet(context, fixed_ip['subnet_id'])
+            vip['address'] = fixed_ip['ip_address']
+
+        return vip
+
+    def _populate_vip_network_vteps(self, context, vip):
+        """ put related tunnel endpoints in vip definiton """
+        vip['vxlan_vteps'] = []
+        vip['gre_vteps'] = []
+        if 'provider:network_type' not in vip['network']:
+            return
+
+        nettype = vip['network']['provider:network_type']
+        if nettype not in ['vxlan', 'gre']:
+            return
+
+        # get resources needed to find port to host
+        # binding so we can defined vteps and fdb entries
+        # for this Vip's port
+        from neutron.plugins.ml2 import models as ml2_db
+        segment_qry = context.session.query(ml2_db.NetworkSegment)
+        segment = segment_qry.filter_by(
+            network_id=vip['network']['id']
+        ).first()
+        segment_id = segment['id']
+        host_qry = context.session.query(ml2_db.PortBinding)
+        hosts = host_qry.filter_by(segment=segment_id).all()
+        host_ids = set()
+        for host in hosts:
+            host_ids.add(host['host'])
+        for host_id in host_ids:
+            if nettype == 'vxlan':
+                endpoints = self._get_vxlan_endpoints(context, host_id)
+                if len(endpoints) > 0:
+                    vip['vxlan_vteps'] = vip['vxlan_vteps'] + endpoints
+            elif nettype == 'gre':
+                endpoints = self._get_gre_endpoints(context, host_id)
+                if len(endpoints) > 0:
+                    vip['gre_vteps'] = vip['gre_vteps'] + endpoints
+
+    def _extend_member(
+            self, adminctx, context, pool, member, global_routed_mode):
+        """ Add networking info to member """
+
+        member['network'] = None
+        member['subnet'] = None
+        member['port'] = None
+        if global_routed_mode:
+            return
+
+        from neutron.db import models_v2 as core_db
+        alloc_qry = adminctx.session.query(core_db.IPAllocation)
+        allocated = alloc_qry.filter_by(ip_address=member['address']).all()
+
+        # try populating member from pool subnet
+        matching_keys = {'tenant_id': pool['tenant_id'],
+                         'subnet_id': pool['subnet_id'],
+                         'shared': None}
+
+        if self._found_and_used_matching_addr(
+                adminctx, context, member, allocated, matching_keys):
+            return
+
+        # try populating member from any tenant subnet
+        matching_keys['subnet_id'] = None
+        if self._found_and_used_matching_addr(
+                adminctx, context, member, allocated, matching_keys):
+            return
+
+        # try populating member net from any shared subnet
+        matching_keys['tenant_id'] = None
+        matching_keys['shared'] = True
+        if self._found_and_used_matching_addr(
+                adminctx, context, member, allocated, matching_keys):
+            return
+
+    def _found_and_used_matching_addr(
+            self, adminctx, context, member, allocated, matching_keys):
+        """ Find a matching address that matches keys """
+
+        # first check list of allocated addresses in neutron
+        # that match the pool member and check those subnets
+        # first because we prefer to use a subnet that actually has
+        # a matching ip address on it.
+        if self._found_and_used_matching_neutron_addr(
+                adminctx, context, member, allocated, matching_keys):
+            return True
+
+        # Perhaps the neutron network was deleted but the pool member
+        # was not. If we find a cached subnet definition that matches the
+        # deleted network it might help us tear down our configuration.
+        if self._found_and_used_matching_cached_subnet(
+                adminctx, member, matching_keys):
+            return True
+
+        # Perhaps the neutron subnet was deleted but the pool member
+        # was not. Maybe the subnet was deleted and then added back
+        # with a different id. If we can find a matching subnet, it
+        # might help us tear down our configuration.
+        if self._found_and_used_matching_neutron_subnet(
+                adminctx, member, matching_keys):
+            return True
+
+        return False
+
+    def _found_and_used_matching_neutron_addr(
+            self, adminctx, context, member, allocated, matching_keys):
+        """ Find a matching address that matches keys """
+
+        core = self.plugin._core_plugin
+        for alloc in allocated:
+            if matching_keys['subnet_id'] and \
+                    alloc['subnet_id'] != matching_keys['subnet_id']:
+                continue
+
+            try:
+                net = self._get_network_cached(adminctx, alloc['network_id'])
+            except:
+                continue
+            if matching_keys['tenant_id'] and \
+                    net['tenant_id'] != matching_keys['tenant_id']:
+                continue
+            if matching_keys['shared'] and not net['shared']:
+                continue
+
+            member['network'] = net
+            member['subnet'] = self._get_subnet_cached(
+                context, alloc['subnet_id'])
+
+            member['port'] = core.get_port(adminctx, alloc['port_id'])
+            self._populate_member_network(context, member)
+            return True
+
+    def _found_and_used_matching_cached_subnet(
+            self, adminctx, member, matching_keys):
+        # member network / subnet not set
+        # Let's see if we have it cached.
+        subnets_matched = []
+        na_add = netaddr.IPAddress(member['address'])
+        for subnet in self.subnet_cache:
+            c_subnet = self.subnet_cache[subnet]
+            na_net = netaddr.IPNetwork(c_subnet['cidr'])
+            if na_add in na_net:
+                if matching_keys['subnet_id'] and \
+                        c_subnet['id'] != matching_keys['subnet_id']:
+                    continue
+                if matching_keys['tenant_id'] and \
+                        c_subnet['tenant_id'] != matching_keys['tenant_id']:
+                    continue
+                if matching_keys['shared'] and not c_subnet['shared']:
+                    continue
+                subnets_matched.append(subnet)
+        if len(subnets_matched) == 1:
+            member['subnet'] = self._get_subnet_cached(
+                adminctx, subnets_matched[0])
+            member['network'] = self._get_network_cached(
+                adminctx, member['subnet']['network_id'])
+            return True
+        return False
+
+    def _found_and_used_matching_neutron_subnet(
+            self, adminctx, member, matching_keys):
+
+        core = self.plugin._core_plugin
+        na_add = netaddr.IPAddress(member['address'])
+
+        subnets_matched = []
+        for subnet in core._get_all_subnets(adminctx):
+            subnet_dict = core._make_subnet_dict(subnet)
+            self.subnet_cache[subnet_dict['id']] = subnet_dict
+            na_net = netaddr.IPNetwork(subnet_dict['cidr'])
+            if na_add in na_net:
+                if matching_keys['subnet_id'] and \
+                        subnet_dict['id'] != \
+                            matching_keys['subnet_id']:
+                    continue
+                if matching_keys['tenant_id'] and \
+                        subnet_dict['tenant_id'] != \
+                            matching_keys['tenant_id']:
+                    continue
+                if matching_keys['shared'] and not subnet_dict['shared']:
+                    continue
+                subnets_matched.append(subnet_dict)
+        if len(subnets_matched) == 1:
+            LOG.debug(_('%s in subnet %s in cache'
+                        % (member['address'],
+                           subnets_matched[0]['id'])))
+            member['subnet'] = subnets_matched[0]
+            member['network'] = self._get_network_cached(
+                adminctx, member['subnet']['network_id'])
+
+    def _populate_member_network(self, context, member):
+        member['vxlan_vteps'] = []
+        member['gre_vteps'] = []
+        if 'provider:network_type' in member['network']:
+            nettype = member['network']['provider:network_type']
+            if nettype == 'vxlan':
+                if 'binding:host_id' in member['port']:
+                    host = member['port']['binding:host_id']
+                    member['vxlan_vteps'] = self._get_vxlan_endpoints(
+                        context, host)
+            if nettype == 'gre':
+                if 'binding:host_id' in member['port']:
+                    host = member['port']['binding:host_id']
+                    member['gre_vteps'] = self._get_gre_endpoints(
+                        context, host)
+        if 'provider:network_type' not in member['network']:
+            member['network']['provider:network_type'] = 'undefined'
+        if not 'provider:segmentation_id' in member['network']:
+            member['network']['provider:segmentation_id'] = 0
 
     @log.log
     def create_network(self, context, tenant_id=None, name=None, shared=False,
@@ -1296,7 +1185,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=vip['pool_id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1334,7 +1222,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=vip['pool_id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1354,7 +1241,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=vip['pool_id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1375,7 +1261,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool['id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
         # call the RPC proxy with the constructed message
@@ -1396,7 +1281,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool['id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1420,7 +1304,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool['id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1443,7 +1326,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=member['pool_id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
         LOG.debug("get_service took %.5f secs" % (time() - start_time))
@@ -1491,7 +1373,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=member['pool_id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1508,7 +1389,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
                 context,
                 pool_id=old_member['pool_id'],
                 global_routed_mode=self._is_global_routed(agent),
-                activate=False,
                 host=agent['host']
             )
             for service_member in old_pool_service['members']:
@@ -1534,7 +1414,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=member['pool_id'],
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1555,7 +1434,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool_id,
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1578,7 +1456,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool_id,
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1601,7 +1478,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool_id,
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1623,7 +1499,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool_id,
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
@@ -1645,7 +1520,6 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
             context,
             pool_id=pool_id,
             global_routed_mode=self._is_global_routed(agent),
-            activate=False,
             host=agent['host']
         )
 
