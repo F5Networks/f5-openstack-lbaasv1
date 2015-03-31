@@ -15,10 +15,8 @@
 
 from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
-from f5.bigip.interfaces import strip_domain_address
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -30,7 +28,6 @@ class NAT(object):
         self.bigip = bigip
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def create(self, name=None, ip_address=None, orig_ip_address=None,
                traffic_group=None, vlan_name=None, folder='Common'):
@@ -144,7 +141,6 @@ class NAT(object):
             if 'items' in return_obj:
                 for nat in return_obj['items']:
                     nat_trans = nat['translationAddress']
-                    nat_trans = strip_domain_address(nat_trans)
                     trans_addresses.append(nat_trans)
         else:
             Log.error('nat', response.text)
@@ -165,8 +161,7 @@ class NAT(object):
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'translationAddress' in return_obj:
-                    return strip_domain_address(
-                        return_obj['translationAddress'])
+                    return return_obj['translationAddress']
             else:
                 Log.error('nat', response.text)
                 raise exceptions.NATQueryException(response.text)
@@ -188,8 +183,7 @@ class NAT(object):
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for nat in return_obj['items']:
-                    nat_orig = strip_domain_address(nat['originatingAddress'])
-                    orig_addresses.append(nat_orig)
+                    orig_addresses.append(nat['originatingAddress'])
         else:
             Log.error('nat', response.text)
             raise exceptions.NATQueryException(response.text)
@@ -209,8 +203,7 @@ class NAT(object):
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
                 if 'originatingAddress' in return_obj:
-                    return strip_domain_address(
-                        return_obj['originatingAddress'])
+                    return return_obj['originatingAddress']
             else:
                 Log.error('nat', response.text)
                 raise exceptions.NATQueryException(response.text)

@@ -15,10 +15,8 @@
 
 from f5.common import constants as const
 from f5.common.logger import Log
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
-from f5.bigip.interfaces import strip_domain_address
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -38,7 +36,6 @@ class VirtualServer(object):
         self.folder_profiles = {}
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def create(self, name=None, ip_address=None, mask=None,
                port=None, protocol=None, vlan_name=None,
@@ -1393,7 +1390,6 @@ class VirtualServer(object):
         return False
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def set_addr_port(self, name=None, ip_address=None,
                       port=None, folder='Common'):
@@ -1438,7 +1434,7 @@ class VirtualServer(object):
                 if 'destination' in response_obj:
                     dest = os.path.basename(
                         response_obj['destination']).split(':')
-                    return strip_domain_address(dest[0])
+                    return dest[0]
                 else:
                     return None
             elif response.status_code == 404:
@@ -1475,7 +1471,6 @@ class VirtualServer(object):
         return -1
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def set_mask(self, name=None, netmask=None, folder='Common'):
         """ Set vip mask """
@@ -1920,7 +1915,7 @@ class VirtualServer(object):
                             v['destination']).split(':')
                     name = strip_folder_and_prefix(v['name'])
                     service = {name: {}}
-                    service[name]['address'] = strip_domain_address(dest[0])
+                    service[name]['address'] = dest[0]
                     service[name]['netmask'] = v['mask']
                     service[name]['protocol'] = v['ipProtocol']
                     service[name]['port'] = dest[1]

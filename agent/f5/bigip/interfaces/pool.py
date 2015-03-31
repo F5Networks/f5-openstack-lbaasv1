@@ -15,10 +15,8 @@
 
 from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
-from f5.bigip.interfaces import strip_domain_address
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -192,7 +190,7 @@ class Pool(object):
                     for member in return_obj['items']:
                         name_parts = member['name'].split(":")
                         members.append(
-                            {'addr': strip_domain_address(name_parts[0]),
+                            {'addr': name_parts[0],
                              'port': int(name_parts[1])})
             elif response.status_code != 404:
                 Log.error('pool', response.text)
@@ -311,7 +309,7 @@ class Pool(object):
                         member_state = 'MONITOR_STATUS_' + \
                             member['state'].upper()
                         members.append(
-                            {'addr': strip_domain_address(name_parts[0]),
+                            {'addr': name_parts[0],
                              'port': name_parts[1],
                              'state': member_state})
             else:
@@ -350,7 +348,6 @@ class Pool(object):
         return return_stats
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def add_member(self, name=None, ip_address=None, port=None,
                    folder='Common', no_checks=False):
@@ -381,7 +378,6 @@ class Pool(object):
         return False
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def enable_member(self, name=None, ip_address=None, port=None,
                       folder='Common', no_checks=False):
@@ -411,7 +407,6 @@ class Pool(object):
         return False
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def disable_member(self, name=None, ip_address=None, port=None,
                        folder='Common', no_checks=False):
@@ -441,7 +436,6 @@ class Pool(object):
         return False
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def set_member_ratio(self, name=None, ip_address=None, port=None,
                          ratio=1, folder='Common', no_checks=False):
@@ -472,7 +466,6 @@ class Pool(object):
         return False
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def remove_member(self, name=None, ip_address=None,
                       port=None, folder='Common'):
@@ -996,7 +989,6 @@ class Pool(object):
         return False
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def member_exists(self, name=None, ip_address=None,
                       port=None, folder='Common'):

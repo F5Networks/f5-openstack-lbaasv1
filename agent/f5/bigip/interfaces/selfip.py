@@ -15,7 +15,6 @@
 
 from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
 from f5.bigip.interfaces import strip_domain_address
@@ -34,7 +33,6 @@ class SelfIP(object):
         self.bigip = bigip
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def create(self, name=None, ip_address=None, netmask=None,
                vlan_name=None, floating=False, traffic_group=None,
@@ -239,8 +237,8 @@ class SelfIP(object):
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for selfip in return_obj['items']:
-                    return_list.append(strip_domain_address(
-                        self._strip_mask(selfip['address'])))
+                    return_list.append(
+                        self._strip_mask(selfip['address']))
         elif response.status_code != 404:
             Log.error('self', response.text)
             raise exceptions.SelfIPQueryException(response.text)
@@ -259,8 +257,7 @@ class SelfIP(object):
                 request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 return_obj = json.loads(response.text)
-                return strip_domain_address(
-                    self._strip_mask(return_obj['address']))
+                return self._strip_mask(return_obj['address'])
             elif response.status_code != 404:
                 Log.error('self', response.text)
                 raise exceptions.SelfIPQueryException(response.text)
@@ -291,7 +288,6 @@ class SelfIP(object):
         return None
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def set_mask(self, name=None, netmask=None, folder='Common'):
         """ Set selfip netmask """
@@ -523,8 +519,8 @@ class SelfIP(object):
             if 'items' in return_obj:
                 for selfip in return_obj['items']:
                     if selfip['floating'] == 'enabled':
-                        floats.append(strip_domain_address(
-                            self._strip_mask(selfip['address'])))
+                        floats.append(
+                            self._strip_mask(selfip['address']))
         else:
             Log.error('self', response.text)
             raise exceptions.SelfIPQueryException(response.text)

@@ -40,16 +40,16 @@ class BigipSelfIpManager(object):
             if subnet['id'] in tenant_snat_subnets:
                 return
 
-        pool = service['pool']
+        selfip_address = self._get_bigip_selfip_address(bigip, subnet)
+        selfip_address += network['route_domain']
+
         if self.bigip_l2_manager.is_common_network(network):
             network_folder = 'Common'
         else:
-            network_folder = pool['tenant_id']
+            network_folder = service['pool']['tenant_id']
 
         (network_name, preserve_network_name) = \
             self.bigip_l2_manager.get_network_name(bigip, network)
-
-        selfip_address = self._get_bigip_selfip_address(bigip, subnet)
 
         bigip.selfip.create(
             name="local-" + bigip.device_name + "-" + subnet['id'],

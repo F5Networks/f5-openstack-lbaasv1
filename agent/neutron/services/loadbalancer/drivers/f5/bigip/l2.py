@@ -88,13 +88,6 @@ class BigipL2Manager(object):
              network['router:external'] and
              (network['id'] in self.conf.common_external_networks))
 
-    def get_network_route_domain(self, bigip, tenant_id, network=None):
-        """ Return route domain for a network """
-        if self.is_common_network(network):
-            return '%0'
-        else:
-            return '%' + str(bigip.route.get_domain(folder=tenant_id))
-
     def get_vlan_name(self, network, hostname):
         """ Construct a consistent vlan name """
         net_key = network['provider:physical_network']

@@ -15,7 +15,6 @@
 
 from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
 from f5.bigip import exceptions
@@ -29,7 +28,6 @@ class Route(object):
         self.bigip = bigip
         self.domain_index = {'Common': 0}
 
-    @domain_address
     @icontrol_rest_folder
     @log
     def create(self, name=None, dest_ip_address=None, dest_mask=None,
@@ -182,7 +180,7 @@ class Route(object):
 
     @icontrol_rest_folder
     @log
-    def create_domain(self, folder='Common'):
+    def create_domain(self, folder='Common', strict_route_isolation=False):
         """ Create route domain """
         folder = str(folder).replace('/', '')
         if not folder == 'Common':
@@ -190,7 +188,7 @@ class Route(object):
             payload['name'] = folder
             payload['partition'] = '/' + folder
             payload['id'] = self._get_next_domain_id()
-            if self.bigip.strict_route_isolation:
+            if strict_route_isolation:
                 payload['strict'] = 'enabled'
             else:
                 payload['strict'] = 'disabled'

@@ -20,7 +20,6 @@ import base64
 from f5.common.logger import Log
 from f5.common import constants as const
 
-from f5.bigip.interfaces import domain_address
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -222,7 +221,6 @@ class Device(object):
             raise exceptions.DeviceQueryException(response.text)
             return None
 
-    @domain_address
     @log
     def set_configsync_addr(self, ip_address=None, folder='/Common'):
         """ Set device config sync ip """
@@ -284,7 +282,6 @@ class Device(object):
             raise exceptions.DeviceQueryException(response.text)
         return None
 
-    @domain_address
     @log
     def set_primary_mirror_addr(self, ip_address=None, folder='/Common'):
         """ Set device primary mirror ip """
@@ -306,7 +303,6 @@ class Device(object):
             raise exceptions.DeviceUpdateException(response.text)
         return False
 
-    @domain_address
     @log
     def set_secondary_mirror_addr(self, ip_address=None, folder='/Common'):
         """ Set device secondary mirror ip """
@@ -380,10 +376,6 @@ class Device(object):
             Log.error('device', response.text)
             raise exceptions.DeviceUpdateException(response.text)
         return False
-
-    @domain_address
-    def _wash_address(self, ip_address=None, folder=None):
-        return ip_address
 
     @log
     def get_failover_state(self):

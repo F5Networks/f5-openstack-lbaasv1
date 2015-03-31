@@ -306,6 +306,7 @@ class iControlDriver(LBaaSBaseDriver):
                    % self.agent_configurations))
 
     def connect_bigips(self):
+        """ Connect big-ips """
         self._init_bigips()
         if self.conf.f5_global_routed_mode:
             local_ips = []
@@ -463,9 +464,7 @@ class iControlDriver(LBaaSBaseDriver):
                    (self.conf.icontrol_username, hostname)))
         return f5_bigip.BigIP(hostname, self.conf.icontrol_username,
                               self.conf.icontrol_password,
-                              f5const.CONNECTION_TIMEOUT,
-                              self.conf.use_namespaces,
-                              self.conf.f5_route_domain_strictness)
+                              f5const.CONNECTION_TIMEOUT)
 
     def _init_bigip(self, bigip, hostname, check_group_name=None):
         """ Prepare a bigip for usage """

@@ -92,6 +92,9 @@ class NetworkBuilderDirect(object):
                     service['vip']['status'] == plugin_const.PENDING_DELETE:
                 return
 
+        if self.conf.use_namespaces:
+            self._annotate_service_route_domains(service)
+
         # Per Device Network Connectivity (VLANs or Tunnels)
         subnetsinfo = _get_subnets_to_assure(service)
         for (assure_bigip, subnetinfo) in \
@@ -114,6 +117,35 @@ class NetworkBuilderDirect(object):
                     # the subnet's default gateway.
                     self.bigip_selfip_manager.assure_gateway_on_subnet(
                         assure_bigip, subnetinfo, traffic_group)
+
+    def _annotate_service_route_domains(self, service):
+        """ Add route domain notation to pool member and vip addresses. """
+        LOG.debug("Service before route domains: %s" % service)
+        tenant_id = service['pool']['tenant_id']
+
+        if 'members' in service:
+            for member in service['members']:
+                if 'network' in member and 'address' in member:
+                    self.assign_route_domain(
+                        tenant_id, member['network'], member['subnet'])
+                    member['address'] += member['network']['route_domain']
+        if 'vip' in service and 'network' in service['vip'] and \
+                'address' in service['vip']:
+            vip = service['vip']
+            self.assign_route_domain(tenant_id, vip['network'], vip['subnet'])
+            service['vip']['address'] += vip['network']['route_domain']
+        LOG.debug("Service after route domains: %s" % service)
+
+    #pylint: disable=unused-argument
+    def assign_route_domain(self, tenant_id, network, subnet):
+        """ Assign route domain for a network """
+        if self.bigip_l2_manager.is_common_network(network):
+            network['route_domain'] = '%0'
+        else:
+            bigip = self.driver.get_bigip()
+            tenant_route_domain = bigip.route.get_domain(folder=tenant_id)
+            network['route_domain'] = '%' + str(tenant_route_domain)
+    #pylint: enable=unused-argument
 
     def _assure_subnet_snats(self, assure_bigips, service, subnetinfo):
         """ Ensure snat for subnet exists on bigips """
@@ -264,14 +296,12 @@ class NetworkBuilderDirect(object):
         """ update pool member l2 records """
         network = member['network']
         if network:
-            ip_address = member['address']
             if self.bigip_l2_manager.is_common_network(network):
                 net_folder = 'Common'
-                ip_address = ip_address + '%0'
             else:
                 net_folder = pool['tenant_id']
             fdb_info = {'network': network,
-                        'ip_address': ip_address,
+                        'ip_address': member['address'],
                         'mac_address': member['port']['mac_address']}
             self.bigip_l2_manager.add_bigip_fdbs(
                 bigip, net_folder, fdb_info, member)
@@ -281,14 +311,12 @@ class NetworkBuilderDirect(object):
         network = member['network']
         if network:
             if member['port']:
-                ip_address = member['address']
                 if self.bigip_l2_manager.is_common_network(network):
                     net_folder = 'Common'
-                    ip_address = ip_address + '%0'
                 else:
                     net_folder = pool['tenant_id']
                 fdb_info = {'network': network,
-                            'ip_address': ip_address,
+                            'ip_address': member['address'],
                             'mac_address': member['port']['mac_address']}
                 self.bigip_l2_manager.delete_bigip_fdbs(
                     bigip, net_folder, fdb_info, member)

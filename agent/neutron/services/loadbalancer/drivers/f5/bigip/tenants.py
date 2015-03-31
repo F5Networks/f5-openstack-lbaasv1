@@ -51,7 +51,8 @@ class BigipTenantManager(object):
             for bigip in self.driver.get_all_bigips():
                 folder = bigip.decorate_folder(tenant_id)
                 if not bigip.route.domain_exists(folder):
-                    bigip.route.create_domain(folder)
+                    bigip.route.create_domain(
+                        folder, self.conf.f5_route_domain_strictness)
 
     def assure_tenant_cleanup(self, service, all_subnet_hints):
         """ Delete tenant partition.

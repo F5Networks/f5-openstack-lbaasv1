@@ -111,6 +111,7 @@ pep8-driver:
 
 pep8-agent:
 	(cd agent; \
+         pep8 f5/bigip/bigip.py; \
          pep8 f5/bigiq/bigiq.py; \
          pep8 $(BDIR)/agent_api.py; \
          pep8 $(BDIR)/agent_manager.py; \
@@ -192,6 +193,7 @@ pylint-agent:
          $(PYLINT) $(IDIR)/arp.py; \
          $(PYLINT) $(IDIR)/iapp.py; \
          $(PYLINT) $(IDIR)/l2gre.py; \
+         $(PYLINT) $(IDIR)/route.py; \
          $(PYLINT) $(IDIR)/system.py; \
          $(PYLINT) $(IDIR)/virtual_server.py; \
          $(PYLINT) $(IDIR)/vxlan.py; \

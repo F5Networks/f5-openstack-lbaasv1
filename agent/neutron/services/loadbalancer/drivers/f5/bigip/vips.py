@@ -43,14 +43,12 @@ class BigipVipManager(object):
 
         if self.driver.conf.f5_global_routed_mode:
             network_name = None
-            ip_address = ip_address + '%0'
         else:
             (network_name, preserve_network_name) = \
                 self.bigip_l2_manager.get_network_name(bigip, network)
 
             if self.bigip_l2_manager.is_common_network(network):
                 network_name = '/Common/' + network_name
-                ip_address = ip_address + '%0'
 
             if self.driver.conf.f5_snat_mode and \
                self.driver.conf.f5_snat_addresses_per_subnet > 0:

@@ -208,7 +208,7 @@ class LBaaSBuilderIApp(LBaaSBuilder):
                 'pool__monitor', iapp_template_monitor_type)
 
     def fill_in_vip_info(self, tenant_service, os_service,
-                         bigip=None, bigiq_workaround=False):
+                         bigiq_workaround=False):
         """ Fill in vip info on tenant service """
         # {
         #     ...,
@@ -247,12 +247,9 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         # The 'vars' key and the list for its value should have already
         # been created on 'tenant_service'
         os_vip = os_service.get('vip')
-        os_pool = os_service.get('pool')
-        os_tenant_id = os_pool['tenant_id']
 
         # This is required per the f5.lbaas iApp template
-        vip_addr_var = self._vip_addr_var(
-            os_vip, tenant_id=os_tenant_id, bigip=bigip)
+        vip_addr_var = self._vip_addr_var(os_vip)
         tenant_service[self.varkey].append(vip_addr_var)
 
         # This is a workaround where we add an additional var named
@@ -326,14 +323,9 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         if vip_state_var:
             tenant_service[self.varkey].append(vip_state_var)
 
-    def _vip_addr_var(self, os_vip, tenant_id=None, bigip=None):
+    def _vip_addr_var(self, os_vip):
         """ Generate vip addr var """
         vip_address = os_vip['address']
-        network = os_vip['network']
-        if tenant_id and bigip and self.bigip_l2_manager:
-            domain = self.bigip_l2_manager.get_network_route_domain(
-                bigip, tenant_id, network)
-            vip_address += domain
         return get_tenant_service_var('vip__addr', vip_address)
 
     @staticmethod
@@ -425,7 +417,7 @@ class LBaaSBuilderIApp(LBaaSBuilder):
             _LTM_VS_STATES[os_vip['admin_state_up']])
 
     def fill_in_pool_members_table(
-            self, tenant_service, os_service, bigip=None):
+            self, tenant_service, os_service, bigip_format):
         """ Fill in pool members """
         # {
         #     ...,
@@ -459,7 +451,7 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         pool_members_table = {}
         pool_members_table['name'] = 'pool__members'
         columns = ['addr', 'connection_limit', 'port', 'state']
-        if bigip:
+        if bigip_format:
             pool_members_table['column-names'] = columns
         else:
             # bigiq
@@ -468,20 +460,13 @@ class LBaaSBuilderIApp(LBaaSBuilder):
 
         if 'members' in os_service and os_service['members']:
 
-            tenant_id = os_service['pool']['tenant_id']
             for os_member in os_service['members']:
                 if not (os_member and 'address' in os_member and
                         os_member['address'] and 'protocol_port' in os_member
                         and os_member['protocol_port']):
                     continue
-                network = os_member['network']
                 member_address = os_member['address']
-                if bigip and self.bigip_l2_manager:
-                    domain = self.bigip_l2_manager.get_network_route_domain(
-                        bigip, tenant_id, network)
-                    member_address += domain
-
-                if bigip:
+                if bigip_format:
                     iapp_pool_member = {'row': [member_address, '10000',
                                                 os_member['protocol_port'],
                                                 'enabled']}

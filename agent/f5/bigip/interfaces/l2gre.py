@@ -17,7 +17,6 @@ from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
-from f5.bigip.interfaces import strip_domain_address
 from f5.bigip.interfaces import prefixed
 from f5.bigip.interfaces import log
 from f5.bigip import exceptions
@@ -201,16 +200,10 @@ class L2GRE(object):
             response_obj = json.loads(response.text)
             if 'records' in response_obj:
                 if not mac:
-                    return_fdbs = []
-                    for fdb in response_obj['records']:
-                        fdb['endpoint'] = strip_domain_address(fdb['endpoint'])
-                        return_fdbs.append(fdb)
-                    return return_fdbs
+                    return response_obj['records']
                 else:
                     for record in response_obj['records']:
                         if record['name'] == mac:
-                            record['endpoint'] = strip_domain_address(
-                                record['endpoint'])
                             return record
         elif response.status_code != 404:
             Log.error('L2GRE', response.text)

@@ -19,8 +19,6 @@ from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import icontrol_folder
-from f5.bigip.interfaces import strip_domain_address
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import log
 
 from f5.bigip import exceptions
@@ -44,7 +42,6 @@ class ARP(object):
     # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
-    @domain_address
     @log
     def create(self, ip_address=None, mac_address=None, folder='Common'):
         payload = dict()
@@ -68,7 +65,6 @@ class ARP(object):
     # pylint: enable=pointless-string-statement
 
     @icontrol_folder
-    @domain_address
     @log
     def create(self, ip_address=None, mac_address=None, folder='Common'):
         """ Create an ARP static entry """
@@ -91,7 +87,6 @@ class ARP(object):
     # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
-    @domain_address
     def delete(self, ip_address=None, folder='Common'):
         if ip_address:
             folder = str(folder).replace('/', '')
@@ -112,7 +107,6 @@ class ARP(object):
     # pylint: enable=pointless-string-statement
 
     @icontrol_folder
-    @domain_address
     @log
     def delete(self, ip_address=None, folder='Common'):
         """ Delete an ARP static entry """
@@ -197,7 +191,6 @@ class ARP(object):
         return mac_addresses
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def get_arps(self, ip_address=None, folder='Common'):
         """ Get ARP static entry """
@@ -213,7 +206,7 @@ class ARP(object):
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 return [
-                    {strip_domain_address(response_obj['name']):
+                    {response_obj['name']:
                      response_obj['macAddress']}
                 ]
             else:
@@ -233,7 +226,7 @@ class ARP(object):
                     arps = []
                     for arp in response_obj['items']:
                         arps.append(
-                            {strip_domain_address(arp['name']):
+                            {arp['name']:
                              arp['macAddress']}
                         )
                     return arps
@@ -288,7 +281,6 @@ class ARP(object):
     # pylint: disable=pointless-string-statement
     '''
     @icontrol_rest_folder
-    @domain_address
     def exists(self, ip_address=None, folder='Common'):
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/arp/'
@@ -305,7 +297,6 @@ class ARP(object):
     # pylint: enable=pointless-string-statement
 
     @icontrol_folder
-    @domain_address
     @log
     def exists(self, ip_address=None, folder='Common'):
         """ Does ARP entry exist? """

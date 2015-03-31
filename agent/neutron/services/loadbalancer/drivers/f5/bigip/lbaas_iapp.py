@@ -1,6 +1,5 @@
-import pkgutil
-
 """ OpenStack LBaaS v1 iApp for BIG-IP """
+import pkgutil
 # Copyright 2014 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

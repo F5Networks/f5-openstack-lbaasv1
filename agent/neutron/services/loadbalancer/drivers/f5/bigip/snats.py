@@ -105,10 +105,9 @@ class BigipSnatManager(object):
 
         snat_name = self._get_snat_name(subnet, tenant_id)
         for i in range(self.driver.conf.f5_snat_addresses_per_subnet):
-            ip_address = snat_info['addrs'][i]
+            ip_address = snat_info['addrs'][i] + network['route_domain']
             index_snat_name = snat_name + "_" + str(i)
             if self.bigip_l2_manager.is_common_network(network):
-                ip_address = ip_address + '%0'
                 index_snat_name = '/Common/' + index_snat_name
 
             snat_traffic_group = self._get_snat_traffic_group(tenant_id)

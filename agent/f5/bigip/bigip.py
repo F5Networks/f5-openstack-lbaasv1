@@ -45,22 +45,12 @@ LOG = logging.getLogger(__name__)
 
 
 class BigIP(object):
-    def __init__(self, hostname, username, password,
-                 timeout=None, address_isolation=True,
-                 strict_route_isolation=False):
+    def __init__(self, hostname, username, password, timeout=None):
         # get icontrol connection stub
         self.icontrol = self._get_icontrol(hostname, username, password)
         self.icr_session = self._get_icr_session(hostname, username, password)
         self.icr_url = 'https://%s/mgmt/tm' % hostname
 
-        if address_isolation:
-            self.route_domain_required = True
-        else:
-            self.route_domain_required = False
-        if strict_route_isolation:
-            self.strict_route_isolation = True
-        else:
-            self.strict_route_isolation = False
         # interface instance cache
         self.interfaces = {}
         self.device_name = None
@@ -274,18 +264,11 @@ class BigIP(object):
 
     def icr_link(self, selfLink):
         return selfLink.replace(
-                          'https://localhost/mgmt/tm',
-                          self.icr_url)
+            'https://localhost/mgmt/tm', self.icr_url)
 
     def decorate_folder(self, folder='Common'):
         folder = str(folder).replace('/', '')
         return bigip_interfaces.prefixed(folder)
-
-    def get_domain_index(self, folder='/Common'):
-        if folder == '/Common' or folder == 'Common':
-            return 0
-        else:
-            return self.route.get_domain(folder=folder)
 
     @staticmethod
     def _get_icontrol(hostname, username, password, timeout=None):
@@ -318,8 +301,7 @@ class BigIP(object):
         icr_session = requests.session()
         icr_session.auth = (username, password)
         icr_session.verify = False
-        icr_session.headers.update(
-                                 {'Content-Type': 'application/json'})
+        icr_session.headers.update({'Content-Type': 'application/json'})
         if timeout:
             socket.setdefaulttimeout(timeout)
         else:

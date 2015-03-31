@@ -15,10 +15,8 @@
 
 from f5.common.logger import Log
 from f5.common import constants as const
-from f5.bigip.interfaces import domain_address
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
-from f5.bigip.interfaces import strip_domain_address
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -31,7 +29,6 @@ class SNAT(object):
         self.bigip = bigip
 
     @icontrol_rest_folder
-    @domain_address
     @log
     def create(self, name=None, ip_address=None,
                traffic_group=None, snat_pool_name=None,
@@ -230,7 +227,7 @@ class SNAT(object):
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'address' in return_obj:
-                return strip_domain_address(return_obj['address'])
+                return return_obj['address']
         elif response.status_code != 404:
             Log.error('snat-translation', response.text)
             raise exceptions.SNATQueryException(response.text)

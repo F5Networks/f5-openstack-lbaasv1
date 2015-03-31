@@ -256,10 +256,6 @@ class BigipPoolManager(object):
                         'deleted_members': []}
 
         ip_address = member['address']
-        if self.driver.conf.f5_global_routed_mode or not network or \
-                self.bigip_l2_manager.is_common_network(network):
-            ip_address = ip_address + '%0'
-
         for existing_member in pool['existing_members']:
             if ip_address.startswith(existing_member['addr']) and \
                (member['protocol_port'] == existing_member['port']):

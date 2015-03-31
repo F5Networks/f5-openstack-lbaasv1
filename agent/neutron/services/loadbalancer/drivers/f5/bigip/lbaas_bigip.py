@@ -192,7 +192,7 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
                     service['vip']['status'] != plugin_const.PENDING_DELETE)
 
         if have_vip:
-            tenant_service = self.generate_bigip_service(bigip, service)
+            tenant_service = self.generate_bigip_service(service)
             LOG.debug("    assure_bigip_service tenant_service: %s"
                       % str(tenant_service))
 
@@ -245,7 +245,7 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
         """ Generate service name """
         return prefixed(pool_id)
 
-    def generate_bigip_service(self, bigip, os_service):
+    def generate_bigip_service(self, os_service):
         """ Generate tenant service """
         tenant_service = {}
 
@@ -272,7 +272,7 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
         tenant_service['variables'] = []
 
         self.fill_in_pool_info(tenant_service, os_service)
-        self.fill_in_vip_info(tenant_service, os_service, bigip)
+        self.fill_in_vip_info(tenant_service, os_service)
         tenant_service['variables'].append(
             get_tenant_service_var('app_stats', 'enabled'))
 
@@ -284,6 +284,6 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
         # }
         tenant_service['tables'] = []
 
-        self.fill_in_pool_members_table(tenant_service, os_service, bigip)
+        self.fill_in_pool_members_table(tenant_service, os_service, True)
 
         return tenant_service

@@ -666,7 +666,7 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
 
         self.fill_in_pool_info(tenant_service, os_service)
         self.fill_in_vip_info(
-            tenant_service, os_service, None, bigiq_workaround=True)
+            tenant_service, os_service, bigiq_workaround=True)
 
         tenant_service[self.varkey].append(
             get_tenant_service_var('app_stats', 'enabled'))
@@ -681,7 +681,7 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
         # }
         tenant_service['tables'] = []
 
-        self.fill_in_pool_members_table(tenant_service, os_service)
+        self.fill_in_pool_members_table(tenant_service, os_service, False)
 
         # {
         #     ...,
