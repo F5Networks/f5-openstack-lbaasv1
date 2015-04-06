@@ -33,8 +33,9 @@ class Vlan(object):
     @icontrol_rest_folder
     @log
     def create(self, name=None, vlanid=None, interface=None,
-               folder='Common', description=None):
-        """ Create vlan """
+               folder='Common', description=None, route_domain_id=0):
+        """ Create vlan.
+            route_domain_id is an int  """
         if name:
             folder = str(folder).replace('/', '')
             payload = dict()
@@ -58,8 +59,9 @@ class Vlan(object):
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if not folder == 'Common':
-                    self.bigip.route.add_vlan_to_domain(
-                        name=name, folder=folder)
+                    self.bigip.route.add_vlan_to_domain_by_id(
+                        name=name, folder=folder,
+                        route_domain_id=route_domain_id)
                 return True
             elif response.status_code == 409:
                 return True

@@ -210,6 +210,11 @@ OPTS = [
         'icontrol_config_mode', default='objects',
         help=_('Whether to use iapp or objects for bigip configuration'),
     ),
+    cfg.IntOpt(
+        'max_namespaces_per_tenant', default=1,
+        help=_('How many routing tables the BIG-IP will allocate per tenant'
+               ' in order to accommodate overlapping IP subnets'),
+    ),
 ]
 
 
@@ -1084,8 +1089,15 @@ class iControlDriver(LBaaSBaseDriver):
             self.plugin_rpc.health_monitor_destroyed(
                 **monitor_destroyed)
         for monitor_updated in monitors_updated:
-            self.plugin_rpc.update_health_monitor_status(
-                **monitor_updated)
+            try:
+                self.plugin_rpc.update_health_monitor_status(
+                    **monitor_updated)
+            except Exception as exc:
+                if 'PENDING_DELETE' in str(exc):
+                    LOG.debug("Attempted to update monitor being deleted!")
+                else:
+                    LOG.debug(str(exc))
+                    raise
 
     def _update_vip_status(self, vip):
         """ Update vip status in OpenStack """

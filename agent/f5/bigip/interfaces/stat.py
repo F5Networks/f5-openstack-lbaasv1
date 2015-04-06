@@ -36,15 +36,15 @@ class Stat(object):
     def get_composite_score(self):
         """ Get composite score """
         cpu_score = self.get_cpu_health_score() * \
-                    const.DEVICE_HEALTH_SCORE_CPU_WEIGHT
+            const.DEVICE_HEALTH_SCORE_CPU_WEIGHT
         mem_score = self.get_mem_health_score() * \
-                    const.DEVICE_HEALTH_SCORE_MEM_WEIGHT
+            const.DEVICE_HEALTH_SCORE_MEM_WEIGHT
         cps_score = self.get_cps_health_score() * \
-                    const.DEVICE_HEALTH_SCORE_CPS_WEIGHT
+            const.DEVICE_HEALTH_SCORE_CPS_WEIGHT
 
         total_weight = const.DEVICE_HEALTH_SCORE_CPU_WEIGHT + \
-                       const.DEVICE_HEALTH_SCORE_MEM_WEIGHT + \
-                       const.DEVICE_HEALTH_SCORE_CPS_WEIGHT
+            const.DEVICE_HEALTH_SCORE_MEM_WEIGHT + \
+            const.DEVICE_HEALTH_SCORE_CPS_WEIGHT
 
         return int((cpu_score + mem_score + cps_score) / total_weight)
 
@@ -52,19 +52,17 @@ class Stat(object):
     @log
     def get_mem_health_score(self):
         """ use TMM memory usage for memory health """
-        stat_type = self.sys_stat.typefactory.create(
-                                    'Common.StatisticType')
+        stat_type = self.sys_stat.typefactory.create('Common.StatisticType')
 
         for stat in self.sys_stat.get_all_tmm_statistics(
-                                    ['0.0']).statistics[0].statistics:
+                ['0.0']).statistics[0].statistics:
             if stat.type == stat_type.STATISTIC_MEMORY_TOTAL_BYTES:
                 total_memory = float(self.bigip.ulong_to_int(stat.value))
             if stat.type == stat_type.STATISTIC_MEMORY_USED_BYTES:
                 used_memory = float(self.bigip.ulong_to_int(stat.value))
 
         if total_memory and used_memory:
-            score = int(100 * \
-                    ((total_memory - used_memory) / total_memory))
+            score = int(100 * ((total_memory - used_memory) / total_memory))
             return score
         else:
             return 0
@@ -81,8 +79,7 @@ class Stat(object):
             used_cycles += self.bigip.ulong_to_int(cpus.system)
             idle_cycles = self.bigip.ulong_to_int(cpus.idle)
 
-        score = int(100 - \
-                (100 * (float(used_cycles) / float(idle_cycles))))
+        score = int(100 - (100 * (float(used_cycles) / float(idle_cycles))))
         return score
 
     @log
@@ -91,20 +88,18 @@ class Stat(object):
         count_init = self._get_tcp_accepted_count()
         time.sleep(const.DEVICE_HEALTH_SCORE_CPS_PERIOD)
         count_final = self._get_tcp_accepted_count()
-        cps = (count_final - count_init) \
-              / const.DEVICE_HEALTH_SCORE_CPS_PERIOD
+        cps = (count_final - count_init) / const.DEVICE_HEALTH_SCORE_CPS_PERIOD
 
         if cps >= const.DEVICE_HEALTH_SCORE_CPS_MAX:
             return 0
         else:
-            score = int(100 - ((100 * float(cps)) \
-            / float(const.DEVICE_HEALTH_SCORE_CPS_MAX)))
+            score = int(100 - ((100 * float(cps)) /
+                        float(const.DEVICE_HEALTH_SCORE_CPS_MAX)))
         return score
 
     def _get_tcp_accepted_count(self):
         """ Get tcp accepted count """
-        stat_type = self.sys_stat.typefactory.create(
-                                    'Common.StatisticType')
+        stat_type = self.sys_stat.typefactory.create('Common.StatisticType')
 
         for stat in self.sys_stat.get_tcp_statistics().statistics:
             if stat.type == stat_type.STATISTIC_TCP_ACCEPTED_CONNECTIONS:

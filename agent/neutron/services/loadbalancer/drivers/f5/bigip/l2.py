@@ -186,11 +186,10 @@ class BigipL2Manager(object):
         if self.vcmp_manager.get_vcmp_host(bigip):
             interface = None
 
-        bigip.vlan.create(name=vlan_name,
-                          vlanid=0,
-                          interface=interface,
-                          folder=network_folder,
-                          description=network['id'])
+        bigip.vlan.create(
+            name=vlan_name, vlanid=0, interface=interface,
+            folder=network_folder, description=network['id'],
+            route_domain_id=network['route_domain_id'])
 
     def _assure_device_network_vlan(self, network, bigip, network_folder):
         """ Ensure bigip has configured tagged vlan """
@@ -232,11 +231,10 @@ class BigipL2Manager(object):
         if self.vcmp_manager.get_vcmp_host(bigip):
             interface = None
 
-        bigip.vlan.create(name=vlan_name,
-                          vlanid=vlanid,
-                          interface=interface,
-                          folder=network_folder,
-                          description=network['id'])
+        bigip.vlan.create(
+            name=vlan_name, vlanid=vlanid, interface=interface,
+            folder=network_folder, description=network['id'],
+            route_domain_id=network['route_domain_id'])
 
     def _assure_device_network_vxlan(self, network, bigip, network_folder):
         """ Ensure bigip has configured vxlan """
@@ -255,7 +253,8 @@ class BigipL2Manager(object):
             self_ip_address=bigip.local_ip,
             vxlanid=network['provider:segmentation_id'],
             description=network['id'],
-            folder=network_folder)
+            folder=network_folder,
+            route_domain_id=network['route_domain_id'])
         if self.fdb_connector:
             self.fdb_connector.notify_vtep_added(network, bigip.local_ip)
 
@@ -276,7 +275,8 @@ class BigipL2Manager(object):
             self_ip_address=bigip.local_ip,
             greid=network['provider:segmentation_id'],
             description=network['id'],
-            folder=network_folder)
+            folder=network_folder,
+            route_domain_id=network['route_domain_id'])
 
         if self.fdb_connector:
             self.fdb_connector.notify_vtep_added(network, bigip.local_ip)
@@ -311,11 +311,11 @@ class BigipL2Manager(object):
 
         # Create the VLAN on the vCMP Host
         try:
-            vcmp_host['bigip'].vlan.create(name=vlan['name'],
-                                           vlanid=vlan['id'],
-                                           interface=vlan['interface'],
-                                           folder='/Common',
-                                           description=vlan['network']['id'])
+            vcmp_host['bigip'].vlan.create(
+                name=vlan['name'], vlanid=vlan['id'],
+                interface=vlan['interface'], folder='/Common',
+                description=vlan['network']['id'],
+                route_domain_id=vlan['network']['route_domain_id'])
             LOG.debug(('Created VLAN %s on vCMP Host %s' %
                       (vlan['name'], vcmp_host['bigip'].icontrol.hostname)))
         except VLANCreationException as exc:

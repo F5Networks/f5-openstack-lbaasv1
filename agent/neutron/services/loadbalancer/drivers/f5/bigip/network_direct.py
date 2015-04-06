@@ -20,6 +20,7 @@ from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import NeutronException
 
 from f5.bigip import exceptions as f5ex
+from f5.bigip.interfaces import strip_domain_address
 from neutron.services.loadbalancer.drivers.f5.bigip.selfips \
     import BigipSelfIpManager
 from neutron.services.loadbalancer.drivers.f5.bigip.snats \
@@ -42,6 +43,7 @@ class NetworkBuilderDirect(object):
             driver, bigip_l2_manager, l3_binding)
         self.bigip_snat_manager = BigipSnatManager(
             driver, bigip_l2_manager, l3_binding)
+        self.rds_cache = {}
 
     def initialize_tunneling(self):
         """ setup tunneling
@@ -122,30 +124,260 @@ class NetworkBuilderDirect(object):
         """ Add route domain notation to pool member and vip addresses. """
         LOG.debug("Service before route domains: %s" % service)
         tenant_id = service['pool']['tenant_id']
+        self.update_rds_cache(tenant_id)
 
         if 'members' in service:
             for member in service['members']:
-                if 'network' in member and 'address' in member:
-                    self.assign_route_domain(
-                        tenant_id, member['network'], member['subnet'])
-                    member['address'] += member['network']['route_domain']
-        if 'vip' in service and 'network' in service['vip'] and \
-                'address' in service['vip']:
+                LOG.debug("processing member %s" % member['address'])
+                if 'address' in member:
+                    if 'network' in member and member['network']:
+                        self.assign_route_domain(
+                            tenant_id, member['network'], member['subnet'])
+                        rd_id = '%' + str(member['network']['route_domain_id'])
+                        member['address'] += rd_id
+                    else:
+                        member['address'] += '%0'
+        if 'vip' in service and 'address' in service['vip']:
             vip = service['vip']
-            self.assign_route_domain(tenant_id, vip['network'], vip['subnet'])
-            service['vip']['address'] += vip['network']['route_domain']
+            if 'network' in vip and vip['network']:
+                self.assign_route_domain(
+                    tenant_id, vip['network'], vip['subnet'])
+                rd_id = '%' + str(vip['network']['route_domain_id'])
+                service['vip']['address'] += rd_id
+            else:
+                service['vip']['address'] += '%0'
         LOG.debug("Service after route domains: %s" % service)
 
-    #pylint: disable=unused-argument
     def assign_route_domain(self, tenant_id, network, subnet):
         """ Assign route domain for a network """
         if self.bigip_l2_manager.is_common_network(network):
-            network['route_domain'] = '%0'
-        else:
+            network['route_domain_id'] = 0
+            return
+
+        LOG.debug("assign route domain get from cache %s" % network)
+        route_domain_id = self.get_route_domain_from_cache(network)
+        if route_domain_id is not None:
+            network['route_domain_id'] = route_domain_id
+            return
+
+        LOG.debug("max namespaces: %s" % self.conf.max_namespaces_per_tenant)
+        LOG.debug("max namespaces ==1: %s" %
+                  (self.conf.max_namespaces_per_tenant == 1))
+
+        if self.conf.max_namespaces_per_tenant == 1:
             bigip = self.driver.get_bigip()
-            tenant_route_domain = bigip.route.get_domain(folder=tenant_id)
-            network['route_domain'] = '%' + str(tenant_route_domain)
-    #pylint: enable=unused-argument
+            LOG.debug("bigip before get_domain: %s" % bigip)
+            tenant_rd = bigip.route.get_domain(folder=tenant_id)
+            network['route_domain_id'] = tenant_rd
+            return
+
+        LOG.debug("assign route domain checking for available route domain")
+        # need new route domain ?
+        check_cidr = netaddr.IPNetwork(subnet['cidr'])
+        placed_route_domain_id = None
+        for route_domain_id in self.rds_cache[tenant_id]:
+            LOG.debug("checking rd %s" % route_domain_id)
+            rd_entry = self.rds_cache[tenant_id][route_domain_id]
+            overlapping_subnet = None
+            for net_shortname in rd_entry:
+                LOG.debug("checking net %s" % net_shortname)
+                net_entry = rd_entry[net_shortname]
+                for exist_subnet_id in net_entry['subnets']:
+                    if exist_subnet_id == subnet['id']:
+                        continue
+                    exist_subnet = net_entry['subnets'][exist_subnet_id]
+                    exist_cidr = exist_subnet['cidr']
+                    if check_cidr in exist_cidr or exist_cidr in check_cidr:
+                        overlapping_subnet = exist_subnet
+                        LOG.debug('rd %s: overlaps with subnet %s id: %s' % (
+                            (route_domain_id, exist_subnet, exist_subnet_id)))
+                        break
+                if overlapping_subnet:
+                    # no need to keep looking
+                    break
+            if not overlapping_subnet:
+                placed_route_domain_id = route_domain_id
+                break
+
+        if placed_route_domain_id is None:
+            if (len(self.rds_cache[tenant_id]) <
+                    self.conf.max_namespaces_per_tenant):
+                placed_route_domain_id = self._create_aux_rd(tenant_id)
+                self.rds_cache[tenant_id][placed_route_domain_id] = {}
+                LOG.debug("Tenant %s now has %d route domains" %
+                          (tenant_id, len(self.rds_cache[tenant_id])))
+            else:
+                raise Exception("Cannot allocate route domain")
+
+        LOG.debug("Placed in route domain %s" % placed_route_domain_id)
+        rd_entry = self.rds_cache[tenant_id][placed_route_domain_id]
+
+        net_short_name = self.get_neutron_net_short_name(network)
+        if net_short_name not in rd_entry:
+            rd_entry[net_short_name] = {'subnets': {}}
+        net_subnets = rd_entry[net_short_name]['subnets']
+        net_subnets[subnet['id']] = {'cidr': check_cidr}
+        network['route_domain_id'] = placed_route_domain_id
+
+    def _create_aux_rd(self, tenant_id):
+        """ Create a new route domain """
+        route_domain_id = None
+        for bigip in self.driver.get_all_bigips():
+            #folder = bigip.decorate_folder(tenant_id)
+            bigip_id = bigip.route.create_domain(
+                folder=tenant_id,
+                strict_route_isolation=self.conf.f5_route_domain_strictness,
+                is_aux=True)
+            if route_domain_id is None:
+                route_domain_id = bigip_id
+            elif bigip_id != route_domain_id:
+                LOG.debug(
+                    "Bigips allocated two different route domains!: %s %s"
+                    % (bigip_id, route_domain_id))
+        LOG.debug("Allocated route domain %s for tenant %s"
+                  % (route_domain_id, tenant_id))
+        return route_domain_id
+
+    # The purpose of the route domain subnet cache is to
+    # determine whether there is an existing bigip
+    # subnet that conflicts with a new one being
+    # assigned to the route domain.
+    """
+    # route domain subnet cache
+    rds_cache =
+        {'<tenant_id>': {
+            {'0': {
+                '<network type>-<segmentation id>': [
+                    'subnets': [
+                        '<subnet id>': {
+                            'cidr': '<cidr>'
+                        }
+                ],
+            '1': {}}}}
+    """
+    def update_rds_cache(self, tenant_id):
+        """ Update the route domain cache from bigips  """
+        if tenant_id not in self.rds_cache:
+            LOG.debug("rds_cache: adding tenant %s" % tenant_id)
+            self.rds_cache[tenant_id] = {}
+            for bigip in self.driver.get_all_bigips():
+                self.update_rds_cache_bigip(tenant_id, bigip)
+            LOG.debug("rds_cache updated: " + str(self.rds_cache))
+
+    def update_rds_cache_bigip(self, tenant_id, bigip):
+        """ Update the route domain cache for this tenant
+            with information from bigip's vlan and tunnels """
+        LOG.debug("rds_cache: processing bigip %s" % bigip.device_name)
+
+        route_domain_ids = bigip.route.get_domain_ids(folder=tenant_id)
+        #LOG.debug("rds_cache: got bigip route domains: %s" % route_domains)
+        for route_domain_id in route_domain_ids:
+            self.update_rds_cache_bigip_rd_vlans(
+                tenant_id, bigip, route_domain_id)
+
+    def update_rds_cache_bigip_rd_vlans(
+            self, tenant_id, bigip, route_domain_id):
+        """ Update the route domain cache with information
+            from the bigip vlans and tunnels from
+            this route domain """
+        LOG.debug("rds_cache: processing bigip %s rd %s"
+                  % (bigip.device_name, route_domain_id))
+        # this gets tunnels too
+        rd_vlans = bigip.route.get_vlans_in_domain_by_id(
+            folder=tenant_id, route_domain_id=route_domain_id)
+        LOG.debug("rds_cache: bigip %s rd %s vlans: %s"
+                  % (bigip.device_name, route_domain_id, rd_vlans))
+        if len(rd_vlans) == 0:
+            return
+
+        # make sure this rd has a cache entry
+        tenant_entry = self.rds_cache[tenant_id]
+        if route_domain_id not in tenant_entry:
+            tenant_entry[route_domain_id] = {}
+
+        # for every VLAN or TUNNEL on this bigip...
+        for rd_vlan in rd_vlans:
+            self.update_rds_cache_bigip_vlan(
+                tenant_id, bigip, route_domain_id, rd_vlan)
+
+    def update_rds_cache_bigip_vlan(
+            self, tenant_id, bigip, route_domain_id, rd_vlan):
+        """ Update the route domain cache with information
+            from the bigip vlan or tunnel """
+        LOG.debug("rds_cache: processing bigip %s rd %d vlan %s"
+                  % (bigip.device_name, route_domain_id, rd_vlan))
+        net_short_name = self.get_bigip_net_short_name(
+            bigip, tenant_id, rd_vlan)
+
+        # make sure this net has a cache entry
+        tenant_entry = self.rds_cache[tenant_id]
+        rd_entry = tenant_entry[route_domain_id]
+        if net_short_name not in rd_entry:
+            rd_entry[net_short_name] = {'subnets': {}}
+        net_subnets = rd_entry[net_short_name]['subnets']
+
+        selfips = bigip.selfip.get_selfips(folder=tenant_id, vlan=rd_vlan)
+        LOG.debug("rds_cache: got selfips: %s" % selfips)
+        for selfip in selfips:
+            LOG.debug("rds_cache: processing bigip %s rd %s vlan %s self %s" %
+                      (bigip.device_name, route_domain_id, rd_vlan,
+                       selfip['name']))
+            if 'openstacklocal-' not in selfip['name']:
+                LOG.error("rds_cache: Found unexpected selfip %s for tenant %s"
+                          % (selfip['name'], tenant_id))
+                continue
+            subnet_id = selfip['name'].split('openstacklocal-')[1]
+
+            # convert 10.1.1.1%1/24 to 10.1.1.1/24
+            addr = selfip['address'].split('/')[0]
+            addr = addr.split('%')[0]
+            netbits = selfip['address'].split('/')[1]
+            selfip['address'] = addr + '/' + netbits
+
+            # selfip addresses will have slash notation: 10.1.1.1/24
+            netip = netaddr.IPNetwork(selfip['address'])
+            LOG.debug("rds_cache: updating subnet %s with %s"
+                      % (subnet_id, str(netip.cidr)))
+            net_subnets[subnet_id] = {'cidr': netip.cidr}
+            LOG.debug("rds_cache: now %s" % self.rds_cache)
+
+    def get_route_domain_from_cache(self, network):
+        """ Get route domain from cache by network """
+        for route_domain_id in self.rds_cache:
+            net_short_name = self.get_neutron_net_short_name(network)
+            if net_short_name in self.rds_cache[route_domain_id]:
+                return route_domain_id
+
+    def remove_from_rds_cache(self, network, subnet):
+        """ Get route domain from cache by network """
+        for route_domain_id in self.rds_cache:
+            net_short_name = self.get_neutron_net_short_name(network)
+            if net_short_name in self.rds_cache[route_domain_id]:
+                net_entry = self.rds_cache[route_domain_id][net_short_name]
+                if subnet['id'] in net_entry:
+                    del net_entry[subnet['id']]
+
+    @staticmethod
+    def get_bigip_net_short_name(bigip, tenant_id, network_name):
+        """ Return <network_type>-<seg_id> for bigip network """
+        if '_tunnel-gre-' in network_name:
+            tunnel_key = bigip.l2gre.get_tunnel_key(
+                name=network_name, folder=tenant_id)
+            return 'gre-%s' % tunnel_key
+        elif '_tunnel-vxlan-' in network_name:
+            tunnel_key = bigip.vxlan.get_tunnel_key(
+                name=network_name, folder=tenant_id)
+            return 'vxlan-%s' % tunnel_key
+        else:
+            vlan_id = bigip.vlan.get_id(name=network_name, folder=tenant_id)
+            return 'vlan-%s' % vlan_id
+
+    @staticmethod
+    def get_neutron_net_short_name(network):
+        """ Return <network_type>-<seg_id> for neutron network """
+        net_type = network['provider:network_type']
+        net_seg_key = network['provider:segmentation_id']
+        return net_type + '-' + str(net_seg_key)
 
     def _assure_subnet_snats(self, assure_bigips, service, subnetinfo):
         """ Ensure snat for subnet exists on bigips """
@@ -414,6 +646,8 @@ class NetworkBuilderDirect(object):
 
                 if subnet['id'] not in subnet_hints['do_not_delete_subnets']:
                     subnet_hints['do_not_delete_subnets'].append(subnet['id'])
+
+                self.remove_from_rds_cache(network, subnet)
             except NeutronException as exc:
                 LOG.error("assure_delete_nets_nonshared: exception: %s"
                           % str(exc.msg))
@@ -427,21 +661,24 @@ class NetworkBuilderDirect(object):
 def _get_subnets_to_assure(service):
     """ Examine service and return active networks """
     networks = dict()
-    if 'id' in service['vip'] and \
-            not service['vip']['status'] == plugin_const.PENDING_DELETE:
-        network = service['vip']['network']
-        subnet = service['vip']['subnet']
-        networks[network['id']] = {'network': network,
-                                   'subnet': subnet,
-                                   'is_for_member': False}
+    vip = service['vip']
+    if 'id' in vip and \
+            not vip['status'] == plugin_const.PENDING_DELETE:
+        if 'network' in vip and vip['network']:
+            network = vip['network']
+            subnet = vip['subnet']
+            networks[network['id']] = {'network': network,
+                                       'subnet': subnet,
+                                       'is_for_member': False}
 
     for member in service['members']:
         if not member['status'] == plugin_const.PENDING_DELETE:
-            network = member['network']
-            subnet = member['subnet']
-            networks[network['id']] = {'network': network,
-                                       'subnet': subnet,
-                                       'is_for_member': True}
+            if 'network' in member and member['network']:
+                network = member['network']
+                subnet = member['subnet']
+                networks[network['id']] = {'network': network,
+                                           'subnet': subnet,
+                                           'is_for_member': True}
     return networks.values()
 
 
@@ -469,7 +706,8 @@ def _ips_exist_on_subnet(bigip, service, subnet):
         (_, dest) = virt_serv.items()[0]
         LOG.debug("            _ips_exist_on_subnet: checking vip %s"
                   % str(dest['address']))
-        if netaddr.IPAddress(dest['address']) in ipsubnet:
+        vip_addr = strip_domain_address(dest['address'])
+        if netaddr.IPAddress(vip_addr) in ipsubnet:
             LOG.debug("            _ips_exist_on_subnet: found")
             return True
 
@@ -480,7 +718,8 @@ def _ips_exist_on_subnet(bigip, service, subnet):
     for node in nodes:
         LOG.debug("            _ips_exist_on_subnet: checking node %s"
                   % str(node))
-        if netaddr.IPAddress(node) in ipsubnet:
+        node_addr = strip_domain_address(node)
+        if netaddr.IPAddress(node_addr) in ipsubnet:
             LOG.debug("        _ips_exist_on_subnet: found")
             return True
 

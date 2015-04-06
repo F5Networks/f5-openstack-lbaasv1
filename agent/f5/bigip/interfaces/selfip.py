@@ -53,7 +53,10 @@ class SelfIP(object):
                 netmask = '32'
                 payload['address'] = ip_address + '/' + str(netmask)
             else:
-                net = netaddr.IPNetwork('1.1.1.1/' + str(netmask))
+                if ':' in str(netmask):
+                    net = netaddr.IPNetwork('::/' + str(netmask))
+                else:
+                    net = netaddr.IPNetwork('1.1.1.1/' + str(netmask))
                 payload['address'] = ip_address + '/' + str(net.prefixlen)
             if floating:
                 payload['floating'] = 'enabled'
@@ -200,7 +203,32 @@ class SelfIP(object):
 
     @icontrol_rest_folder
     @log
-    def get_selfips(self, folder='Common'):
+    def get_selfips(self, folder='Common', vlan=None):
+        """ Get selfips """
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/net/self/'
+        if folder:
+            request_filter = 'partition eq ' + folder
+            request_url += '?$filter=' + request_filter
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        return_list = []
+        if response.status_code < 400:
+            return_obj = json.loads(response.text)
+            if 'items' in return_obj:
+                for selfip in return_obj['items']:
+                    if vlan and selfip['vlan'] != vlan:
+                        continue
+                    selfip['name'] = strip_folder_and_prefix(selfip['name'])
+                    return_list.append(selfip)
+        elif response.status_code != 404:
+            Log.error('self', response.text)
+            raise exceptions.SelfIPQueryException(response.text)
+        return return_list
+
+    @icontrol_rest_folder
+    @log
+    def get_selfip_list(self, folder='Common'):
         """ Get selfips """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/self/'
@@ -214,8 +242,8 @@ class SelfIP(object):
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
-                for self in return_obj['items']:
-                    return_list.append(strip_folder_and_prefix(self['name']))
+                for selfip in return_obj['items']:
+                    return_list.append(strip_folder_and_prefix(selfip['name']))
         elif response.status_code != 404:
             Log.error('self', response.text)
             raise exceptions.SelfIPQueryException(response.text)

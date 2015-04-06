@@ -84,7 +84,8 @@ class BigipTenantManager(object):
 
     def _remove_tenant_replication_mode(self, bigip, tenant_id):
         """ Remove tenant in replication sync-mode """
-        bigip.route.delete_domain(folder=tenant_id)
+        for domain_name in bigip.route.get_domain_names(folder=tenant_id):
+            bigip.route.delete_domain(folder=tenant_id, name=domain_name)
         sudslog = std_logging.getLogger('suds.client')
         sudslog.setLevel(std_logging.FATAL)
         bigip.system.force_root_folder()

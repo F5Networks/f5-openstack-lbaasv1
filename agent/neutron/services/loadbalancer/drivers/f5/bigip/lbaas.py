@@ -97,18 +97,21 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         """ Examine service and return active networks """
         subnets = dict()
         if 'id' in service['vip']:
-            network = service['vip']['network']
-            subnet = service['vip']['subnet']
-            subnets[subnet['id']] = {'network': network,
-                                     'subnet': subnet,
-                                     'is_for_member': False}
+            vip = service['vip']
+            if 'network' in vip and vip['network']:
+                network = service['vip']['network']
+                subnet = service['vip']['subnet']
+                subnets[subnet['id']] = {'network': network,
+                                         'subnet': subnet,
+                                         'is_for_member': False}
 
         for member in service['members']:
-            network = member['network']
-            subnet = member['subnet']
-            subnets[subnet['id']] = {'network': network,
-                                     'subnet': subnet,
-                                     'is_for_member': True}
+            if 'network' in member and member['network']:
+                network = member['network']
+                subnet = member['subnet']
+                subnets[subnet['id']] = {'network': network,
+                                         'subnet': subnet,
+                                         'is_for_member': True}
         return subnets
 
     def fill_in_pool_info(self, tenant_service, os_service):

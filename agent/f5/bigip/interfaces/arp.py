@@ -142,7 +142,7 @@ class ARP(object):
             mask_div = subnet.find('/')
             if mask_div > 0:
                 try:
-                    rd_div = subnet.find(':')
+                    rd_div = subnet.find('%')
                     if rd_div > -1:
                         network = netaddr.IPNetwork(
                             subnet[0:mask_div][0:rd_div] + subnet[mask_div:])
@@ -155,7 +155,7 @@ class ARP(object):
                 return []
             else:
                 try:
-                    rd_div = subnet.find(':')
+                    rd_div = subnet.find('%')
                     if rd_div > -1:
                         network = netaddr.IPNetwork(
                             subnet[0:rd_div] + '/' + mask)

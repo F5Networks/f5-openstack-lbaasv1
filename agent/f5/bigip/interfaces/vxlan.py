@@ -89,7 +89,8 @@ class VXLAN(object):
                                  self_ip_address=None,
                                  vxlanid=0,
                                  description=None,
-                                 folder='Common'):
+                                 folder='Common',
+                                 route_domain_id=0):
         """ Create vxlan multipoint tunnel """
         if not self.tunnel_exists(name=name, folder=folder):
             folder = str(folder).replace('/', '')
@@ -109,8 +110,9 @@ class VXLAN(object):
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 if not folder == 'Common':
-                    self.bigip.route.add_vlan_to_domain(
-                        name=name, folder=folder)
+                    self.bigip.route.add_vlan_to_domain_by_id(
+                        name=name, folder=folder,
+                        route_domain_id=route_domain_id)
                 return True
             else:
                 Log.error('VXLAN', response.text)
@@ -274,7 +276,9 @@ class VXLAN(object):
     def add_fdb_entries(self, fdb_entries=None):
         """ Add vxlan fdb entries """
         for tunnel_name in fdb_entries:
-            folder = prefixed(fdb_entries[tunnel_name]['folder'])
+            folder = fdb_entries[tunnel_name]['folder']
+            if folder != 'Common':
+                folder = prefixed(folder)
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + self.OBJ_PREFIX + tunnel_name
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
@@ -370,7 +374,9 @@ class VXLAN(object):
                            fdb_entries=None):
         """ Delete vxlan fdb entries """
         for tunnel_name in fdb_entries:
-            folder = prefixed(fdb_entries[tunnel_name]['folder'])
+            folder = fdb_entries[tunnel_name]['folder']
+            if folder != 'Common':
+                folder = prefixed(folder)
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
             request_url += '~' + folder + '~' + tunnel_name
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
@@ -483,6 +489,24 @@ class VXLAN(object):
                 return tunnel_list
             else:
                 return None
+        elif response.status_code != 404:
+            Log.error('VXLAN', response.text)
+            exceptions.VXLANQueryException(response.text)
+        return None
+
+    @icontrol_rest_folder
+    @log
+    def get_tunnel_key(self, name=None, folder='Common'):
+        """ Get tunnel key """
+        folder = str(folder).replace('/', '')
+        request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
+        request_url += '~' + folder + '~' + name
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return_obj = json.loads(response.text)
+            Log.debug('VXLAN', 'get_tunnel_key got %s' + str(return_obj))
+            return return_obj['key']
         elif response.status_code != 404:
             Log.error('VXLAN', response.text)
             exceptions.VXLANQueryException(response.text)

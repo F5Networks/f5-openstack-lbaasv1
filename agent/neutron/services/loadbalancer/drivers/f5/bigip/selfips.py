@@ -41,7 +41,7 @@ class BigipSelfIpManager(object):
                 return
 
         selfip_address = self._get_bigip_selfip_address(bigip, subnet)
-        selfip_address += network['route_domain']
+        selfip_address += '%' + str(network['route_domain_id'])
 
         if self.bigip_l2_manager.is_common_network(network):
             network_folder = 'Common'

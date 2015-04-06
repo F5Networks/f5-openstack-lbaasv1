@@ -1144,11 +1144,14 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     @log.log
     def get_pool_stats(self, context, pool, service, host):
         """ Send message to agent to get pool stats """
-        return self.cast(
+        LOG.debug('Calling agent for get_pool_stats')
+        stats = self.cast(
             context,
             self.make_msg('get_pool_stats', pool=pool, service=service),
             topic='%s.%s' % (self.topic, host)
         )
+        LOG.debug('Got agent for get_pool_stats: %s' % stats)
+        return stats
 
 
 class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):

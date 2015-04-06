@@ -492,13 +492,18 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 self.refresh_service(pool_id)
 
     @log.log
-    def get_pool_stats(self, pool, service):
+    def get_pool_stats(self, context, pool, service):
+        LOG.debug("agent_manager got get_pool_stats call")
         if not self.plugin_rpc:
             return
         try:
-            stats = self.lbdriver.get_stats(pool, service)
+            LOG.debug("agent_manager calling driver get_stats")
+            stats = self.lbdriver.get_stats(service)
+            LOG.debug("agent_manager called driver get_stats")
             if stats:
+                    LOG.debug("agent_manager calling update_pool_stats")
                     self.plugin_rpc.update_pool_stats(pool['id'], stats)
+                    LOG.debug("agent_manager called update_pool_stats")
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as exc:

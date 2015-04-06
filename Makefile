@@ -240,7 +240,7 @@ pylint-driver:
          rm -v neutron/__init__.py; \
         )
 
-test:
+test-agent:
 	(cd agent; \
          > neutron/__init__.py; \
          > neutron/services/__init__.py; \
