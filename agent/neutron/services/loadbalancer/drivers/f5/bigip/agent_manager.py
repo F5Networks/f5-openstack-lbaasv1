@@ -450,7 +450,6 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 self.conf.f5_global_routed_mode
             )
             self.cache.put(service)
-            # update is create or update
             self.lbdriver.sync(service)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)

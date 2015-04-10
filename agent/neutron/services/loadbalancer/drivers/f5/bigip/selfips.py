@@ -35,10 +35,14 @@ class BigipSelfIpManager(object):
                         ' for network with no id... skipping.'))
             return
         subnet = subnetinfo['subnet']
+
+        tenant_id = service['pool']['tenant_id']
         # If we have already assured this subnet.. return.
-        for tenant_snat_subnets in bigip.assured_tenant_snat_subnets:
-            if subnet['id'] in tenant_snat_subnets:
-                return
+        # Note this cache is periodically cleared in order to
+        # force assurance that the configuration is present.
+        if tenant_id in bigip.assured_tenant_snat_subnets and \
+                subnet['id'] in bigip.assured_tenant_snat_subnets[tenant_id]:
+            return
 
         selfip_address = self._get_bigip_selfip_address(bigip, subnet)
         selfip_address += '%' + str(network['route_domain_id'])

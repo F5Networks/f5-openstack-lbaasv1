@@ -177,7 +177,9 @@ class BigipSnatManager(object):
             # add subnet to hints list of subnets in use.
             LOG.debug(_('Check cache for subnet in use by other tenant'))
             in_use_count = 0
-            for tenant_snat_subnets in bigip.assured_tenant_snat_subnets:
+            for tenant_id in bigip.assured_tenant_snat_subnets:
+                tenant_snat_subnets = \
+                    bigip.assured_tenant_snat_subnets[tenant_id]
                 if subnet['id'] in tenant_snat_subnets:
                     in_use_count += 1
 

@@ -883,6 +883,13 @@ class iControlDriver(LBaaSBaseDriver):
     @is_connected
     def sync(self, service):
         """Sync service defintion to device"""
+        # plugin_rpc may not be set when unit testing
+        if self.plugin_rpc:
+            # Get the latest service. It may have changed.
+            service = self.plugin_rpc.get_service_by_pool_id(
+                service['pool']['id'],
+                self.conf.f5_global_routed_mode
+            )
         self._common_service_handler(service)
 
     @serialized('backup_configuration')
