@@ -648,6 +648,12 @@ class NetworkBuilderDirect(object):
                     subnet_hints['do_not_delete_subnets'].append(subnet['id'])
 
                 self.remove_from_rds_cache(network, subnet)
+                tenant_id = service['pool']['tenant_id']
+                if tenant_id in bigip.assured_tenant_snat_subnets:
+                    tenant_snat_subnets = \
+                        bigip.assured_tenant_snat_subnets[tenant_id]
+                    if subnet['id'] in tenant_snat_subnets:
+                        tenant_snat_subnets.remove(subnet['id'])
             except NeutronException as exc:
                 LOG.error("assure_delete_nets_nonshared: exception: %s"
                           % str(exc.msg))
