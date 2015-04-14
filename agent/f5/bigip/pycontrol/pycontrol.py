@@ -18,8 +18,11 @@
 import logging
 
 from urllib import pathname2url
+
+import urllib2
 import platform
 import StringIO
+import ssl
 
 from suds.cache import Cache
 from suds.client import Client
@@ -203,7 +206,7 @@ class BIGIP(object):
 
     def _get_suds_client(self, url, **kw):
         """
-        Make a suds client for a specifij WSDL (via url).
+        Make a suds client for a specific WSDL (via url).
         Added new Suds cache features. Warning: These don't work on
         Windows. *nix should be fine. Also exposed general kwargs to
         pass down to Suds for advance users who don't want to deal
@@ -211,11 +214,13 @@ class BIGIP(object):
         """
         if not url.startswith("https"):
             t = transport.http.HttpAuthenticated(username=self.username,
-                                                  password=self.password)
+                                                 password=self.password)
             c = ROClient(url, transport=t, username=self.username,
                          password=self.password, doctor=DOCTOR, **kw)
         else:
-            c = ROClient(url, username=self.username,
+            t = HTTPSUnVerifiedCertTransport(username=self.username,
+                                             password=self.password)
+            c = ROClient(url, transport=t, username=self.username,
                          password=self.password, doctor=DOCTOR, **kw)
         return c
 
@@ -381,6 +386,24 @@ class InMemoryCache(Cache):
 
     def clear(self):
         self.data = {}
+
+
+class HTTPSUnVerifiedCertTransport(transport.https.HttpAuthenticated):
+
+    def __init__(self, *args, **kwargs):
+        transport.https.HttpAuthenticated.__init__(self, *args, **kwargs)
+
+    def u2handlers(self):
+        handlers = []
+        handlers.append(urllib2.ProxyHandler(self.proxy))
+        handlers.append(urllib2.HTTPBasicAuthHandler(self.pm))
+        # python ssl Context support - PEP 0466
+        if hasattr(ssl, '_create_unverified_context'):
+            ssl_context = ssl._create_unverified_context()
+            handlers.append(urllib2.HTTPSHandler(context=ssl_context))
+        else:
+            handlers.append(urllib2.HTTPSHandler())
+        return handlers
 
 
 def main():
