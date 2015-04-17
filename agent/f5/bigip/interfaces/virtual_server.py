@@ -17,6 +17,7 @@ from f5.common import constants as const
 from f5.common.logger import Log
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
+from f5.bigip.interfaces import split_addr_port
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -52,8 +53,12 @@ class VirtualServer(object):
                 ip_address = ip_address[:-2]
             if not port:
                 port = 0
-            payload['destination'] = ip_address + ':' + str(port)
-            payload['mask'] = mask
+            if ':' in ip_address:
+                payload['destination'] = ip_address + '.' + str(port)
+            else:
+                payload['destination'] = ip_address + ':' + str(port)
+            if mask:
+                payload['mask'] = mask
             if not protocol:
                 protocol = 'tcp'
             else:
@@ -74,6 +79,7 @@ class VirtualServer(object):
                     const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
 
             request_url = self.bigip.icr_url + '/ltm/virtual/'
+            Log.debug('virtual', 'adding virtual: ' + str(payload))
             response = self.bigip.icr_session.post(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
@@ -111,7 +117,10 @@ class VirtualServer(object):
             payload['partition'] = folder
             if str(ip_address).endswith('%0'):
                 ip_address = ip_address[:-2]
-            payload['destination'] = ip_address + ':0'
+            if ':' in ip_address:
+                payload['destination'] = ip_address + '.0'
+            else:
+                payload['destination'] = ip_address + ':0'
             payload['mask'] = mask
             payload['ipProtocol'] = 'any'
             payload['vlansEnabled'] = True
@@ -170,7 +179,10 @@ class VirtualServer(object):
                 ip_address = ip_address[:-2]
             if not port:
                 port = 0
-            payload['destination'] = ip_address + ':' + str(port)
+            if ':' in ip_address:
+                payload['destination'] = ip_address + '.' + str(port)
+            else:
+                payload['destination'] = ip_address + ':' + str(port)
             payload['mask'] = mask
             if not protocol:
                 protocol = 'tcp'
@@ -1405,7 +1417,10 @@ class VirtualServer(object):
                     return False
             folder = str(folder).replace('/', '')
             payload = dict()
-            payload['destination'] = ip_address + ":" + port
+            if ':' in ip_address:
+                payload['destination'] = ip_address + "." + str(port)
+            else:
+                payload['destination'] = ip_address + ":" + str(port)
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
             response = self.bigip.icr_session.put(
@@ -1433,8 +1448,9 @@ class VirtualServer(object):
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
                     dest = os.path.basename(
-                        response_obj['destination']).split(':')
-                    return dest[0]
+                        response_obj['destination'])
+                    (ip_addr, port) = split_addr_port(dest)
+                    return ip_addr
                 else:
                     return None
             elif response.status_code == 404:
@@ -1459,8 +1475,9 @@ class VirtualServer(object):
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
                     dest = os.path.basename(
-                        response_obj['destination']).split(':')
-                    return dest[1]
+                        response_obj['destination'])
+                    (ip_addr, port) = split_addr_port(dest)
+                    return port
                 else:
                     return -1
             elif response.status_code == 404:
@@ -1617,9 +1634,10 @@ class VirtualServer(object):
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
-                    address_port = response_obj['destination'].split(':')
+                    dest = response_obj['destination']
+                    (address, port) = split_addr_port(dest)
                     va_req = self.bigip.icr_url + '/ltm/virtual-address/'
-                    va_req += urllib.quote(address_port[0]).replace('/', '~')
+                    va_req += urllib.quote(address).replace('/', '~')
                     payload = dict()
                     payload['trafficGroup'] = traffic_group
                     va_response = self.bigip.icr_session.put(
@@ -1650,9 +1668,10 @@ class VirtualServer(object):
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
-                    address_port = response_obj['destination'].split(':')
+                    dest = response_obj['destination']
+                    (address, port) = split_addr_port(dest)
                     va_req = self.bigip.icr_url + '/ltm/virtual-address/'
-                    va_req += urllib.quote(address_port[0]).replace('/', '~')
+                    va_req += urllib.quote(address).replace('/', '~')
                     va_req += '?$select=trafficGroup'
                     va_response = self.bigip.icr_session.get(
                         va_req, timeout=const.CONNECTION_TIMEOUT)
@@ -1912,13 +1931,14 @@ class VirtualServer(object):
                 for v in response_obj['items']:
                     dest = \
                         os.path.basename(
-                            v['destination']).split(':')
+                            v['destination'])
+                    (vip_addr, vip_port) = split_addr_port(dest)
                     name = strip_folder_and_prefix(v['name'])
                     service = {name: {}}
-                    service[name]['address'] = dest[0]
+                    service[name]['address'] = vip_addr
                     service[name]['netmask'] = v['mask']
                     service[name]['protocol'] = v['ipProtocol']
-                    service[name]['port'] = dest[1]
+                    service[name]['port'] = vip_port
                     virtual_services.append(service)
         elif response.status_code != 404:
             Log.error('virtual', response.text)

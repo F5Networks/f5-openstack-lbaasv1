@@ -222,6 +222,14 @@ def strip_domain_address(ip_address):
         return ip_address.split('%')[0]
 
 
+def split_addr_port(dest):
+    if len(dest.split(':')) > 2:
+        parts = dest.split('.')
+    else:
+        parts = dest.split(':')
+    return (parts[0], parts[1])
+
+
 def log(method):
     """Decorator helping to log method calls."""
     def wrapper(*args, **kwargs):

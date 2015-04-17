@@ -48,6 +48,7 @@ from f5.bigip import bigip as f5_bigip
 from f5.common import constants as f5const
 from f5.bigip import exceptions as f5ex
 from f5.bigip import interfaces as bigip_interfaces
+from f5.bigip.interfaces import strip_domain_address
 
 from eventlet import greenthread
 import uuid
@@ -683,7 +684,7 @@ class iControlDriver(LBaaSBaseDriver):
     @is_connected
     def create_pool_health_monitor(self, health_monitor, pool, service):
         """Create pool health monitor"""
-        self._common_service_handler(service, skip_networking=True)
+        self._common_service_handler(service)
         return True
 
     @serialized('update_health_monitor')
@@ -698,7 +699,7 @@ class iControlDriver(LBaaSBaseDriver):
                     health_monitor['id']:
                 service['pool']['health_monitors_status'][i]['status'] = \
                     plugin_const.PENDING_UPDATE
-        self._common_service_handler(service, skip_networking=True)
+        self._common_service_handler(service)
         return True
 
     @serialized('delete_pool_health_monitor')
@@ -725,7 +726,7 @@ class iControlDriver(LBaaSBaseDriver):
                 # pool health monitor. The plugin should do this.
                 status['status'] = plugin_const.PENDING_DELETE
 
-        self._common_service_handler(service, skip_networking=True)
+        self._common_service_handler(service)
         return True
     # pylint: enable=unused-argument
 
@@ -752,8 +753,8 @@ class iControlDriver(LBaaSBaseDriver):
             pool = service['pool']
             pool_stats = hostbigip.pool.get_statistics(
                 name=pool['id'],
-                folder=pool['tenant_id']
-            )
+                folder=pool['tenant_id'],
+                config_mode=self.conf.icontrol_config_mode)
             if 'STATISTIC_SERVER_SIDE_BYTES_IN' in pool_stats:
                 stats[lb_const.STATS_IN_BYTES] += \
                     pool_stats['STATISTIC_SERVER_SIDE_BYTES_IN']
@@ -785,7 +786,8 @@ class iControlDriver(LBaaSBaseDriver):
                         monitor_states = \
                             hostbigip.pool.get_members_monitor_status(
                                 name=pool['id'],
-                                folder=pool['tenant_id']
+                                folder=pool['tenant_id'],
+                                config_mode=self.conf.icontrol_config_mode
                             )
                         for member in service['members']:
                             if member['status'] in update_if_status:
@@ -800,7 +802,9 @@ class iControlDriver(LBaaSBaseDriver):
                                 for state in monitor_states:
                                     # matched the pool member
                                     # by address and port number
-                                    if member['address'] == state['addr'] and \
+                                    if member['address'] == \
+                                            strip_domain_address(
+                                            state['addr']) and \
                                             int(member['protocol_port']) == \
                                             int(state['port']):
                                         # if the monitor says member is up
@@ -890,7 +894,10 @@ class iControlDriver(LBaaSBaseDriver):
                 service['pool']['id'],
                 self.conf.f5_global_routed_mode
             )
-        self._common_service_handler(service)
+        if service['pool']:
+            self._common_service_handler(service)
+        else:
+            LOG.debug("Attempted sync of deleted pool")
 
     @serialized('backup_configuration')
     @is_connected
@@ -915,14 +922,18 @@ class iControlDriver(LBaaSBaseDriver):
             return self.lbaas_builder_bigiq_iapp.exists(service)
         else:
             bigip = self.get_bigip()
-            return bigip.pool.exists(name=service['pool']['id'],
-                                     folder=service['pool']['tenant_id']) or \
-                bigip.pool.exists_in_iapp(name=service['pool']['id'],
-                                          folder=service['pool']['tenant_id'])
+            return bigip.pool.exists(
+                name=service['pool']['id'],
+                folder=service['pool']['tenant_id'],
+                config_mode=self.conf.icontrol_config_mode)
 
-    def _common_service_handler(self, service, skip_networking=False):
+    def _common_service_handler(self, service):
         """ Assure that the service is configured on bigip(s) """
         start_time = time()
+
+        if not service['pool']:
+            LOG.error("_common_service_handler: Service pool is None")
+            return
 
         # Here we look to see if the tenant has big-ips and
         # so we should use bigiq (if enabled) or fall back
@@ -934,9 +945,6 @@ class iControlDriver(LBaaSBaseDriver):
         else:
             use_bigiq = False
 
-        if use_bigiq:
-            skip_networking = True
-
         if not use_bigiq:
             self.tenant_manager.assure_tenant_created(service)
             LOG.debug("    _assure_tenant_created took %.5f secs" %
@@ -944,7 +952,7 @@ class iControlDriver(LBaaSBaseDriver):
 
         traffic_group = self._service_to_traffic_group(service)
 
-        if not skip_networking and self.network_builder:
+        if not use_bigiq and self.network_builder:
             start_time = time()
             self.network_builder.prep_service_networking(
                 service, traffic_group)
@@ -974,7 +982,7 @@ class iControlDriver(LBaaSBaseDriver):
                 self.lbaas_builder_bigip_objects.assure_service(
                     service, traffic_group, all_subnet_hints)
 
-        if not skip_networking and self.network_builder:
+        if not use_bigiq and self.network_builder:
             start_time = time()
             try:
                 self.network_builder.post_service_networking(

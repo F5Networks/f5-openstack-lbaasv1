@@ -399,14 +399,7 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
 
         connector = self._connectors_by_name[self._connector_name(project_id)]
 
-        have_vip = ('vip' in service and
-                    'id' in service['vip'] and
-                    'address' in service['vip'] and
-                    service['vip']['address'] and
-                    service['vip']['status'] != plugin_const.PENDING_DELETE)
-
-        if have_vip:
-            tenant_service = self.generate_bigiq_service(service, connector)
+        tenant_service = self.generate_bigiq_service(service, connector)
 
         pool_id = service['pool']['id']
         tenant_name = self.get_bigiq_tenant_name(project_id)
@@ -422,7 +415,7 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
         # it would indicate that there were pool members for this app
         # and thus we should create it. If there aren't any then we
         # delete the app if it was already deployed.
-        if have_vip and tenant_service['tables']:
+        if tenant_service['tables']:
             if existing_service:
                 tenant_service['generation'] = existing_service['generation']
                 tenant_service['selfLink'] = existing_service['selfLink']
@@ -448,7 +441,12 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
                 self._bigiq.post_tenant_service(
                     self.get_bigiq_tenant_name(project_id),
                     tenant_service)
-                if have_vip:
+                if ('vip' in service and
+                        'id' in service['vip'] and
+                        'address' in service['vip'] and
+                        service['vip']['address'] and
+                        service['vip']['status'] !=
+                        plugin_const.PENDING_DELETE):
                     self.allow_vip_on_bigips(
                         project_id, service['vip']['address'])
         else:

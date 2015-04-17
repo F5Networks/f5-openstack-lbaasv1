@@ -185,16 +185,9 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
         project_id = pool['tenant_id']
         tenant_name = self.get_bigip_tenant_name(project_id)
 
-        have_vip = ('vip' in service and
-                    'id' in service['vip'] and
-                    'address' in service['vip'] and
-                    service['vip']['address'] and
-                    service['vip']['status'] != plugin_const.PENDING_DELETE)
-
-        if have_vip:
-            tenant_service = self.generate_bigip_service(service)
-            LOG.debug("    assure_bigip_service tenant_service: %s"
-                      % str(tenant_service))
+        tenant_service = self.generate_bigip_service(service)
+        LOG.debug("    assure_bigip_service tenant_service: %s"
+                  % str(tenant_service))
 
         pool_id = pool['id']
         service_name = self.get_bigip_service_name(pool_id)
@@ -208,13 +201,14 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
         # it would indicate that there were pool members for this app
         # and thus we should create it. If there aren't any then we
         # delete the app if it was already deployed.
-        if have_vip and tenant_service['tables']:
+        if tenant_service['tables']:
             if existing_service:
 
                 LOG.debug("    assure_bigip_service existing service: %s"
                           % str(existing_service))
                 tenant_service['generation'] = existing_service['generation']
                 tenant_service['selfLink'] = existing_service['selfLink']
+                tenant_service['execute-action'] = 'definition'
 
                 LOG.debug("    assure_bigip_service updating service: %s"
                           % str(tenant_service))
@@ -229,8 +223,9 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
                     service=tenant_service)
         elif existing_service:
             bigip.iapp.delete_service(service_name, folder=tenant_name)
-            bigip.pool.delete_all_nodes(folder=tenant_name)
-            bigip.pool.delete_all_nodes(folder='/Common')
+        # try to delete nodes for deleted pool members
+        bigip.pool.delete_all_nodes(folder=tenant_name)
+        bigip.pool.delete_all_nodes(folder='/Common')
         # need to optimize this
         subnet_hints['check_for_delete_subnets'] = \
             self._get_all_subnets(service)

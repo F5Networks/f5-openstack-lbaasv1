@@ -17,6 +17,7 @@ from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.interfaces import icontrol_rest_folder
 from f5.bigip.interfaces import strip_folder_and_prefix
+from f5.bigip.interfaces import split_addr_port
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -188,10 +189,10 @@ class Pool(object):
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
                     for member in return_obj['items']:
-                        name_parts = member['name'].split(":")
+                        (addr, port) = split_addr_port(member['name'])
                         members.append(
-                            {'addr': name_parts[0],
-                             'port': int(name_parts[1])})
+                            {'addr': addr,
+                             'port': int(port)})
             elif response.status_code != 404:
                 Log.error('pool', response.text)
                 raise exceptions.PoolQueryException(response.text)
@@ -255,12 +256,6 @@ class Pool(object):
                       (str(decorated_pool), str(cleanup_list)))
             if decorated_pool in cleanup_list:
                 del cleanup_list[decorated_pool]
-            # Exclude known iapp pool
-            decorated_pool += '_pool'
-            Log.debug('pool', 'excluding %s from %s' %
-                      (str(decorated_pool), str(cleanup_list)))
-            if decorated_pool in cleanup_list:
-                del cleanup_list[decorated_pool]
 
         # anything left should be purged
         for pool in cleanup_list:
@@ -292,11 +287,16 @@ class Pool(object):
 
     @icontrol_rest_folder
     @log
-    def get_members_monitor_status(self, name=None, folder='Common'):
+    def get_members_monitor_status(
+            self, name=None, folder='Common', config_mode='object'):
         if name:
             folder = str(folder).replace('/', '')
             request_url = self.bigip.icr_url + '/ltm/pool/'
-            request_url += '~' + folder + '~' + name
+            if config_mode == 'iapp':
+                request_url += '~' + folder + '~' + name + \
+                    '.app~' + name
+            else:
+                request_url += '~' + folder + '~' + name
             request_url += '/members?$select=name,state'
             response = self.bigip.icr_session.get(
                 request_url, timeout=const.CONNECTION_TIMEOUT)
@@ -305,12 +305,12 @@ class Pool(object):
                 return_obj = json.loads(response.text)
                 if 'items' in return_obj:
                     for member in return_obj['items']:
-                        name_parts = member['name'].split(":")
+                        (addr, port) = split_addr_port(member['name'])
                         member_state = 'MONITOR_STATUS_' + \
                             member['state'].upper()
                         members.append(
-                            {'addr': name_parts[0],
-                             'port': name_parts[1],
+                            {'addr': addr,
+                             'port': port,
                              'state': member_state})
             else:
                 Log.error('pool', response.text)
@@ -320,12 +320,15 @@ class Pool(object):
 
     @icontrol_rest_folder
     @log
-    def get_statistics(self, name=None, folder='Common'):
+    def get_statistics(self, name=None, folder='Common', config_mode='object'):
         if not name:
             return None
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/pool/'
-        request_url += '~' + folder + '~' + name
+        if config_mode == 'iapp':
+            request_url += '~' + folder + '~' + name + '.app~' + name
+        else:
+            request_url += '~' + folder + '~' + name
         request_url += '/stats'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
@@ -357,7 +360,10 @@ class Pool(object):
             request_url += '~' + folder + '~' + name
             request_url += '/members'
             payload = dict()
-            payload['name'] = ip_address + ':' + str(port)
+            if ':' in ip_address:
+                payload['name'] = ip_address + '.' + str(port)
+            else:
+                payload['name'] = ip_address + ':' + str(port)
             payload['partition'] = folder
             payload['address'] = ip_address
             response = self.bigip.icr_session.post(
@@ -387,7 +393,10 @@ class Pool(object):
             request_url += '~' + folder + '~' + name
             request_url += '/members/'
             request_url += '~' + folder + '~'
-            request_url += urllib.quote(ip_address) + ':' + str(port)
+            if ':' in ip_address:
+                request_url += urllib.quote(ip_address) + '.' + str(port)
+            else:
+                request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['session'] = 'user-enabled'
             response = self.bigip.icr_session.put(
@@ -416,7 +425,10 @@ class Pool(object):
             request_url += '~' + folder + '~' + name
             request_url += '/members/'
             request_url += '~' + folder + '~'
-            request_url += urllib.quote(ip_address) + ':' + str(port)
+            if ':' in ip_address:
+                request_url += urllib.quote(ip_address) + '.' + str(port)
+            else:
+                request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['session'] = 'user-disabled'
             response = self.bigip.icr_session.put(
@@ -445,7 +457,10 @@ class Pool(object):
             request_url += '~' + folder + '~' + name
             request_url += '/members/'
             request_url += '~' + folder + '~'
-            request_url += urllib.quote(ip_address) + ':' + str(port)
+            if ':' in ip_address:
+                request_url += urllib.quote(ip_address) + '.' + str(port)
+            else:
+                request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['ratio'] = ratio
             response = self.bigip.icr_session.put(
@@ -475,7 +490,10 @@ class Pool(object):
             request_url += '~' + folder + '~' + name
             request_url += '/members/'
             request_url += '~' + folder + '~'
-            request_url += urllib.quote(ip_address) + ':' + str(port)
+            if ':' in ip_address:
+                request_url += urllib.quote(ip_address) + '.' + str(port)
+            else:
+                request_url += urllib.quote(ip_address) + ':' + str(port)
             response = self.bigip.icr_session.delete(
                 request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400 or response.status_code == 404:
@@ -958,26 +976,13 @@ class Pool(object):
 
     @icontrol_rest_folder
     @log
-    def exists(self, name=None, folder='Common'):
+    def exists(self, name=None, folder='Common', config_mode='object'):
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/ltm/pool/'
-        request_url += '~' + folder + '~' + name
-        request_url += '?$select=name'
-        response = self.bigip.icr_session.get(
-            request_url, timeout=const.CONNECTION_TIMEOUT)
-        if response.status_code < 400:
-            return True
-        elif response.status_code != 404:
-            Log.error('pool', response.text)
-            raise exceptions.PoolQueryException(response.text)
-        return False
-
-    @icontrol_rest_folder
-    @log
-    def exists_in_iapp(self, name=None, folder='Common'):
-        folder = str(folder).replace('/', '')
-        request_url = self.bigip.icr_url + '/ltm/pool/'
-        request_url += '~' + folder + '~' + name + '.app~' + name + '_pool'
+        if config_mode == 'iapp':
+            request_url += '~' + folder + '~' + name + '.app~' + name
+        else:
+            request_url += '~' + folder + '~' + name
         request_url += '?$select=name'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
@@ -997,7 +1002,10 @@ class Pool(object):
         request_url += '~' + folder + '~' + name
         request_url += '/members/'
         request_url += '~' + folder + '~'
-        request_url += urllib.quote(ip_address) + ':' + str(port)
+        if ':' in ip_address:
+            request_url += urllib.quote(ip_address) + '.' + str(port)
+        else:
+            request_url += urllib.quote(ip_address) + ':' + str(port)
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:

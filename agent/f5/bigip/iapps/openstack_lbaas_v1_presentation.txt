@@ -4,30 +4,47 @@ section intro {
 
 section vip {
     string addr        display "large" validator "IpAddress" required
+    string mask        display "large" validator "IpAddress"
     string port        display "large" validator "PortNumber" default "80"
+    string connection_limit display "large" default "0"
+    string snat_pool   display "large"  default "automap"
     choice protocol    display "medium" default "http"
-        { "http", "tcp" }
+        { "http", "https", "tcp" }
+    optional ( protocol == "https" ) {
+        string clientssl_profile display "xlarge"
+        string serverssl_profile display "xlarge"
+    }
     choice persist     display "medium" default "http-cookie"
         { "source-ip", "http-cookie", "app-cookie", "none" }
     optional ( persist == "app-cookie" ) {
         string cookie  display "medium" default "jsessionid"
     }
     choice state       display "medium" default "enabled"
-        { "enabled", "disabled" }
+        { "enabled", "disabled", "delete" }
+    string name        display "xlarge" default ""
 }
 
 section pool {
+    string name         display "xlarge" default ""
     table members {
         string addr    display "large" validator "IpAddress"
         string port    display "small" validator "PortNumber" default "80"
-        string connection_limit display "small" validator "NonNegativeNumber" default "10000"
+        string connection_limit display "small" default "0"
+        string ratio   display "small" validator "NonNegativeNumber" default "1"
         choice state   display "medium" default "enabled"
-            { "enabled", "drain-disabled", "force-disabled" }
+            { "enabled", "drain-disabled", "disabled" }
     }
     choice lb_method   display "xlarge" default "round-robin"
         { "round-robin", "least-connections-member" }
-    choice monitor     display "xlarge" default "http"
-        { "http", "tcp", "ping" }
+    table monitors {
+        string name display "xlarge" default ""
+        choice type display "small" default "http"
+            { "http", "https", "tcp", "ping" }
+        string interval display "small" validator "NonNegativeNumber" default "5"
+        string timeout  display "small" validator "NonNegativeNumber" default "16"
+        string send_string display "xlarge" default "GET /"
+        string recv_string display "xlarge" default "200"
+    }
 }
 
 text {
@@ -36,18 +53,30 @@ text {
 
     vip "Virtual Server"
     vip.addr "What is the virtual IP address?"
+    vip.mask "What is the virtual subnet mask?"
     vip.port "What is the virtual port number? (default: 80)"
+    vip.connection_limit "How many connections should this virtual server support? (0 = no limit)"
+    vip.snat_pool "Enter the name of a SNAT pool or the word 'automap'"
     vip.protocol "What protocol optimization should be used on this VIP?"
+    vip.clientssl_profile "What client SSL profile should be used?"
+    vip.serverssl_profile "What server SSL profile should be used?"
     vip.persist "What persistence type should be used on this VIP?"
     vip.cookie "What application cookie should BIG-IP persist on?"
     vip.state "What is the VIP state?"
+    vip.name "Enter a specific name for the virtual server (optional)"
 
     pool "Pool"
+    pool.name "Enter a specific name for the pool (optional)"
     pool.members "Enter an address and TCP port number for each pool member. (default: 80)"
     pool.members.addr "IP"
     pool.members.port "Port"
     pool.members.connection_limit "Connection Limit"
     pool.members.state "State"
     pool.lb_method "What load balancing method should be used?"
-    pool.monitor "What type of monitor should be used to determine pool health?"
+    pool.monitors "What monitor types should be used to determine pool health?"
+    pool.monitors.name "Name (optional)"
+    pool.monitors.interval "Interval (secs)"
+    pool.monitors.timeout "Timeout (secs)"
+    pool.monitors.send_string "Send"
+    pool.monitors.recv_string "Expect"
 }

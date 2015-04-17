@@ -249,6 +249,16 @@ class LBaaSBuilderIApp(LBaaSBuilder):
 
         # The 'vars' key and the list for its value should have already
         # been created on 'tenant_service'
+        have_vip = ('vip' in os_service and
+                    'id' in os_service['vip'] and
+                    'address' in os_service['vip'] and
+                    os_service['vip']['address'] and
+                    os_service['vip']['status'] != plugin_const.PENDING_DELETE)
+        if not have_vip:
+            vip_state_var = get_tenant_service_var('vip__state', 'delete')
+            tenant_service[self.varkey].append(vip_state_var)
+            return
+
         os_vip = os_service.get('vip')
 
         # This is required per the f5.lbaas iApp template
@@ -462,11 +472,12 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         pool_members_table['rows'] = []
 
         if 'members' in os_service and os_service['members']:
-
             for os_member in os_service['members']:
                 if not (os_member and 'address' in os_member and
                         os_member['address'] and 'protocol_port' in os_member
-                        and os_member['protocol_port']):
+                        and os_member['protocol_port']
+                        and os_member['status'] !=
+                        plugin_const.PENDING_DELETE):
                     continue
                 member_address = os_member['address']
                 if bigip_format:
@@ -479,6 +490,7 @@ class LBaaSBuilderIApp(LBaaSBuilder):
                                         os_member['protocol_port'], '']
                 pool_members_table['rows'].append(iapp_pool_member)
 
+        if len(pool_members_table['rows']):
             # We only add the table if there are any members for us to add.
             # If we add it without any member the iApp blows up
             # when it tries to do '[join $members]' when it is creating

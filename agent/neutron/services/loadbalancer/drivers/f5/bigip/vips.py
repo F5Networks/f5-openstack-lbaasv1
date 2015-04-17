@@ -149,11 +149,15 @@ class BigipVipManager(object):
         #virtual_type = 'standard'
 
         folder = vip['tenant_id']
+        if '.' in ip_address:
+            mask = '255.255.255.255'
+        else:
+            mask = None
         if virtual_type == 'standard':
             if bigip_vs.create(
                 name=vip['id'],
                 ip_address=ip_address,
-                mask='255.255.255.255',
+                mask=mask,
                 port=int(vip['protocol_port']),
                 protocol=vip['protocol'],
                 vlan_name=network_name,
@@ -169,7 +173,7 @@ class BigipVipManager(object):
             if bigip_vs.create_fastl4(
                 name=vip['id'],
                 ip_address=ip_address,
-                mask='255.255.255.255',
+                mask=mask,
                 port=int(vip['protocol_port']),
                 protocol=vip['protocol'],
                 vlan_name=network_name,

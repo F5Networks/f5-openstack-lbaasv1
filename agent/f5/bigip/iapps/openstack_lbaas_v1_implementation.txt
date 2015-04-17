@@ -9,7 +9,7 @@
 # Furthermore, for compatibility with BIG-IQ, no presentation
 # logic is used and all APL variables are insured with default
 # values as defined in the arrays shown below, called var_defaults
-# and pool_defaults. Thus, the template will not abort merely
+# and table_defaults. Thus, the template will not abort merely
 # because BIG-IQ fails to supply a given value. However, iApp
 # implementation will still fail if BIG-IP rejects the resultant
 # configuration. For example, the iApp will fail if HTTP_COOKIE
@@ -17,68 +17,123 @@
 # requires HTTP protocol optimization in order to offer cookie
 # persistence.
 
+set truncated_app_name $tmsh::app_name
+
 array set var_defaults {
     vip__state enabled
     vip__addr Error
+    vip__mask 255.255.255.255
     vip__port 80
+    vip__connection_limit -1
+    vip__snat_pool automap
     vip__protocol http
-    vip__persist none
+    vip__persist http-cookie
     vip__cookie jsessionid
+    vip__clientssl_profile none
+    vip__serverssl_profile none
+    vip__name $truncated_app_name
+    pool__name $truncated_app_name
     pool__lb_method round-robin
-    pool__monitor http
+    pool__monitor none
 }
 
-array set pool_defaults {
+array set table_defaults {
     pool__members {
         state enabled
         addr Error
         port 80
-        connection_limit 1000
+        connection_limit 0
+        ratio 1
+    }
+    pool__monitors {
+        name ""
+        type "http"
+        interval 5
+        timeout 16
+        send_string ""
+        recv_string ""
+        url_path "/"
+        expected_codes "200"
     }
 }
 
+# iRule for RPS Throttling
+set throttle_irule {
+when HTTP_REQUEST {
+    set expiration_time 300
+    set client_ip \[IP::client_addr\]
+    set req_limit $::vip__connection_limit
+    set curr_time \[clock seconds\]
+    set timekey starttime
+    set reqkey reqcount
+    set request_count \[session lookup uie \$reqkey\]
+    if { \$request_count eq "" } {
+        set request_count 1
+        session add uie \$reqkey \$request_count  \$expiration_time
+        session add uie \$timekey \[expr {\$curr_time - 2}\] \[expr {\$expiration_time + 2}\]
+    } else {
+        set start_time \[session lookup uie \$timekey\]
+        incr request_count
+        session add uie \$reqkey \$request_count \$expiration_time
+        set elapsed_time \[expr {\$curr_time - \$start_time}\]
+        if {\$elapsed_time < 60} {
+          set elapsed_time 60
+        }
+        set curr_rate \[expr {\$request_count /(\$elapsed_time/60)}\]
+        if {\$curr_rate > \$req_limit} {
+          HTTP::respond 503 throttled "Retry-After" 60
+        }
+    }
+}}
+
 # iRule from SOL7392: Overview of universal persistence
 set persist_irule {
-when HTTP_RESPONSE {
-  if { \[HTTP::cookie exists \"$::vip__cookie\"\] } {
-    persist add uie \[HTTP::cookie \"$::vip__cookie\"\]
-  }
-}
 when HTTP_REQUEST {
-  if { \[HTTP::cookie exists \"$::vip__cookie\"\] } {
-    persist uie \[HTTP::cookie \"$::vip__cookie\"\]
-  }
+    if { \[HTTP::cookie + str(cookiename)\] ne \"\" } {
+        persist uie \[string tolower \[HTTP::cookie + $::vip__cookie\]\] 3600
+    }
+}
+when HTTP_RESPONSE {
+    if { \[HTTP::cookie $::vip__cookie\] ne \"\" } {
+        persist add uie \[string tolower \[HTTP::cookie + $::vip__cookie\]\] 3600
+    }
 }}
 
 array set pool_state {
-    enabled        {session user-enabled  state user-up}
-    disabled       {session user-disabled state user-up}
-    drain-disabled {session user-disabled state user-up}
+    enabled        {session user-enabled state user-up}
+    disabled       {state user-down}
     force-disabled {state user-down}
-}
-
-array set monitor {
-    ping {[tmsh_create ltm monitor gateway-icmp ${tmsh::app_name}_ping]}
-    tcp  {[tmsh_create ltm monitor tcp ${tmsh::app_name}_tcp]}
-    http {[tmsh_create ltm monitor http ${tmsh::app_name}_http]}
+    drain-disabled {session user-disabled state user-up}
 }
 
 array set persist {
     none        {none}
     source-ip   {replace-all-with \{[tmsh_create ltm persistence \
-                 source-addr ${tmsh::app_name}_source_ip]\}}
+                 source-addr source_ip_$truncated_app_name]\}}
     http-cookie {replace-all-with \{[tmsh_create ltm persistence \
-                 cookie ${tmsh::app_name}_http_cookie]\}}
+                 cookie http_cookie_$truncated_app_name]\}}
     app-cookie  {replace-all-with \{[tmsh_create ltm persistence \
-                 universal ${tmsh::app_name}_app_cookie \
-                 rule [tmsh_create ltm rule ${tmsh::app_name}_cookie \
+                 universal app_cookie_$truncated_app_name \
+                 rule [tmsh_create ltm rule app_cookie_$truncated_app_name \
                  [subst $persist_irule]]]\}}
 }
 
 array set profiles {
-    tcp  {none}
-    http {replace-all-with \{[tmsh_create \
-          ltm profile http ${tmsh::app_name}_http]\}}
+    tcp    {replace-all-with \{ \
+               [tmsh_create ltm profile fastl4 $truncated_app_name] \
+           \}}
+    http   {replace-all-with \{ \
+               [tmsh_create ltm profile http $truncated_app_name \
+                 insert-xforwarded-for enabled] \
+           \}}
+    https  {replace-all-with \{ \
+               [expr {$vip__clientssl_profile ne "none" \
+               ? "$vip__clientssl_profile \{ context clientside \}" : "" }] \
+               [expr {$vip__serverssl_profile ne "none" \
+               ? "$vip__serverssl_profile \{ context serverside \}" : "" }] \
+               [tmsh_create ltm profile http $truncated_app_name \
+                 insert-xforwarded-for enabled] \
+           \}}
 }
 
 # tmsh command wrapper that writes to scriptd log and returns object name
@@ -86,7 +141,12 @@ proc tmsh_create { args } {
     set args [join $args]
     puts "tmsh create $args"
     tmsh::create $args
-    return [lindex $args [lsearch -glob $args "*_*"]]
+    set p [lindex $args 1]
+    if { $p eq "virtual" || $p eq "pool" || $p eq "rule" } {
+        return [lindex $args 2]
+    } else {
+        return [lindex $args 3]
+    }
 }
 
 # constructor that handles IPv6 and port number wildcards
@@ -94,36 +154,27 @@ proc destination { addr port } {
 
     # 0 and * represent wildcard port assignments in the GUI,
     # but TMSH requires the string 'any' to specify a wildcard
-    if { $port eq "0" || $port eq "*" } {
-        set port "any"
-    }
+    set port [expr {$port eq "0" || $port eq "*" ? "any" : "$port"}]
 
     # decide on IPv4 or IPv6 delimiter
     set delimiter [expr {[string match "*:*:*" $addr] ? ".":":"}]
     return $addr$delimiter$port
 }
 
-# safely set any variables that do not exist
-foreach var [array names var_defaults] {
-    if { ![info exists ::$var] || [set ::$var] eq "" } {
-        set ::$var $var_defaults($var)
-    }
-}
-
-# safely set column values that do not exist
-foreach table [array names pool_defaults] {
-    if { ![info exists ::$table] } {
-        set members none
-    } else {
-        array set column_defaults $pool_defaults($table)
-        foreach row [set ::$table] {
+# convert APL table into TMSH replace-all-with clause
+proc convert_table { table_name } {
+    set rval ""
+    set row_count 1
+    array set column_defaults [subst $::table_defaults($table_name)]
+    if { [set ::$table_name] ne "none" } {
+        foreach row [set ::$table_name] {
             set params {}
             array unset column
 
             # extract the iApp table data
             foreach column_data [lrange [split [join $row] "\n"] 1 end-1] {
                 set name [lindex $column_data 0]
-                set column($name) [lindex $column_data 1]
+                set column($name) [lrange $column_data 1 end]
             }
 
             # fill in any empty table values
@@ -131,25 +182,128 @@ foreach table [array names pool_defaults] {
                 if { ![info exists column($name)] || $column($name) eq "" } {
                     set column($name) $column_defaults($name)
                 }
-                if { $name eq "state" } {
-                    append params " $pool_state($column($name))"
-                } elseif { $name ne "addr" && $name ne "port" } {
-                    append params " [string map {_ -} $name] $column($name)"
+            }
+
+            # customize command line options for tmsh
+            foreach name [array names column_defaults] {
+                switch $name {
+                    state {
+                        append params " $::pool_state($column($name))"
+                    }
+                    connection_limit {
+                        if { $column($name) eq "-1" } {
+                            set column($name) 0
+                        }
+                        append params " connection-limit $column($name)"
+                    }
+                    ratio {
+                        if { $column($name) ne "1" } {
+                            set ::do_ratio_lb 1
+                            append params " ratio $column($name)"
+                        }
+                    }
+                    send_string {
+                        if { $column(type) ne "ping" } {
+                            if { $column($name) eq "" } {
+                                append params " send \"GET $column(url_path) HTTP/1.0\""
+                            } else {
+                                append params " send \"$column($name)\""
+                            }
+                        }
+                    }
+                    recv_string {
+                        if { $column(type) ne "ping" } {
+                            if { $column($name) eq "" } {
+                                if { [string first "-" $column(expected_codes)] >= 0 } {
+                                    append params " recv \"HTTP/1.(0|1) \[$column(expected_codes)\]\""
+                                } else {
+                                    append params " recv \"HTTP/1.(0|1) ([string map {\, \| " " ""} $column(expected_codes)])\""
+                                }
+                            } else {
+                                append params " recv \"$column($name)\""
+                            }
+                        }
+                    }
+                    interval -
+                    timeout {
+                        append params " $name $column($name)"
+                    }
                 }
             }
-            append members \
-                " [destination $column(addr) $column(port)] \\\{$params\\\}"
+            if { $table_name eq "pool__members" } {
+                append rval " [destination $column(addr) $column(port)] \\\{$params \\\}"
+            }
+            if { $table_name eq "pool__monitors" } {
+                if { $column(name) eq "" } {
+                   set monitor_name ${::truncated_app_name}_${row_count}_$column(type)
+                   set row_count [expr {$row_count + 1}]
+                } else {
+                   set monitor_name $column(name)
+                }
+                if { $column(type) eq "ping" } {
+                    append rval " [tmsh_create ltm monitor gateway-icmp $monitor_name $params]"
+                } else {
+                    append rval " [tmsh_create ltm monitor $column(type) $monitor_name $params]"
+                }
+            }
         }
+    }
+    return $rval
+}
+
+# safely set any variables that do not exist
+foreach var [array names var_defaults] {
+    if { ![info exists ::$var] || [set ::$var] eq "" } {
+        set ::$var [subst $var_defaults($var)]
     }
 }
 
-# build the application
-tmsh_create ltm virtual ${tmsh::app_name}_vip \
-    $::vip__state ip-protocol tcp snat automap \
+# construct pool member clause
+set do_ratio_lb 0
+set members  [convert_table pool__members]
+
+# construct monitor clause, supporting pool__monitor for backwards compatibility
+if { ![info exists ::pool__monitors] } {
+    set ::pool__monitors {}
+}
+if { $::pool__monitor ne "none" } {
+    lappend ::pool__monitors "\{\n type $::pool__monitor\n\}" 
+}
+set monitors [convert_table pool__monitors]
+
+# convert to ratio load balancing if ratios are assigned in the pool
+array set ratio_lb {
+    round-robin ratio-member
+    least-connections-member ratio-least-connections-member
+}
+set lb_method [expr {$do_ratio_lb \
+    ? "$ratio_lb($::pool__lb_method)" \
+    : "$::pool__lb_method"}]
+
+# build the pool
+set pool [tmsh_create ltm pool $::pool__name \
+    load-balancing-mode $lb_method \
+    monitor [expr {[llength $monitors] \
+        ? "min 1 of \{ [join $monitors] \}" \
+        : "none"}] \
+    members [expr {[llength $members] \
+        ? "replace-all-with \{ [join $members] \}" \
+        : "none"}]]
+
+# build the virtual
+if { $::vip__state ne "delete" } {
+    tmsh_create ltm virtual ${vip__name} \
+    $::vip__state \
+    ip-protocol tcp \
     destination [destination $::vip__addr $::vip__port] \
-    pool [tmsh_create ltm pool ${tmsh::app_name}_pool \
-    members replace-all-with \{ [join $members] \} \
-    load-balancing-mode $::pool__lb_method \
-    monitor  [subst $monitor($::pool__monitor)]] \
+    mask $::vip__mask \
+    pool $pool \
     persist  [subst $persist($::vip__persist)] \
-    profiles [subst $profiles($::vip__protocol)]
+    profiles [subst $profiles($::vip__protocol)] \
+    source-address-translation \{ type [expr {$::vip__snat_pool eq "automap" \
+        ? "automap" \
+        : "snat pool $::vip__snat_pool"}] \} \
+    rules    [expr {$::vip__connection_limit > 0 && $::vip__protocol ne "tcp" \
+        ? "\{ [tmsh_create ltm rule rps_throttle_$truncated_app_name [subst $throttle_irule]] \}" \
+        : "none"}]
+}

@@ -84,16 +84,6 @@ class NetworkBuilderDirect(object):
         if self.conf.f5_global_routed_mode or not service['pool']:
             return
 
-        if self.conf.icontrol_config_mode == 'iapp':
-            # if in iapp mode, we wait for a vip before doing anything.
-            have_vip = ('vip' in service and
-                        'id' in service['vip'] and
-                        'address' in service['vip'] and
-                        service['vip']['address'])
-            if not have_vip or \
-                    service['vip']['status'] == plugin_const.PENDING_DELETE:
-                return
-
         if self.conf.use_namespaces:
             self._annotate_service_route_domains(service)
 
@@ -439,18 +429,6 @@ class NetworkBuilderDirect(object):
         # Non Shared Config -  Local Per BIG-IP
         self.update_bigip_l2(service)
 
-        # in iapp mode, we only delete networking if the vip exists
-        # and is in pending delete. Otherwise we assume the networking
-        # has not been created yet or was already deleted.
-        if self.conf.icontrol_config_mode == 'iapp':
-            have_vip = ('vip' in service and
-                        'id' in service['vip'] and
-                        'address' in service['vip'] and
-                        service['vip']['address'])
-            if not have_vip or \
-                    service['vip']['status'] != plugin_const.PENDING_DELETE:
-                return
-
         # Delete shared config objects
         deleted_names = set()
         for bigip in self.driver.get_config_bigips():
@@ -496,25 +474,9 @@ class NetworkBuilderDirect(object):
         vip = service['vip']
         pool = service['pool']
 
-        have_vip = ('vip' in service and
-                    'id' in service['vip'] and
-                    'address' in service['vip'] and
-                    service['vip']['address'])
-
-        delete_all = False
-        if self.conf.icontrol_config_mode == 'iapp':
-            # no vip means no iapp deployed means no config
-            if not have_vip:
-                return
-            # deleting vip means whole iapp and all objects
-            # with l2 entries should have been removed from bigips
-            if service['vip']['status'] == plugin_const.PENDING_DELETE:
-                delete_all = True
-
         for bigip in self.driver.get_all_bigips():
             for member in service['members']:
-                if member['status'] == plugin_const.PENDING_DELETE \
-                        or delete_all:
+                if member['status'] == plugin_const.PENDING_DELETE:
                     self.delete_bigip_member_l2(bigip, pool, member)
                 else:
                     self.update_bigip_member_l2(bigip, pool, member)

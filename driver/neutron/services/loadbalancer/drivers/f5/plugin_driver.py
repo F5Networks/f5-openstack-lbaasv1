@@ -180,6 +180,7 @@ class LoadBalancerCallbacks(object):
                 context, pool_id, global_routed_mode)
             service['pool'] = pool
             if not pool:
+                LOG.debug(_('Built pool %s service: %s' % (pool_id, service)))
                 return service
 
             # populate pool members
@@ -188,14 +189,18 @@ class LoadBalancerCallbacks(object):
                 pool['members'] = []
             service['members'] = []
             for member_id in pool['members']:
-                member = self.plugin.get_member(context, member_id)
-                member['network'] = None
-                member['subnet'] = None
-                member['port'] = None
-                if not global_routed_mode:
-                    self._extend_member(
-                        adminctx, context, pool, member)
-                service['members'].append(member)
+                try:
+                    member = self.plugin.get_member(context, member_id)
+                    member['network'] = None
+                    member['subnet'] = None
+                    member['port'] = None
+                    if not global_routed_mode:
+                        self._extend_member(
+                            adminctx, context, pool, member)
+                    service['members'].append(member)
+                except MemberNotFound:
+                    LOG.error("get_service_by_pool_id: Member not found %s" %
+                              member_id)
 
             # populate health monitors
             service['health_monitors'] = []
@@ -208,6 +213,7 @@ class LoadBalancerCallbacks(object):
             service['vip'] = self._get_extended_vip(
                 context, pool, global_routed_mode)
 
+        LOG.debug(_('Built pool %s service: %s' % (pool_id, service)))
         return service
 
     def _get_extended_pool(self, context, pool_id, global_routed_mode):
@@ -216,6 +222,8 @@ class LoadBalancerCallbacks(object):
         try:
             pool = self.plugin.get_pool(context, pool_id)
         except:
+            LOG.error("get_service_by_pool_id: Pool not found %s" %
+                      pool_id)
             return None
 
         # Populate extended pool attributes
@@ -887,7 +895,10 @@ class LoadBalancerCallbacks(object):
     def member_destroyed(self, context, member_id=None, host=None):
         """Agent confirmation hook that a member has been destroyed."""
         # delete the pool member from the data model
-        self.plugin._delete_db_member(context, member_id)
+        try:
+            self.plugin._delete_db_member(context, member_id)
+        except MemberNotFound:
+            pass
 
     @log.log
     def update_health_monitor_status(self, context, pool_id=None,
@@ -897,6 +908,13 @@ class LoadBalancerCallbacks(object):
                                      host=None):
         """Agent confirmation hook to update healthmonitor status."""
         try:
+            assoc = self.plugin._get_pool_health_monitor(
+                context, health_monitor_id, pool_id)
+            status = getattr(assoc, 'status', None)
+            if status == constants.PENDING_DELETE:
+                LOG.error("Attempt to update deleted health monitor %s" %
+                          health_monitor_id)
+                return
             self.plugin.update_pool_health_monitor(
                 context,
                 health_monitor_id,
@@ -926,6 +944,31 @@ class LoadBalancerCallbacks(object):
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
         """ Update pool stats """
         try:
+            # Check if pool is in a PENDING_DELETE state. Do not update stats.
+            pool = self.plugin.get_pool(context, pool_id)
+            if pool['status'] == 'PENDING_DELETE':
+                LOG.debug('Pool status is PENDING_DELETE. '
+                          'Pool stats were not updated. %s' % pool)
+                return
+
+            # Remove any pool members that are in a PENDING_DELETE state
+            # from the stats pool member list.
+            members = self.plugin.get_members(
+                context,
+                filters={'pool_id': [pool_id], },
+                fields=['id', 'pool_id', 'status']
+            )
+            for member in members:
+                if member['status'] == 'PENDING_DELETE':
+                    LOG.debug('Member status is PENDING_DELETE. Remove from '
+                              'stats member list (when present):%s' % member)
+                    if member['id'] in stats['members']:
+                        del stats['members'][member['id']]
+                        LOG.debug(
+                            'Member removed from stats members:%s' % stats)
+                    else:
+                        LOG.debug(
+                            'Member not found in stats.  Stats not modified.')
             self.plugin.update_pool_stats(context, pool_id, stats)
         except PoolNotFound:
             pass
@@ -1510,9 +1553,9 @@ class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
         )
 
         # call the RPC proxy with the constructed message
-        self.agent_rpc.update_pool_health_monitor(context, old_health_monitor,
-                                                  health_monitor, pool,
-                                                  service, agent['host'])
+        self.agent_rpc.update_health_monitor(context, old_health_monitor,
+                                             health_monitor, pool,
+                                             service, agent['host'])
 
     @log.log
     def update_health_monitor(self, context, old_health_monitor,
