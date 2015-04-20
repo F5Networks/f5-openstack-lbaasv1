@@ -224,8 +224,10 @@ def strip_domain_address(ip_address):
 
 def split_addr_port(dest):
     if len(dest.split(':')) > 2:
+        # ipv6: bigip syntax is addr.port
         parts = dest.split('.')
     else:
+        # ipv4: bigip syntax is addr:port
         parts = dest.split(':')
     return (parts[0], parts[1])
 

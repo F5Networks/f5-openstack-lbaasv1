@@ -265,6 +265,9 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         vip_addr_var = self._vip_addr_var(os_vip)
         tenant_service[self.varkey].append(vip_addr_var)
 
+        vip_mask_var = self._vip_mask_var(os_vip)
+        tenant_service[self.varkey].append(vip_mask_var)
+
         # This is a workaround where we add an additional var named
         # 'pool__addr' to the tenant service we are POSTing/PUTting.
         # This is because the IAppServiceWorker.java on the BIG-IP queries
@@ -340,6 +343,17 @@ class LBaaSBuilderIApp(LBaaSBuilder):
         """ Generate vip addr var """
         vip_address = os_vip['address']
         return get_tenant_service_var('vip__addr', vip_address)
+
+    def _vip_mask_var(self, os_vip):
+        """ Generate vip mask var """
+        vip_address = os_vip['address']
+        if len(vip_address.split(':')) > 2:
+            # ipv6
+            vip_mask = 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'
+        else:
+            # ipv4
+            vip_mask = '255.255.255.255'
+        return get_tenant_service_var('vip__mask', vip_mask)
 
     @staticmethod
     def _vip_persist_var(os_vip):
