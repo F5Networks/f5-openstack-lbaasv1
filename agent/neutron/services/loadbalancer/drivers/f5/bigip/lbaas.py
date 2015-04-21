@@ -504,12 +504,7 @@ class LBaaSBuilderIApp(LBaaSBuilder):
                                         os_member['protocol_port'], '']
                 pool_members_table['rows'].append(iapp_pool_member)
 
-        if len(pool_members_table['rows']):
-            # We only add the table if there are any members for us to add.
-            # If we add it without any member the iApp blows up
-            # when it tries to do '[join $members]' when it is creating
-            # the pool.
-            tenant_service['tables'].append(pool_members_table)
+        tenant_service['tables'].append(pool_members_table)
 
 
 def get_tenant_service_var(var_name, var_value):
