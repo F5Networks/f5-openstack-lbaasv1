@@ -16,12 +16,11 @@
 -->
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
-<meta name="generator" content=
-"HTML Tidy for Linux (vers 25 March 2009), see www.w3.org" />
+<meta name="generator" content="Bluefish 2.2.7" />
 <meta http-equiv="Content-Type" content=
 "text/html; charset=us-ascii" />
 <title>Neutron/LBaaS/F5BigIP</title>
-<meta name="author" content="j.gruber@f5.com" />
+<meta name="author" content="John Gruber" />
 <style type="text/css">
 /*<![CDATA[*/
                         body {
@@ -158,52 +157,86 @@
 </head>
 <body>
 <div id='bodyContent'>
-<h1 id='firstHeading' class='firstHeading'>Neutron/LBaaS/F5BigIP -
-Multi-Tenant Plugin Version 1.0.6 Release</h1>
+<h1 id='firstHeading' class='firstHeading'>
+Neutron/LBaaS/F5BigIP - Plugin Version 1.0.8 Release
+</h1>
 <hr />
 <ul>
-<li><a href='#Supported_Neutron_Releases'>Supported Neutron
-Releases</a></li>
-<li><a href='LBaaS_scheduling'>Scheduling LBaaS
-Deployments</a></li>
-<li><a href='#Installation_of_the_Type_Driver'>Installation of the
-Plugin Side Type Driver</a></li>
-<li><a href='#Neutron_Server_Plugin_Settings'>Neutron Server Plugin
-Settings</a></li>
-<li><a href=
-'#Installing_and_Running_a_LBaaS_Agent_Processes'>Installing and
-Running a LBaaS Agent Processes</a></li>
-<li><a href='#iControl_Driver_Supported_TMOS_Versions'>iControl
-Driver Supported TMOS Versions</a></li>
-<li><a href='#Supported_Neutron_Network_Topologies'>Supported
-Neutron Network Topologies</a></li>
-<li><a href='#Multitenancy_Mapping'>OpenStack and TMOS
-Multitenancy</a></li>
-<li><a href='#Supported_TMOS_High_Availability_Modes'>Supported
-TMOS High Availability Modes</a></li>
-<li><a href='#Preparing_Your_TMOS_Device_for_LBaaS'>Preparing Your
-TMOS Device for LBaaS</a></li>
-<li><a href='#Troubleshooting_Issues'>Troubleshooting
-Issues</a></li>
+<li>
+<a href='#Supported_Neutron_Releases'>Supported Neutron Releases</a>
+</li>
+<li>
+<a href='LBaaS_scheduling'>Scheduling LBaaS Deployments</a>
+</li>
+<li>
+<a href='#Installation_of_the_Type_Driver'>Installation of the Plugin Side Type Driver</a>
+</li>
+<li>
+<a href='#Neutron_Server_Plugin_Settings'>Neutron Server Plugin Settings</a>
+</li>
+<li>
+<a href='#Installing_and_Running_a_LBaaS_Agent_Processes'>Installing and Running a LBaaS Agent Processes</a>
+</li>
+<li>
+<a href='#iControl_Driver_Supported_TMOS_Versions'>iControl Driver Supported TMOS Versions</a>
+</li>
+<li>
+<a href='#Supported_Neutron_Network_Topologies'>Supported Neutron Network Topologies</a>
+</li>
+<li>
+<a href='#Multitenancy_Mapping'>OpenStack and TMOS Multitenancy</a>
+</li>
+<li>
+<a href='#Supported_TMOS_High_Availability_Modes'>Supported TMOS High Availability Modes</a>
+</li>
+<li>
+<a href='#Preparing_Your_TMOS_Device_for_LBaaS'>Preparing Your TMOS Device for LBaaS</a>
+</li>
+<li>
+<a href='#Troubleshooting_Issues'>Troubleshooting Issues</a>
+</li>
 </ul>
-<h2><span class='mw-headline' id=
-'Supported_Neutron_Releases'>Supported Neutron Releases</span></h2>
-<p>The f5 LBaaS plugin driver, as well as the f5 LBaaS agent with
-iControl driver, support the OpenStack Neutron Havana release.
+<h2>
+<span class='mw-headline' id='Supported_Neutron_Releases'>
+Supported Neutron Releases
+</span>
+</h2>
+<p>
+The f5 LBaaS plugin driver, as well as the f5 LBaaS agent with
+iControl driver, support the OpenStack Neutron Havana, Icehouse,
+and Juno releases.
+</p>
+<p>
 There are no alternations made to the community LBaaS database
 schema, nor any additional database tables generated. The stock
 community LoadBalancerPlugin class is used as the service plugin.
 Any discovered issues with the community LoadBalancerPlugin class
 and the associated LBaaS database model will need to be monitored
-and resolved through the OpenStack Neutron community.</p>
-<p>For deployment modes which include tenant tunnels, Neutron
+and resolved through the OpenStack Neutron community.
+</p>
+<p>
+For deployment modes which include tenant tunnels, Neutron
 <b>MUST</b> be using the ML2 core plugin, with the associated
-Neutron ML2 types and data model classes. I.E.:</p>
-<p><span class='command_text'>core_plugin =
-neutron.plugins.ml2.plugin.Ml2Plugin</span></p>
-<p>Using the standard community ML2 plugin and type drivers will
-meet the f5 LBaaS plugin requirements.</p>
-<p>When Neutron networks are discovered by the plugin that fall
+Neutron ML2 types and data model classes. Your neutron server 
+configuration should look like:
+</p>
+<p>
+<span class='command_text'>
+core_plugin = neutron.plugins.ml2.plugin.Ml2Plugin
+</span>
+</p>
+<p>
+Using the ML2 plugin assures that non-proprietary network
+types are being used for your cloud networking, and that 
+tenant network attributes can be discovered from within 
+Neutron's data model.
+</p>
+<p>
+Using the standard community ML2 plugin and type drivers will
+meet the f5 LBaaS plugin requirements.
+</p>
+<p>
+When Neutron networks are discovered by the plugin that fall
 into the classification of a Pool, Vip, or Member object, they must
 include the Neutron providernet extension data. The providernet
 extension adds attributes to Neutron networks allowing other
@@ -213,10 +246,13 @@ LBaaS plugin uses these attributes to provision L2 connectivity on
 TMOS devices matching the L2 connectivity for the appropriate
 Neutron networks. If the providernet extension data is not present
 on Neutron networks, proper L2 isolation and tenancy can not be
-provisioned on the TMOS devices.</p>
-<p>You can determine if your Neutron networks support this
+provisioned on the TMOS devices.
+</p>
+<p>
+You can determine if your Neutron networks support this
 extension by showing the details for a Neutron network and checking
-for the following attributes, such as:</p>
+for the following attributes, such as:
+</p>
 <pre>
 # neutron net-show Provider-VLAN-62
 +---------------------------+--------------------------------------+
@@ -239,41 +275,64 @@ for the following attributes, such as:</p>
 <p>Typically only older style, monolithic Neutron core drivers will
 be a concern. ML2 core drivers should typically support providernet
 extensions without any additional configuration.</p>
-<h2><span class='mw-headline' id='LBaaS_scheduling'>Scheduling
-LBaaS Deployments</span></h2>
-<p>The f5 LBaaS plugin driver schedules LBaaS requests across one
+<h2>
+<span class='mw-headline' id='LBaaS_scheduling'>
+Scheduling LBaaS Deployments
+</span>
+</h2>
+<p>
+The f5 LBaaS plugin driver schedules LBaaS requests across one
 or multiple f5 LBaaS agent processes. OpenStack RPC queues are used
 to spread requests out to one or multiple f5 LBaaS agent processes.
 The f5 agents register and use RPC queues to call back into the f5
 LBaaS plugin driver to update LBaaS object status and allocate
-Neutron ports and IP addresses as necessary.</p>
+Neutron ports and IP addresses as necessary.
+</p>
 <p><img src='./images/plugin_agent.png' width='750px' /></p>
-<p>F5 LBaaS agents can be run on any host which has the appropriate
+<p>
+F5 LBaaS agents can be run on any host which has the appropriate
 Neutron python libraries installed. This includes the controller or
 network nodes. Alternatively, a host can be dedicated to service
 agents. Multiple f5 LBaaS agent processes can run on the same host
-simultaneously.</p>
-<p>F5 LBaaS agent processes are mapped directly to TMOS Device
+simultaneously.
+</p>
+<p>
+The f5 LBaaS agent will load configuration parameters from the 
+<span class='command_text'>/etc/neutron/neutron.conf</span file 
+as well as the <span class='command_text'>f5-bigip-lbaas-agent.ini</span> 
+file. The former should contain the necessary neutron settings for 
+RPC communications. The later includes settings specific to the 
+f5 LBaaS agent.
+</p>
+<p>
+F5 LBaaS agent processes are mapped directly to TMOS Device
 Service Groups. As a result there will always be one active f5
-LBaaS agent per TMOS Device Service Group.</p>
-<p>By default the f5 LBaaS plugin uses an agent scheduler which
+LBaaS agent per TMOS Device Service Group.
+</p>
+<p>
+By default the f5 LBaaS plugin uses an agent scheduler which
 will keep all LBaaS Pools associated with the same tenant on the
 same TMOS Device Service Group. This aids in scaling by keeping all
 network objects associated with an OpenStack tenant on the same
 TMOS Device Service Group instead of requiring them to be
 provisioned on all possible TMOS Device Service Groups in your
-cloud deployment.</p>
+cloud deployment.
+</p>
 <p><img src='./images/agent_to_dsg.png' width='750px' /></p>
-<p>Other scheduling from Pool to agent is possible with the use of
-a custom scheduler class. Please reference the plugin configuration
+<p>
+Other scheduling from Pool to agent is possible with the use of
+a custom scheduler class. Please reference <i>the plugin</i> configuration
 setting for <span class=
 'command_text'>f5_loadbalancer_pool_scheduler_driver</span> in the
 <span class='command_text'>neutron.conf</span> configuration file
 in following section. Only the tenant affinity scheduler, described
-above, is included with the f5 LBaaS plugin.</p>
-<p>F5 LBaaS agent processes use standard Neutron agent registration
+above, is included with the f5 LBaaS plugin.
+</p>
+<p>
+F5 LBaaS agent processes use standard Neutron agent registration
 and state reporting. The health and details of registered f5 LBaaS
-agents can be queried using typical Neutron agent commands.</p>
+agents can be queried using typical Neutron agent commands.
+</p>
 <pre>
 # neutron agent-list
 +--------------------------------------+--------------------+------------------------------------------------------+-------+----------------+
@@ -288,60 +347,85 @@ agents can be queried using typical Neutron agent commands.</p>
 +--------------------------------------+--------------------+------------------------------------------------------+-------+----------------+
                 
 </pre>
-<p>F5 LBaaS agent processes support the configuration of static
+<p>
+F5 LBaaS agent processes support the configuration of static
 name value parameters which will get passed to the plugin every
-time it updates its status. These custom values can be used to
-inventory the f5 LBaaS agents or as input to custom agent
+time it updates its status. The values can be queried from within 
+neutron or via the <span class='command_text'>neutron agent show</span> 
+command. These custom values can be used to inventory the f5 LBaaS 
+agents for operational purposes, or as input to custom agent
 schedulers. Please see the reference to the <span class=
 'command_text'>static_agent_configuration_data</span> entry in the
-agent <span class='command_text'>f5-bigip-lbaas-agent.ini</span>
-configuration in the following section.</p>
-<p>High availability for the f5 LBaaS agent process follows the
+<i>agent</i> <span class='command_text'>f5-bigip-lbaas-agent.ini</span>
+configuration in the following section.
+</p>
+<p>
+High availability for the f5 LBaaS agent process follows the
 same pattern as any OpenStack agent. Please see the OpenStack high
 availability guides for instructions on how to run active and
-standby agents in a high availability mode.</p>
-<p><a href=
+standby agents in a high availability mode.
+</p>
+<p>
+<a href=
 'http://docs.openstack.org/high-availability-guide/content/ha-using-active-passive.html'>
-OpenStack Active-Stanby Agent Guide</a></p>
-<p>Please see the section below for the high availability modes
-supported for the TMOS devices themselves.</p>
-<h2><span class='mw-headline' id=
-'Installation_of_the_Type_Driver'>Installation of the Plugin Side
-Type Driver</span></h2>
-<p>The Neutron server plugin driver is distributed as a Debian
-installation package. It has been tested on Ubuntu Server 12.04
-LTS. To install the Neutron server plugin driver, download the
-<span class='command_text'>f5-lbaas-driver_1.0-1_all.deb</span>
-package to the host which runs your Neutron API server process. To
-install run:</p>
-<p><span class='command_text'>sudo dpkg -i
-f5-lbaas-driver_1.0-1_all.deb</span></p>
-<h2><span class='mw-headline' id=
-'Neutron_Server_Plugin_Settings'>Neutron Server Plugin
-Settings</span></h2>
-<p>There are two settings which must be set to enable Neutron LBaaS
+OpenStack Active-Stanby Agent Guide</a>
+</p>
+<p>
+Restarting a failed agent process will force the agent to resychronize BIG-IPs for LBaaS 
+object associated with the agent.
+</p>
+<p>
+Please see the section below for the high availability modes 
+supported for the TMOS devices themselves.
+</p>
+<h2>
+<span class='mw-headline' id='Installation_of_the_Type_Driver'>Installation of the Plugin Side
+Type Driver
+</span>
+</h2>
+<p>
+The Neutron server plugin driver is distributed as a Debian or 
+Red Hat installation package. To install the Neutron server plugin 
+driver, download the appropriate package for your neutron server 
+host and install it. Changes to the neutron server configuration file, 
+as detailed below, will then need to be made to enable LBaaS services 
+and reference the f5 LBaaS provider driver. The neutron server will 
+then need to be restarted.
+<h2>
+<span class='mw-headline' id=
+'Neutron_Server_Plugin_Settings'>Neutron Server Plugin Settings
+</span>
+</h2>
+<p>
+There are two settings which must be set to enable Neutron LBaaS
 with the F5 LBaaS type driver. The services entry for Neutron must
 include a reference to the default community LoadBalancerPlugin.
 The <span class='command_text'>services</span> configuration entry
 in the default <span class='command_text'>neutron.conf</span> file
 contains a comma separated list of python classes which implement
 extension plugin services. The following example would load the
-default community LoadBalancerPlugin.</p>
-<p>In the <span class='command_text'>neutron.conf</span> file:</p>
+default community LoadBalancerPlugin.
+</p>
+<p>
+In the <span class='command_text'>neutron.conf</span> file:</p>
 <p><span class='command_text'>service_plugins =
 neutron.services.loadbalancer.plugin.LoadBalancerPlugin</span></p>
 <p>Once the default community LoadBalancerPlugin plugin is loaded,
 service provider type drivers entries will be examined. Providing
 the following service provider type driver entry for the
 <span class='command_text'>LOADBALANCER</span> plugin service will
-load the f5 LBaaS type driver:</p>
-<p><span class=
-'command_text'>service_provider=LOADBALANCER:F5:neutron.services.loadbalancer.drivers.f5.plugin_driver.F5PluginDriver:default</span></p>
-<p>You must have at least one <span class=
-'command_text'>default</span> entry for each plugin service. If the
+load the f5 LBaaS type driver:
+</p>
+<p><span class='command_text'>
+service_provider=LOADBALANCER:F5:neutron.services.loadbalancer.drivers.f5.plugin_driver.F5PluginDriver:default
+</span>
+</p>
+<p>You must have at least one 
+<span class='command_text'>default</span> entry for each plugin service. If the
 F5 plugin type driver is not the default, simply remove the
 <span class='command_text'>default</span> field from the above
-entry.</p>
+entry.
+</p>
 <p>In the default section of your <span class=
 'command_text'>neutron.conf</span> file, the optional <span class=
 'command_text'>f5_loadbalancer_pool_scheduler_driver</span>
@@ -354,19 +438,19 @@ affinity as described above.</p>
 <p style="page-break-after:always;"></p>
 <h2><span class='mw-headline' id=
 'Installing_and_Running_a_LBaaS_Agent_Processes'>Installing and
-Running an LBaaS Agent Processes</span></h2>
-<p>The f5 LBaaS agent is distributed as a Debian installation
-package. It has been tested on Ubuntu Server 12.04 LTS. To install
-a single LBaaS agent, first download the
-f5-bigip-lbaas-agent_1.0-1_all.deb package to the host which will
-run your agent process. Once downloaded, run:</p>
-<span class='command_text'>sudo dpkg -i
-f5-bigip-lbaas-agent_1.0-1_all.deb</span>
-<p>On Ubuntu systems an upstart job will run as a result of the
-installation. You should stop this service and configure your f5
-LBaaS agent:</p>
-<span class='command_text'>sudo service f5-bigip-lbaas-agent
-stop</span>
+Running an LBaaS Agent Processes</span>
+</h2>
+<p>The f5 LBaaS agent is distributed as a Debian or Redhat 
+installation package. To install a single LBaaS agent, first download the
+appropriate package to the host which will run your agent process. Once downloaded, 
+once downloaded, install the package.
+</p>
+<p>
+The installation process will start the agent. You will need to stop 
+the agent service, configure the <span class='command_text'>/etc/neturon</span> 
+and <span class='command_text'>/etc/neutron/f5-bigip-lbaas-agent.init</span> 
+files appropriately, and then restart the agent process.
+</p>
 <p>The default configuration file for the f5 LBaaS agent is located
 at <span class=
 'command_text'>/etc/neutron/f5-bigip-lbaas-agent.ini</span>. Below
@@ -386,21 +470,24 @@ documention comments as well.</p>
 <td>True or False</td>
 <td>False</td>
 <td>Should the agent create verbose debug logging in
-/var/log/neutron/f5-bigip-lbaas-agent.log</td>
+/var/log/neutron/f5-bigip-lbaas-agent.log. You should 
+remember to check the /etc/neutron/neutron.conf settings 
+for debug and verbose as well.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">periodic_interval</td>
 <td>integer number of seconds</td>
 <td>10</td>
-<td>How often should the get_stats, and save configurations be
-considered. (not run, but considered)</td>
+<td>How often the statistics are updated for LBaaS objects 
+assoicated with this agent.
+</td>
 </tr>
 <tr>
 <td nowrap="nowrap">service_resync_interval</td>
 <td>integer number of seconds</td>
 <td>500</td>
 <td>How often the agent pulls known configurations from Neutron and
-cleans up orphaned configurations on the BIG-IPs.</td>
+syncrhonizes and cleans up orphaned configurations on the BIG-IPs.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">use_namespace</td>
@@ -408,6 +495,17 @@ cleans up orphaned configurations on the BIG-IPs.</td>
 <td>True</td>
 <td>Should all Neutron non-shared subnet addresses be assigned to
 route domains</td>
+</tr>
+<tr>
+<td nowrap="nowrap">max_namespaces</td>
+<td>integer number of namespaces</td>
+<td>1</td>
+<td>If a tenant attempts to create overlapping subnets within their 
+own networks, this number must be increased to the max number of 
+overlapping subnets that will be supported. By default only one 
+route domain will be created per tenant. If this is increased, it 
+can adversely effect the tenant scaling of the BIG-IPs as maintaining 
+separate routing tables cost control plan memory.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">static_agent_configuration_data</td>
@@ -429,13 +527,13 @@ prefixed with uuid_.</td>
 <td>external</td>
 <td>external</td>
 <td>This determines the type of automatica device onboarding. Only
-external, is acceptable for this release.</td>
+external is acceptable with this releaes.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">f5_ha_type</td>
 <td>standalone, pair, or scalen</td>
 <td>pair</td>
-<td>This determines the way LBaaS will be deployed for HA</td>
+<td>This determines the way LBaaS will be deployed for HA.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">f5_sync_mode</td>
@@ -444,9 +542,8 @@ external, is acceptable for this release.</td>
 <td>This determines the way LBaaS will be provisioned. For
 auto_sync, only a single TMOS device will be provisioned and DSG
 syncing used to replicate the configuration objects. For
-replication, each device will be provisioned independantly. The
-recommended mode is replication. It is faster for large
-configurations.</td>
+replication, each device will be provisioned independantly. Only 
+replication mode is supported at this time.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">f5_external_physical_mappings</td>
@@ -491,6 +588,13 @@ Default is to advertise both gre and vxlan.</td>
 with a GRE or VxLAN tunnel network, in addition to a tunnel fdb 
 record being added, that a static arp entry will be created to 
 avoid the need to learn the Member's MAC address via flooding.</td>
+</tr>
+<td nowrap="nowrap">l2_population</td>
+<td>True or False</td>
+<td>True</td>
+<td>The agent will register for Neutron L2 population updates 
+and will populate tunnel fdb entries accordingly. Without L2 
+population, pool member migration will not function properly.</td>
 </tr>
 <tr>
 <td nowrap="nowrap">f5_global_routed_mode</td>
@@ -545,6 +649,20 @@ network UUIDs defined will exempt services from creating new VLANs,
 but will use the /Common/[vlan] specified instead.</td>
 </tr>
 <tr>
+<td>l3_binding_driver</td>
+<td>l3 binding driver path</td>
+<td>neutron.service.loadbalancing.drivers. f5.bigip.l3_binding.AllowedAddressPairs</td>
+<td>Some system require notification when L3 addresses are bound to ports 
+to open security features or provide forwarding information.</td>
+</tr>
+<tr>
+<td>l3_binding_static_mappings</td>
+<td>JSON dictionary</td>
+<td>'' (blank string)</td>
+<td>Much like common network ids, if there are known subnets which are bound to 
+ BIG-IP neutron ports which need L3 binding, these can be specified statically.</td>
+</tr>
+<tr>
 <td>f5_bigip_lbaas_device_driver</td>
 <td>python class name of the device driver to use</td>
 <td>
@@ -583,6 +701,81 @@ agent.</td>
 <td>How often to attempt to reconnect if iControl connection
 fails</td>
 </tr>
+<tr>
+<td>icontrol_vcmp_hostname</td>
+<td>iControl
+endpoint IP address or FQDN</td>
+<td>192.168.1.245</td>
+<td>VCMP host which must have use the same credentials 
+as the BIG-IP guests.</td>
+</tr>
+<tr>
+<td>icontrol_config_mode</td>
+<td>objects or iapp</td>
+<td>objects</td>
+<td>Determines if iControl objects or the LBaaSv1 iApp are 
+used to provision services. iApp support is experimental in 
+this release.</td>
+</tr>
+
+<tr>
+<td>bigiq_hostname</td>
+<td>BIG-IQ API endpoint IP or FQDN</td>
+<td>bigiqhostname</td>
+<td>Single tenant LBaaS support via BIG-IQ. This is experimental 
+in this release.</td>
+</tr>
+
+<tr>
+<td>bigiq_admin_password</td>
+<td>valid password for a BIG-IQ device</td>
+<td>admin</td>
+<td>Single tenant LBaaS support via BIG-IQ. This is experimental 
+in this release.</td>
+</tr>
+
+<tr>
+<td>bigip_management_username</td>
+<td>valid username for a BIG-IP device</td>
+<td>admin</td>
+<td>The username used by BIG-IQ to manage BIG-IPs for Single tenant LBaaS 
+support via BIG-IQ. This is experimental in 
+this release.</td>
+</tr>
+
+<tr>
+<td>bigip_management_password</td>
+<td>valid password for a BIG-IP device</td>
+<td>admin</td>
+<td>The password used by BIG-IQ to manage BIG-IPs for Single tenant LBaaS 
+support via BIG-IQ. This is experimental in 
+this release.</td>
+</tr>
+
+<tr>
+<td>openstack_keystone_url</td>
+<td>URL</td>
+<td>http://keystonserver:5000/v2.0</td>
+<td>OpenStack keystone instance. This is experimental in this release.</td>
+</tr>
+
+<tr>
+<td>openstack_admin_username</td>
+<td>Keystone admin username</td>
+<td>valid Keystone username</td>
+<td>Admin OpenStack login to determine if a tenant has BIG-IPs 
+which can be used for Single Tenant LBaaS. This is experimental in this release.</td>
+</tr>
+
+<tr>
+<td>openstack_admin_password</td>
+<td>Keystone admin password</td>
+<td>valid Keystone password</td>
+<td>Admin OpenStack login to determine if a tenant has BIG-IPs 
+which can be used for Single Tenant LBaaS. This is experimental in this release.</td>
+</tr>
+
+
 </tbody>
 </table>
 <h3>Starting Multiple Agents on the Same Host</h3>
@@ -593,12 +786,9 @@ alterations need to be made for each additional agent instance:</p>
 <span class=
 'command_text'>/etc/neutron/f5-bigip-lbaas-agent.ini</span> as a
 template.</li>
-<li>Create additional upstart conf files in /etc/init using
-<span class=
-'command_text'>/etc/init/f5-bigip-lbaas-agent.conf</span> as a
-template. The <span class='command_text'>exec</span> line in each
-upstart conf file should be customized to point to each agent's
-unique configuration file and a unique agent log file.</li>
+<li>Create additional upstart, init.d, or systemd service definitions 
+for the agent using the default service definitions as a guide. 
+</li>
 <li>Start each agent using the name of its unique upstart conf
 file.</li>
 </ol>
@@ -760,12 +950,13 @@ this:</p>
 'command_text'>f5_external_physical_mappings = default:1.1:True,
 ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
 <h3>Tunnels</h3>
-<h2><span class='mw-headline'>Warning - To use GRE or VxLAN tunnels
-with versions less then TMOS 11.6, you must apply an engineering
-hotfix. The minimum recommended release for use with tunnels is
-TMOS 11.5.1 with engineering hotfix BIGIP-11.5.1.2.38.121-HF2-ENG.
-To obtain this hotfix, please open a support case on your TMOS
-device and request it.</span></h2>
+<h2>
+<span class='mw-headline'>
+Warning - There are hotfixes for both TMOS 11.5 and 11.6 with 
+fixes associated with SDN tunneling. You should check for and 
+apply those hotfixes.
+</span>
+</h2>
 <p>For GRE and VxLAN tunnels, the f5 TMOS devices expect to
 communicate with Open vSwitch VTEPs. The VTEP addresses for Open
 vSwitch VTEPs are learned from their registered Neutron agent
