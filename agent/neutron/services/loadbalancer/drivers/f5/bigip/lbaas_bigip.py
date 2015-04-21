@@ -196,12 +196,7 @@ class LBaaSBuilderBigipIApp(LBaaSBuilderIApp):
 
         LOG.debug("    assure_bigip_service existing_service: %s"
                   % str(existing_service))
-        # We check to see if there are any tables on the service that
-        # we are going to update before doing so. If there were tables
-        # it would indicate that there were pool members for this app
-        # and thus we should create it. If there aren't any then we
-        # delete the app if it was already deployed.
-        if tenant_service['tables']:
+        if pool['status'] != plugin_const.PENDING_DELETE:
             if existing_service:
 
                 LOG.debug("    assure_bigip_service existing service: %s"

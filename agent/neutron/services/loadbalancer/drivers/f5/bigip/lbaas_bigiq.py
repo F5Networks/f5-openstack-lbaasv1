@@ -410,12 +410,7 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
         except:
             existing_service = None
 
-        # We check to see if there are any tables on the service that
-        # we are going to update before doing so. If there were tables
-        # it would indicate that there were pool members for this app
-        # and thus we should create it. If there aren't any then we
-        # delete the app if it was already deployed.
-        if tenant_service['tables']:
+        if pool['status'] != plugin_const.PENDING_DELETE:
             if existing_service:
                 tenant_service['generation'] = existing_service['generation']
                 tenant_service['selfLink'] = existing_service['selfLink']

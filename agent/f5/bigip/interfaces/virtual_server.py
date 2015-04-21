@@ -709,7 +709,7 @@ class VirtualServer(object):
 
     @icontrol_rest_folder
     @log
-    def delete_all_presistence_profiles(self, folder='Common'):
+    def delete_all_persistence_profiles(self, folder='Common'):
         """ Delete all persistence profiles """
         timeout = const.CONNECTION_TIMEOUT
         folder = str(folder).replace('/', '')
@@ -2080,8 +2080,8 @@ class VirtualServer(object):
             Log.debug('persistence', 'profile renamed: %s' % common_name)
             return common_name
         # refesh cache
-        Log.debug('presistence',
-                  'refreshing persisetence profile cache for %s on cache miss'
+        Log.debug('persistence',
+                  'refreshing persistence profile cache for %s on cache miss'
                   % folder)
         self.get_all_persistence_profiles(folder=folder)
         if profile_name in self.folder_persistence_profiles:

@@ -260,6 +260,9 @@ foreach var [array names var_defaults] {
 
 # construct pool member clause
 set do_ratio_lb 0
+if { ![info exists ::pool__members] } {
+    set ::pool__members {}
+}
 set members  [convert_table pool__members]
 
 # construct monitor clause, supporting pool__monitor for backwards compatibility

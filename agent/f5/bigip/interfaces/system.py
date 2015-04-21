@@ -216,7 +216,7 @@ class System(object):
             bigip.pool.delete_all(folder=folder)
             bigip.monitor.delete_all(folder=folder)
             bigip.snat.delete_all(folder=folder)
-            bigip.virtual_server.delete_all_presistence_profiles(folder=folder)
+            bigip.virtual_server.delete_all_persistence_profiles(folder=folder)
             bigip.virtual_server.delete_all_http_profiles(folder=folder)
             bigip.rule.delete_all(folder=folder)
             bigip.arp.delete_all(folder=folder)
@@ -249,8 +249,10 @@ class System(object):
         existing_folders.remove('/')
         existing_folders.remove('Common')
         # remove all folders which are not managed
-        # with this object prefix
-        for folder in existing_folders:
+        # with this object prefix.
+        # copy the list so we are not modifying it while traversing it.
+        existing_folders_copy = list(existing_folders)
+        for folder in existing_folders_copy:
             if not folder.startswith(self.OBJ_PREFIX):
                 existing_folders.remove(folder)
             # iapp folders need to be purged by removing the iapp
@@ -282,8 +284,12 @@ class System(object):
         existing_folders.remove('Common')
         # remove all folders which are not managed
         # with this object prefix
-        for folder in existing_folders:
+        existing_folders_copy = list(existing_folders)
+        for folder in existing_folders_copy:
             if not folder.startswith(self.OBJ_PREFIX):
+                existing_folders.remove(folder)
+            # iapp folders need to be purged by removing the iapp
+            if folder.endswith('.app'):
                 existing_folders.remove(folder)
         for folder in known_folders:
             decorated_folder = bigip.decorate_folder(folder)
