@@ -97,7 +97,7 @@ class L2GRE(object):
             if description:
                 payload['description'] = description
             request_url = self.bigip.icr_url + '/net/tunnels/tunnel/'
-            Log.info('L2GRE', 'creating tunnel with %s' % json.dumps(payload))
+            Log.debug('L2GRE', 'creating tunnel with %s' % json.dumps(payload))
             response = self.bigip.icr_session.post(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)

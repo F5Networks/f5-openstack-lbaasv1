@@ -856,6 +856,11 @@ class LoadBalancerCallbacks(object):
                            host=None):
         """Agent confirmation hook to update pool status."""
         try:
+            pool = self.plugin.get_pool(context, pool_id)
+            if pool['status'] == constants.PENDING_DELETE:
+                LOG.debug('Pool status is PENDING_DELETE. '
+                          'Pool status was not updated. %s' % pool)
+                return
             self.plugin.update_status(
                 context,
                 lb_db.Pool,

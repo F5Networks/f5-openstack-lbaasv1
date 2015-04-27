@@ -555,7 +555,7 @@ class Pool(object):
             return_obj = json.loads(response.text)
             if 'items' in return_obj:
                 for node in return_obj['items']:
-                    node_addresses.append(node['address'].split('%')[0])
+                    node_addresses.append(node['address'])
         elif response.status_code != 404:
             Log.error('node', response.text)
             raise exceptions.PoolQueryException(response.text)

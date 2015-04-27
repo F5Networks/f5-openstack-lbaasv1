@@ -656,16 +656,19 @@ def _get_subnets_to_delete(bigip, service, subnet_hints):
     subnets_to_delete = []
     for subnetinfo in subnet_hints['check_for_delete_subnets'].values():
         subnet = subnetinfo['subnet']
+        route_domain = subnetinfo['network']['route_domain_id']
         if not subnet:
             continue
-        if not _ips_exist_on_subnet(bigip, service, subnet):
+        if not _ips_exist_on_subnet(bigip, service, subnet, route_domain):
             subnets_to_delete.append(subnetinfo)
     return subnets_to_delete
 
 
-def _ips_exist_on_subnet(bigip, service, subnet):
+def _ips_exist_on_subnet(bigip, service, subnet, route_domain):
     """ Does the big-ip have any IP addresses on this subnet? """
-    LOG.debug("_ips_exist_on_subnet entry %s" % str(subnet['cidr']))
+    LOG.debug("_ips_exist_on_subnet entry %s rd %s"
+              % (str(subnet['cidr']), route_domain))
+    route_domain = str(route_domain)
     ipsubnet = netaddr.IPNetwork(subnet['cidr'])
     # Are there any virtual addresses on this subnet?
     get_vs = bigip.virtual_server.get_virtual_service_insertion
@@ -674,6 +677,12 @@ def _ips_exist_on_subnet(bigip, service, subnet):
         (_, dest) = virt_serv.items()[0]
         LOG.debug("            _ips_exist_on_subnet: checking vip %s"
                   % str(dest['address']))
+        if len(dest['address'].split('%')) > 1:
+            vip_route_domain = dest['address'].split('%')[1]
+        else:
+            vip_route_domain = '0'
+        if vip_route_domain != route_domain:
+            continue
         vip_addr = strip_domain_address(dest['address'])
         if netaddr.IPAddress(vip_addr) in ipsubnet:
             LOG.debug("            _ips_exist_on_subnet: found")
@@ -686,6 +695,12 @@ def _ips_exist_on_subnet(bigip, service, subnet):
     for node in nodes:
         LOG.debug("            _ips_exist_on_subnet: checking node %s"
                   % str(node))
+        if len(node.split('%')) > 1:
+            node_route_domain = node.split('%')[1]
+        else:
+            node_route_domain = '0'
+        if node_route_domain != route_domain:
+            continue
         node_addr = strip_domain_address(node)
         if netaddr.IPAddress(node_addr) in ipsubnet:
             LOG.debug("        _ips_exist_on_subnet: found")

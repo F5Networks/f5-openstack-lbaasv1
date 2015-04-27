@@ -97,6 +97,10 @@ class IApp(object):
         if response.status_code < 400:
             return True
         else:
+            # ignore this anomaly for now
+            if 'The monitor rule  was not found' in response.text:
+                Log.error('IAPP', response.text)
+                return True
             Log.error('IAPP', response.text)
             raise exceptions.IAppUpdateException(response.text)
         return False

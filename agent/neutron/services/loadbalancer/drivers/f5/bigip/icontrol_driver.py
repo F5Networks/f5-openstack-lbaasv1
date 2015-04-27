@@ -1078,11 +1078,14 @@ class iControlDriver(LBaaSBaseDriver):
         monitors_updated = []
         pool = service['pool']
 
+        LOG.debug("update_pool_monitors_status: service: %s" % service)
         health_monitors_status = {}
         for monitor in pool['health_monitors_status']:
             health_monitors_status[monitor['monitor_id']] = \
                 monitor['status']
 
+        LOG.debug("update_pool_monitors_status: health_monitor_status: %s"
+                  % health_monitors_status)
         for monitor in service['health_monitors']:
             if monitor['id'] in health_monitors_status:
                 if health_monitors_status[monitor['id']] == \
@@ -1100,7 +1103,9 @@ class iControlDriver(LBaaSBaseDriver):
                          'status': plugin_const.ACTIVE,
                          'status_description': 'monitor active'})
 
+        LOG.debug("Monitors to destroy: %s" % monitors_destroyed)
         for monitor_destroyed in monitors_destroyed:
+            LOG.debug("Monitor destroying: %s" % monitor_destroyed)
             self.plugin_rpc.health_monitor_destroyed(
                 **monitor_destroyed)
         for monitor_updated in monitors_updated:
@@ -1125,12 +1130,12 @@ class iControlDriver(LBaaSBaseDriver):
             self.plugin_rpc.update_vip_status(
                 vip['id'],
                 status=status,
-                status_description='vip created')
+                status_description=None)
         elif vip['status'] == plugin_const.PENDING_UPDATE:
             self.plugin_rpc.update_vip_status(
                 vip['id'],
                 status=status,
-                status_description='vip updated')
+                status_description=None)
         elif vip['status'] == plugin_const.PENDING_DELETE:
             try:
                 self.plugin_rpc.vip_destroyed(vip['id'])
