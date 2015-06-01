@@ -19,7 +19,10 @@
 # pylint: disable=broad-except
 
 from neutron.common import constants as q_const
-from neutron.openstack.common import log as logging
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from neutron.services.loadbalancer.drivers.f5.bigip.fdb_connector \
     import FDBConnector
 

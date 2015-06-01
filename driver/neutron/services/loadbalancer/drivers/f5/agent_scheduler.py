@@ -13,8 +13,13 @@
 # limitations under the License.
 #
 
-from neutron.services.loadbalancer import agent_scheduler
-from neutron.openstack.common import log as logging
+try:
+    from neutron.services.loadbalancer import agent_scheduler
+    from neutron.openstack.common import log as logging
+except ImportError:
+    # Kilo
+    from neutron_lbaas.services.loadbalancer import agent_scheduler
+    from oslo_log import log as logging
 
 LOG = logging.getLogger(__name__)
 

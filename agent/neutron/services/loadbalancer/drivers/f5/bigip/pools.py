@@ -15,9 +15,13 @@
 #
 
 # pylint: disable=no-self-use,broad-except
+try:
+    from neutron.openstack.common import log as logging
+    from neutron.services.loadbalancer import constants as lb_const
+except ImportError:
+    from oslo_log import log as logging
+    from neutron_lbaas.services.loadbalancer import constants as lb_const
 from neutron.plugins.common import constants as plugin_const
-from neutron.services.loadbalancer import constants as lb_const
-from neutron.openstack.common import log as logging
 from time import time
 
 LOG = logging.getLogger(__name__)
@@ -223,7 +227,7 @@ class BigipPoolManager(object):
 
         # if members are using weights, change the LB to RATIO
         if any_using_ratio:
-            #LOG.debug(_("Pool: %s changing to ratio based lb"
+            # LOG.debug(_("Pool: %s changing to ratio based lb"
             #        % pool['id']))
             if pool['lb_method'] == lb_const.LB_METHOD_LEAST_CONNECTIONS:
                 bigip.pool.set_lb_method(name=pool['id'],

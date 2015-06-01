@@ -11,33 +11,61 @@ import uuid
 import netaddr
 import datetime
 
+from time import time
 from oslo.config import cfg
 
 from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
+from neutron.plugins.common import constants
 from neutron.common import rpc as q_rpc
 from neutron.db import agents_db
-from neutron.db.loadbalancer import loadbalancer_db as lb_db
-from neutron.extensions import lbaas_agentscheduler
-from neutron.openstack.common import importutils
-from neutron.common import log
-from neutron.openstack.common import log as logging
-PREJUNO = False
-try:
-    from neutron.openstack.common import rpc
-    from neutron.openstack.common.rpc import proxy
-    PREJUNO = True
-except ImportError:
-    from neutron.common import rpc as proxy
-from neutron.plugins.common import constants
-from neutron.extensions import portbindings
-from neutron.services.loadbalancer.drivers import abstract_driver
-from neutron.extensions.loadbalancer import MemberNotFound
-from neutron.extensions.loadbalancer import PoolNotFound
-from neutron.extensions.loadbalancer import VipNotFound
-from neutron.extensions.loadbalancer import HealthMonitorNotFound
 from neutron.context import get_admin_context
-from time import time
+from neutron.extensions import portbindings
+from neutron.common import log
+
+PREJUNO = False
+PREKILO = False
+try:
+    from neutron.services.loadbalancer.drivers.abstract_driver \
+        import LoadBalancerAbstractDriver  # @UnresolvedImport @Reimport
+    from neutron.extensions \
+        import lbaas_agentscheduler  # @UnresolvedImport @Reimport
+    from neutron.db.loadbalancer import loadbalancer_db as lb_db
+    from neutron.openstack.common import log as logging
+    from neutron.openstack.common import importutils
+    from neutron.extensions.loadbalancer \
+        import MemberNotFound  # @UnresolvedImport @Reimport
+    from neutron.extensions.loadbalancer \
+        import PoolNotFound  # @UnresolvedImport @Reimport
+    from neutron.extensions.loadbalancer \
+        import VipNotFound  # @UnresolvedImport @Reimport
+    from neutron.extensions.loadbalancer \
+        import HealthMonitorNotFound  # @UnresolvedImport @Reimport
+    PREKILO = True
+    try:
+        from neutron.openstack.common import rpc
+        from neutron.openstack.common.rpc import proxy
+        PREJUNO = True
+    except ImportError:
+        from neutron.common import rpc as proxy
+except ImportError:
+    # Kilo
+    from neutron_lbaas.services.loadbalancer.drivers.abstract_driver \
+        import LoadBalancerAbstractDriver  # @UnresolvedImport @Reimport
+    from neutron_lbaas.extensions \
+        import lbaas_agentscheduler  # @UnresolvedImport @Reimport
+    from neutron_lbaas.db.loadbalancer import loadbalancer_db as lb_db
+    from oslo_log import log as logging
+    from oslo_utils import importutils
+    from neutron_lbaas.extensions.loadbalancer \
+        import MemberNotFound  # @UnresolvedImport @Reimport
+    from neutron_lbaas.extensions.loadbalancer \
+        import PoolNotFound  # @UnresolvedImport @Reimport
+    from neutron_lbaas.extensions.loadbalancer \
+        import VipNotFound  # @UnresolvedImport @Reimport
+    from neutron_lbaas.extensions.loadbalancer \
+        import HealthMonitorNotFound  # @UnresolvedImport @Reimport
+    import neutron.services.loadbalancer.drivers.f5.rpc as proxy
 
 LOG = logging.getLogger(__name__)
 
@@ -182,10 +210,9 @@ class LoadBalancerCallbacks(object):
             if not pool:
                 LOG.debug(_('Built pool %s service: %s' % (pool_id, service)))
                 return service
-
             # populate pool members
             adminctx = get_admin_context()
-            if not 'members' in pool or len(pool['members']) == 0:
+            if 'members' not in pool or len(pool['members']) == 0:
                 pool['members'] = []
             service['members'] = []
             for member_id in pool['members']:
@@ -249,16 +276,16 @@ class LoadBalancerCallbacks(object):
         """ network from cache or get from neutron """
         if network_id not in self.net_cache:
             net_dict = self._core_plugin().get_network(context, network_id)
-            if not 'provider:network_type' in net_dict:
+            if 'provider:network_type' not in net_dict:
                 net_dict['provider:network_type'] = 'undefined'
-            if not 'provider:segmentation_id' in net_dict:
+            if 'provider:segmentation_id' not in net_dict:
                 net_dict['provider:segmentation_id'] = 0
             self.net_cache[network_id] = net_dict
         return self.net_cache[network_id]
 
     def _get_extended_vip(self, context, pool, global_routed_mode):
         """ add network data to vip """
-        if not 'vip_id' in pool or not pool['vip_id']:
+        if 'vip_id' not in pool or not pool['vip_id']:
             return {'port': {'network': None, 'subnet': None}}
 
         vip = self.plugin.get_vip(context, pool['vip_id'])
@@ -480,7 +507,7 @@ class LoadBalancerCallbacks(object):
                         context, host)
         if 'provider:network_type' not in member['network']:
             member['network']['provider:network_type'] = 'undefined'
-        if not 'provider:segmentation_id' in member['network']:
+        if 'provider:segmentation_id' not in member['network']:
             member['network']['provider:segmentation_id'] = 0
 
     @log.log
@@ -1202,7 +1229,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
         return stats
 
 
-class F5PluginDriver(abstract_driver.LoadBalancerAbstractDriver):
+class F5PluginDriver(LoadBalancerAbstractDriver):
     """ Plugin Driver for LBaaS.
 
         This class implements the methods found in the abstract

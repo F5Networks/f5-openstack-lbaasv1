@@ -15,7 +15,10 @@
 #
 
 # pylint: disable=broad-except,star-args,no-self-use
-from neutron.openstack.common import log as logging
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import NeutronException
 
@@ -213,7 +216,7 @@ class NetworkBuilderDirect(object):
         """ Create a new route domain """
         route_domain_id = None
         for bigip in self.driver.get_all_bigips():
-            #folder = bigip.decorate_folder(tenant_id)
+            # folder = bigip.decorate_folder(tenant_id)
             bigip_id = bigip.route.create_domain(
                 folder=tenant_id,
                 strict_route_isolation=self.conf.f5_route_domain_strictness,
@@ -260,7 +263,7 @@ class NetworkBuilderDirect(object):
         LOG.debug("rds_cache: processing bigip %s" % bigip.device_name)
 
         route_domain_ids = bigip.route.get_domain_ids(folder=tenant_id)
-        #LOG.debug("rds_cache: got bigip route domains: %s" % route_domains)
+        # LOG.debug("rds_cache: got bigip route domains: %s" % route_domains)
         for route_domain_id in route_domain_ids:
             self.update_rds_cache_bigip_rd_vlans(
                 tenant_id, bigip, route_domain_id)

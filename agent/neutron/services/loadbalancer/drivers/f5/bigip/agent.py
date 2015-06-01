@@ -21,10 +21,10 @@ from neutron.agent.common import config
 preJuno = False
 try:
     from neutron.common import legacy
-    from neutron.openstack.common.rpc import service as rpc_service
+    from neutron.openstack.common.rpc.service import Service
     preJuno = True
 except ImportError:
-    from neutron.common import rpc as rpc_service
+    from neutron.common.rpc import Service
     from neutron.common import config as common_config
 from neutron.openstack.common import service
 from neutron.services.loadbalancer.drivers.f5.bigip import \
@@ -42,7 +42,7 @@ OPTS = [
 ]
 
 
-class LbaasAgentService(rpc_service.Service):
+class LbaasAgentService(Service):
     def start(self):
         super(LbaasAgentService, self).start()
         self.tg.add_timer(

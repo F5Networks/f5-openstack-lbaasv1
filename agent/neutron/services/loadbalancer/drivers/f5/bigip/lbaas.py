@@ -15,10 +15,14 @@
 #
 
 # pylint: disable=broad-except,star-args,no-self-use
+try:
+    from neutron.openstack.common import log as logging
+    from neutron.services.loadbalancer import constants as os_lb_consts
+except ImportError:
+    from oslo_log import log as logging
+    from neutron_lbaas.services.loadbalancer import constants as os_lb_consts
 from abc import abstractmethod
-from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
-from neutron.services.loadbalancer import constants as os_lb_consts
 
 LOG = logging.getLogger(__name__)
 
@@ -189,14 +193,14 @@ class LBaaSBuilderIApp(LBaaSBuilder):
             return None
 
         for health_monitor in os_service['health_monitors']:
-            if not 'type' in health_monitor:
+            if 'type' not in health_monitor:
                 continue
 
             templ_map = _IAPP_TEMPLATE_MONITOR_TYPES
             iapp_template_monitor_type = templ_map.get(health_monitor['type'])
 
             if not iapp_template_monitor_type:
-                #LOG.info(_('Unsupported OpenStack health monitor type %s'
+                # LOG.info(_('Unsupported OpenStack health monitor type %s'
                 #            ' - the default LTM health monitor specified '
                 #            'in the iApp template will be used'
                 #            % health_monitor['type']))

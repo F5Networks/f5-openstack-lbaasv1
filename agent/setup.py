@@ -43,10 +43,15 @@ if 'bdist_deb' in sys.argv:
     stdebcfg.close()
 
 if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
-    data_files.append(('/etc/init.d',
-                [project_dir + '/agent/etc/init.d/f5-bigip-lbaas-agent']))
-    data_files.append(('/etc/systemd/system',
-                [project_dir + '/agent/etc/systemd/system/f5-bigip-lbaas-agent.service']))
+    data_files.append(
+        ('/etc/init.d',
+         [project_dir + '/agent/etc/init.d/f5-bigip-lbaas-agent'])
+    )
+    data_files.append(
+        ('/etc/systemd/system',
+         [project_dir +
+          '/agent/etc/systemd/system/f5-bigip-lbaas-agent.service'])
+    )
 
 setup(name='f5-bigip-lbaas-agent',
       description='F5 LBaaS Agent for OpenStack',
@@ -57,10 +62,12 @@ setup(name='f5-bigip-lbaas-agent',
       author_email='devcentral@f5.com',
       url='http://devcentral.f5.com/openstack',
       py_modules=[
+         'neutron.services.loadbalancer.drivers',
          'neutron.services.loadbalancer.drivers.f5.bigip.agent',
          'neutron.services.loadbalancer.drivers.f5.bigip.agent_api',
          'neutron.services.loadbalancer.drivers.f5.bigip.agent_manager',
          'neutron.services.loadbalancer.drivers.f5.bigip.constants',
+         'neutron.services.loadbalancer.drivers.f5.bigip.rpc',
          'neutron.services.loadbalancer.drivers.f5.bigip.fdb_connector',
          'neutron.services.loadbalancer.drivers.f5.bigip.fdb_connector_ml2',
          'neutron.services.loadbalancer.drivers.f5.bigip.lbaas_driver',

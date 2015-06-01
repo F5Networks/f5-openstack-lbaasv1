@@ -15,8 +15,10 @@
 #
 
 # pylint: disable=no-self-use
-
-from neutron.openstack.common import log as logging
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from f5.bigip import exceptions as f5ex
 from f5.bigip.interfaces import prefixed
 from f5.bigip.exceptions import \
@@ -669,14 +671,14 @@ class BigipL2Manager(object):
             ip_address = entry[1]
 
             # create/get tunnel data
-            if not tunnel_name in fdbs:
+            if tunnel_name not in fdbs:
                 fdbs[tunnel_name] = {}
             tunnel_fdbs = fdbs[tunnel_name]
             # update tunnel folder
             tunnel_fdbs['folder'] = folder
 
             # maybe create records for tunnel
-            if not 'records' in tunnel_fdbs:
+            if 'records' not in tunnel_fdbs:
                 tunnel_fdbs['records'] = {}
 
             # add entry to records map keyed by mac address

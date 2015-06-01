@@ -15,7 +15,10 @@
 #
 
 # pylint: disable=no-self-use
-from neutron.openstack.common import log as logging
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from neutron.plugins.common import constants as plugin_const
 from f5.bigip import interfaces as bigip_interfaces
 
@@ -146,7 +149,7 @@ class BigipVipManager(object):
         # we don't need unless we decided to handle
         # shifting from L4 to L7 or from L7 to L4
 
-        #virtual_type = 'standard'
+        # virtual_type = 'standard'
 
         folder = vip['tenant_id']
         if '.' in ip_address:
@@ -169,7 +172,6 @@ class BigipVipManager(object):
             ):
                 return True
         else:
-
             if bigip_vs.create_fastl4(
                 name=vip['id'],
                 ip_address=ip_address,

@@ -15,9 +15,11 @@
 #
 
 # pylint: disable=broad-except
-
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
-from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants as plugin_const
 import novaclient.v1_1.client as nvclient
 import neutronclient.v2_0.client as neclient
@@ -147,11 +149,11 @@ class LBaaSBuilderBigiqIApp(LBaaSBuilderIApp):
                 self._connectors_by_id[connector['connectorId']] = connector
                 self._connectors_by_name[connector['name']] = connector
             else:
-                if not 'connectorId' in connector and not 'name' in connector:
+                if 'connectorId' not in connector and 'name' not in connector:
                     LOG.info(_("Can't map a connector because it doesn't"
                                " have the key named 'connectorId' and the "
                                "key named 'name'"))
-                elif not 'connectorId' in connector:
+                elif 'connectorId' not in connector:
                     LOG.info(_("Can't map the connector with the 'name' of "
                                "'%s' because it doesn't have a key named "
                                " 'connectorId'" % connector['name']))

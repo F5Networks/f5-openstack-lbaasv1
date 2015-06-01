@@ -14,7 +14,10 @@
 # limitations under the License.
 #
 # pylint: disable=no-self-use
-from neutron.openstack.common import log as logging
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from f5.bigip import bigip as f5_bigip
 from f5.bigip.interfaces import prefixed
 

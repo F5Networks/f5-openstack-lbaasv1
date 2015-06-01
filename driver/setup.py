@@ -34,15 +34,17 @@ if 'bdist_deb' in sys.argv:
     stdebcfg.write('Debian-Version: ' + release + '\n')
     stdebcfg.close()
 
-setup(name='f5-lbaas-driver',
-      version=version,
-      description='F5 LBaaS Driver for OpenStack',
-      long_description='F5 LBaaS Driver for OpenStack',
-      license='Apache License, Version 2.0',
-      author='F5 DevCentral',
-      author_email='devcentral@f5.com',
-      url='http://devcentral.f5.com/openstack',
-      packages=['neutron.services.loadbalancer.drivers.f5',
-                'neutron.services.loadbalancer.drivers.f5.log'],
-      data_files=data_files
-     )
+setup(
+    name='f5-lbaas-driver',
+    version=version,
+    description='F5 LBaaS Driver for OpenStack',
+    long_description='F5 LBaaS Driver for OpenStack',
+    license='Apache License, Version 2.0',
+    author='F5 DevCentral',
+    author_email='devcentral@f5.com',
+    url='http://devcentral.f5.com/openstack',
+    packages=['neutron.services.loadbalancer.drivers',
+              'neutron.services.loadbalancer.drivers.f5',
+              'neutron.services.loadbalancer.drivers.f5.log'],
+    data_files=data_files
+)

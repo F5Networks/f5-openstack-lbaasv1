@@ -16,12 +16,20 @@
 # pylint: disable=broad-except,star-args,no-self-use
 
 from oslo.config import cfg
-from neutron.openstack.common import log as logging
-from neutron.openstack.common import importutils
+
+try:
+    from neutron.openstack.common import log as logging
+    from neutron.openstack.common import importutils
+    from neutron.services.loadbalancer import constants as lb_const
+except ImportError:
+    # Kilo
+    from oslo_log import log as logging
+    from oslo_utils import importutils
+    from neutron_lbaas.services.loadbalancer import constants as lb_const
+
 from neutron.plugins.common import constants as plugin_const
 from neutron.common.exceptions import NeutronException, \
     InvalidConfigurationOption
-from neutron.services.loadbalancer import constants as lb_const
 
 from neutron.services.loadbalancer.drivers.f5.bigip.lbaas_driver \
     import LBaaSBaseDriver
@@ -810,7 +818,7 @@ class iControlDriver(LBaaSBaseDriver):
                                         # if the monitor says member is up
                                         if state['state'] == \
                                                 'MONITOR_STATUS_UP' or \
-                                            state['state'] == \
+                                           state['state'] == \
                                                 'MONITOR_STATUS_UNCHECKED':
                                             # set ACTIVE as long as the
                                             # status was not set to 'DOWN'

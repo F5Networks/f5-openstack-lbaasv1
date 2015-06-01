@@ -16,20 +16,29 @@
 import datetime
 
 preJuno = False
+preKilo = False
+
 try:
-    from neutron.openstack.common.rpc import dispatcher
-    preJuno = True
+    from neutron.openstack.common import importutils
+    from neutron.openstack.common import log as logging
+    preKilo = True
+    try:
+        from neutron.openstack.common.rpc import dispatcher
+        preJuno = True
+    except ImportError:
+        from neutron.common import rpc
 except ImportError:
-    from neutron.common import rpc as n_rpc
+    from oslo_log import log as logging
+    from oslo_utils import importutils
+    from neutron.services.loadbalancer.drivers.f5.bigip import rpc
+
 from oslo.config import cfg
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
 from neutron import context
-from neutron.openstack.common import importutils
 from neutron.common import log
 from neutron.common import topics
 from neutron.common.exceptions import NeutronException
-from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
 
@@ -120,7 +129,7 @@ class LogicalServiceCache(object):
             port_id = None
         pool_id = service['pool']['id']
         tenant_id = service['pool']['tenant_id']
-        if not pool_id in self.services:
+        if pool_id not in self.services:
             s = self.Service(port_id, pool_id, tenant_id)
             self.services[pool_id] = s
         else:
@@ -247,6 +256,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.context,
             self.agent_host
         )
+        # Allow driver to make callbacks using the
+        # same RPC proxy as the manager
         self.lbdriver.set_plugin_rpc(self.plugin_rpc)
 
         # Agent state Callbacks API
@@ -258,8 +269,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 self._report_state)
             heartbeat.start(interval=report_interval)
 
+        # The LBaaS agent listener with it's host are registered
+        # as part of the rpc.Service. Here we are setting up
+        # other message queues to listen for updates from
+        # Neutron.
         if not self.conf.f5_global_routed_mode:
-            # Core plugin Callbacks API
+            # Core plugin Callbacks API for tunnel updates
             self.lbdriver.set_tunnel_rpc(agent_api.CoreAgentApi(topics.PLUGIN))
 
             # L2 Populate plugin Callbacks API
@@ -716,7 +731,7 @@ if preJuno:
         def __init__(self, conf):
             LbaasAgentManagerBase.do_init(self, conf)
 else:
-    class LbaasAgentManager(n_rpc.RpcCallback,
+    class LbaasAgentManager(rpc.RpcCallback,
                             LbaasAgentManagerBase):  # @UndefinedVariable
         RPC_API_VERSION = '1.1'
 

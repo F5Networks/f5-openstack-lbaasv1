@@ -13,7 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from neutron.openstack.common import log as logging
+try:
+    from neutron.openstack.common import log as logging
+except ImportError:
+    from oslo_log import log as logging
 from eventlet import greenthread
 from time import time
 import uuid
@@ -49,16 +52,16 @@ def serialized(method_name):
             # To avoid race conditions, DO NOT add logging to this code
             # block.
 
-            #num_requests = len(service_queue)
+            # num_requests = len(service_queue)
 
             # queue optimization
 
-            #if num_requests > 1 and method_name == 'create_member':
+            # if num_requests > 1 and method_name == 'create_member':
             #    cur_pool_id = service['pool']['id']
-                #cur_index = num_requests - 1
-                # do not attempt to replace the first entry (index 0)
-                # because it may already be in process.
-                #while cur_index > 0:
+                # cur_index = num_requests - 1
+                #  do not attempt to replace the first entry (index 0)
+                #  because it may already be in process.
+                # while cur_index > 0:
                 #    (check_request, check_method, check_service) = \
                 #        service_queue[cur_index]
                 #    if check_service['pool']['id'] != cur_pool_id:
@@ -66,8 +69,8 @@ def serialized(method_name):
                 #        continue
                 #    if check_method != 'create_member':
                 #        break
-                    # move this request up in the queue and return
-                    # so that existing thread can handle it
+                # move this request up in the queue and return
+                # so that existing thread can handle it
                 #    service_queue[cur_index] = \
                 #        (check_request, check_method, service)
                 #    return
