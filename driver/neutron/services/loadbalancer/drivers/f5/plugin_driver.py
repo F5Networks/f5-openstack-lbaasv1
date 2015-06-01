@@ -321,29 +321,24 @@ class LoadBalancerCallbacks(object):
         if nettype not in ['vxlan', 'gre']:
             return
 
-        # get resources needed to find port to host
-        # binding so we can defined vteps and fdb entries
-        # for this Vip's port
-        from neutron.plugins.ml2 import models as ml2_db
-        segment_qry = context.session.query(ml2_db.NetworkSegment)
-        segment = segment_qry.filter_by(
-            network_id=vip['network']['id']
-        ).first()
-        segment_id = segment['id']
-        host_qry = context.session.query(ml2_db.PortBinding)
-        hosts = host_qry.filter_by(segment=segment_id).all()
-        host_ids = set()
-        for host in hosts:
-            host_ids.add(host['host'])
-        for host_id in host_ids:
+        ports = self.get_ports_on_network(context,
+                                          network_id=vip['network']['id'])
+        vtep_hosts = []
+        for port in ports:
+            if 'binding:host_id' in port and \
+               port['binding:host_id'] not in vtep_hosts:
+                vtep_hosts.append(port['binding:host_id'])
+        for vtep_host in vtep_hosts:
             if nettype == 'vxlan':
-                endpoints = self._get_vxlan_endpoints(context, host_id)
-                if len(endpoints) > 0:
-                    vip['vxlan_vteps'] = vip['vxlan_vteps'] + endpoints
+                endpoints = self._get_vxlan_endpoints(context, vtep_host)
+                for ep in endpoints:
+                    if ep not in vip['vxlan_vteps']:
+                        vip['vxlan_vteps'].append(ep)
             elif nettype == 'gre':
-                endpoints = self._get_gre_endpoints(context, host_id)
-                if len(endpoints) > 0:
-                    vip['gre_vteps'] = vip['gre_vteps'] + endpoints
+                endpoints = self._get_gre_endpoints(context, vtep_host)
+                for ep in endpoints:
+                    if ep not in vip['gre_vteps']:
+                        vip['gre_vteps'].append(ep)
 
     def _extend_member(
             self, adminctx, context, pool, member):
@@ -571,6 +566,17 @@ class LoadBalancerCallbacks(object):
         if not isinstance(mac_addresses, list):
             mac_addresses = [mac_addresses]
         filters = {'mac_address': mac_addresses}
+        return self._core_plugin().get_ports(
+            context,
+            filters=filters
+        )
+
+    @log.log
+    def get_ports_on_network(self, context, network_id=None):
+        """ Get ports for mac addresses """
+        if not isinstance(network_id, list):
+            network_ids = [network_id]
+        filters = {'network_id': network_ids}
         return self._core_plugin().get_ports(
             context,
             filters=filters
