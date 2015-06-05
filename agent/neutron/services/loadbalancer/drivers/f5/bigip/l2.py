@@ -88,7 +88,7 @@ class BigipL2Manager(object):
             (network['id'] in self.conf.common_network_ids) or \
             ('router:external' in network and
              network['router:external'] and
-             (network['id'] in self.conf.common_external_networks))
+             (self.f5_conf.common_external_networks))
 
     def get_vlan_name(self, network, hostname):
         """ Construct a consistent vlan name """
