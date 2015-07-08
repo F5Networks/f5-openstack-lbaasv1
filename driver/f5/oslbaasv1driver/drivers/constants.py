@@ -13,6 +13,6 @@
 # limitations under the License.
 #
 
-# topic name for this particular agent implementation
+# RPC channel names
 TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
 TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'

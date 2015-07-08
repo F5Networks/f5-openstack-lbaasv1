@@ -26,7 +26,7 @@ from neutron.openstack.common import periodic_task
 
 from f5.oslbaasv1agent.drivers.bigip import agent_api
 from f5.oslbaasv1agent.drivers.bigip import constants
-import f5.common.oslbaasv1constants as lbaasv1constants
+import f5.oslbaasv1agent.drivers.bigip.constants as lbaasv1constants
 
 preJuno = False
 preKilo = False

@@ -30,3 +30,7 @@ VTEP_SELFIP_NAME = 'vtep'
 
 # Inter-Agent Channel
 AGENT_STATUS = 'f5-agents'
+
+# RPC channel names
+TOPIC_PROCESS_ON_HOST = 'q-f5-lbaas-process-on-host'
+TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'

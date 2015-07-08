@@ -22,7 +22,7 @@ from neutron.db import agents_db
 from neutron.context import get_admin_context
 from neutron.extensions import portbindings
 from neutron.common import log
-import f5.common.oslbaasv1constants as lbaasv1constants
+import f5.oslbaasv1driver.drivers.constants as lbaasv1constants
 
 PREJUNO = False
 PREKILO = False

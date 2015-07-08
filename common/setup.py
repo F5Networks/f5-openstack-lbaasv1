@@ -63,9 +63,8 @@ setup(name='f5-bigip-common',
                   'f5.bigip.interfaces.vxlan',
                   'f5.bigip.pycontrol.pycontrol',
                   'f5.bigiq.bigiq',
-                  'f5.common.constants',
                   'f5.common.logger',
-                  'f5.common.oslbaasv1constants'
+                  'f5.common.constants'
       ],
       packages=['f5',
                 'f5.bigip',

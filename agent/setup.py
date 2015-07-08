@@ -85,6 +85,7 @@ setup(name='f5-oslbaasv1-agent',
                   'f5.oslbaasv1agent.drivers.bigip.tenants',
                   'f5.oslbaasv1agent.drivers.bigip.vcmp',
                   'f5.oslbaasv1agent.drivers.bigip.vips',
+                  'f5.oslbaasv1agent.drivers.bigip.constants',
                   'f5.oslbaasv1agent.utils.migrate_config'
       ],
       packages=['f5.oslbaasv1agent',
