@@ -880,7 +880,8 @@ class iControlDriver(LBaaSBaseDriver):
         for bigip in self.get_all_bigips():
             if bigip.local_ip:
                 tunnel_ips.append(bigip.local_ip)
-        self.fdb_connector.advertise_tunnel_ips(tunnel_ips)
+        if self.fdb_connector:
+            self.fdb_connector.advertise_tunnel_ips(tunnel_ips)
 
     @serialized('sync')
     @is_connected
