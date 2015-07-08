@@ -23,28 +23,31 @@ version = os.environ['VERSION']
 release = os.environ['RELEASE']
 project_dir = os.environ['PROJECT_DIR']
 
-data_files = [('/usr/share/doc/f5-lbaas-driver',
-               [project_dir + '/doc/f5lbaas-readme.pdf',
+data_files = [('/usr/share/doc/f5-oslbaasv1-driver',
+               [project_dir + '/doc/f5-oslbaasv1-readme.pdf',
                 project_dir + '/SUPPORT'])]
 
 if 'bdist_deb' in sys.argv:
     stdebcfg = open('stdeb.cfg', 'w')
     stdebcfg.write('[DEFAULT]\n')
-    stdebcfg.write('Package: f5-lbaas-driver\n')
+    stdebcfg.write('Package: f5-oslbaasv1-driver\n')
     stdebcfg.write('Debian-Version: ' + release + '\n')
+    stdebcfg.write('Depends: f5-bigip-common, neutron-server\n')
     stdebcfg.close()
 
 setup(
-    name='f5-lbaas-driver',
+    name='f5-oslbaasv1-driver',
     version=version,
-    description='F5 LBaaS Driver for OpenStack',
-    long_description='F5 LBaaS Driver for OpenStack',
+    description='F5 LBaaSv1 Driver for OpenStack',
+    long_description='F5 LBaaSv1 Driver for OpenStack',
     license='Apache License, Version 2.0',
     author='F5 DevCentral',
     author_email='devcentral@f5.com',
     url='http://devcentral.f5.com/openstack',
-    packages=['neutron.services.loadbalancer.drivers',
-              'neutron.services.loadbalancer.drivers.f5',
-              'neutron.services.loadbalancer.drivers.f5.log'],
-    data_files=data_files
-)
+    py_modules=['f5.oslbaasv1driver.drivers.agent_scheduler',
+                'f5.oslbaasv1driver.drivers.plugin_driver',
+                'f5.oslbaasv1driver.drivers.rpc'],
+    packages=['f5.oslbaasv1driver',
+              'f5.oslbaasv1driver.drivers',
+              'f5.oslbaasv1driver.utils'],
+    data_files=data_files)

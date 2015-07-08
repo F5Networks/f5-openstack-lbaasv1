@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+if which pycompile >/dev/null 2>&1; then
+	pycompile -p f5-oslbaasv1-agent 
+fi
+
+if [ -x "/etc/init.d/f5-oslbaasv1-agent" ] || [ -e "/etc/init/f5-oslbaasv1-agent.conf" ]; then
+	if [ ! -e "/etc/init/f5-oslbaasv1-agent.conf" ]; then
+		update-rc.d f5-oslbaasv1-agent defaults >/dev/null
+	fi
+	invoke-rc.d f5-oslbaasv1-agent start || exit $?
+fi
+
+update-rc.d -f f5-oslbaasv1-agent remove >/dev/null || exit $?
+
+python -m f5.oslbaasv1agent.utils.migrate_config
+

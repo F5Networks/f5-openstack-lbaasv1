@@ -1,0 +1,16 @@
+description "F5 BIG-IP LBaaS Agent"
+author "John Gruber <j.gruber@f5.com>"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+chdir /var/run
+
+pre-start script
+  mkdir -p /var/run/neutron
+  chown neutron:root /var/run/neutron
+end script
+
+exec start-stop-daemon --start --chuid neutron --exec /usr/bin/f5-oslbaasv1-agent -- --config-file=/etc/neutron/f5-oslbaasv1-agent.ini --config-file=/etc/neutron/neutron.conf --log-file=/var/log/neutron/f5-oslbaasv1-agent.log

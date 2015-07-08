@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if which pycompile >/dev/null 2>&1; then
+	pycompile -p f5-oslbaasv1-driver 
+fi
+
+python -m f5.oslbaasv1driver.utils.migrate_config
+
