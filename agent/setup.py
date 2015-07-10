@@ -93,6 +93,7 @@ setup(name='f5-oslbaasv1-agent',
                 'f5.oslbaasv1agent.drivers.bigip',
                 'f5.oslbaasv1agent.utils'],
       data_files=data_files,
+      include_package_data=True,
       package_data={
           'f5.oslbaasv1agent': ['iapps/*']
       },

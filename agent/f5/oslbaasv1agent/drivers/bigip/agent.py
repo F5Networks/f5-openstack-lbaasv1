@@ -19,7 +19,7 @@ from oslo.config import cfg
 from neutron.agent.common import config
 from neutron.openstack.common import service
 from f5.oslbaasv1agent.drivers.bigip import agent_manager as manager
-import f5.common.oslbaasv1constants as lbaasconstants
+import f5.oslbaasv1agent.drivers.bigip.constants as lbaasconstants
 
 eventlet.monkey_patch()
 

@@ -87,7 +87,7 @@ build/f5-oslbaasv1-agent-$(VERSION).noarch.rpm:
 
 pdf:
 	html2pdf $(PROJECT_DIR)/doc/f5-oslbaasv1-readme.html \
-            $(PROJECT_DIR)/doc/f5-oslbaasv1-readme.pdf
+             $(PROJECT_DIR)/doc/f5-oslbaasv1-readme.pdf
 
 clean: clean-debs clean-rpms 
 
@@ -110,6 +110,7 @@ clean-debs:
 
 clean-rpms:
 	find . -name "*.pyc" -exec rm -rf {} \;
+	rm -f common/MANIFEST
 	rm -f driver/MANIFEST
 	rm -f agent/MANIFEST 
 	rm -f build/f5-bigip-common-*.rpm
@@ -141,15 +142,14 @@ pep8-driver:
          pep8 f5/oslbaasv1driver/drivers/agent_scheduler.py; \
          pep8 f5/oslbaasv1driver/drivers/plugin_driver.py; \
          pep8 f5/oslbaasv1driver/drivers/rpc.py; \
-         pep8 f5/oslbaasv1driver/drivers/log/__init__.py; \
-         pep8 f5/oslbaasv1driver/drivers/log/plugin_driver.py; \
+         pep8 f5/oslbaasv1driver/drivers/constants.py; \
         )    
 
 pep8-agent:
 	(cd agent; \
-	     pep8 f5/oslbaasv1agent/__init__.py; \
-	     pep8 f5/oslbaasv1agent/drivers/__init__.py; \
-	     pep8 $(BDIR)/__init__.py; \
+	 pep8 f5/oslbaasv1agent/__init__.py; \
+	 pep8 f5/oslbaasv1agent/drivers/__init__.py; \
+	 pep8 $(BDIR)/__init__.py; \
          pep8 $(BDIR)/agent_api.py; \
          pep8 $(BDIR)/agent_manager.py; \
          pep8 $(BDIR)/agent.py; \
@@ -206,7 +206,7 @@ pep8-common:
          pep8 f5/common/__init__.py; \
          pep8 f5/common/constants.py; \
          pep8 f5/common/logger.py; \
-         pep8 f5/common/oslbaasv1constants.py; \
+         pep8 $(IDIR)/constants.py; \
         )       
         
 PYHOOK := 'import sys;sys.path.insert(1,".")'
