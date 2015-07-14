@@ -15,6 +15,7 @@
 #
 
 # pylint: disable=no-self-use
+
 try:
     from neutron.openstack.common import log as logging
 except ImportError:
@@ -86,6 +87,16 @@ class L3BindingBase(object):
                                             % (subnet_id, port_id, device_id)))
             self.__initialized__bigip_ports = True
 
+    def bind_address(self, subnet_id=None, ip_address=None):
+        raise NotImplementedError(
+            "An L3 address binding class must implement bind_address"
+        )
+
+    def unbind_address(self, subnet_id=None, ip_address=None):
+        raise NotImplementedError(
+            "An L3 address binding class must implement unbind_address"
+        )
+
 
 class AllowedAddressPairs(L3BindingBase):
     """ Class for configuring L3 address bindings to L2 ports """
@@ -137,37 +148,3 @@ class AllowedAddressPairs(L3BindingBase):
                             'allowed address %s to port: %s.'
                             % (ip_address, port_id)
                         ))
-
-
-class NuageL3Binding(L3BindingBase):
-    """ Class for configuring L3 address bindings to L2 ports """
-    def __init__(self, conf, driver):
-        super(NuageL3Binding, self).__init__(conf, driver)
-
-    def bind_address(self, subnet_id=None, ip_address=None):
-        LOG.debug(_('checking for required port bindings '
-                    'subnet_id: %s ip_address %s'
-                    % (subnet_id, ip_address)))
-        if subnet_id in self.l3_binding_mappings:
-            binding_list = self.l3_binding_mappings[subnet_id]
-            for (port_id, device_id) in binding_list:
-                if port_id:
-                    LOG.debug(_('adding IP mapping '
-                                'address: %s port: %s device %s'
-                                % (ip_address, port_id, device_id)))
-                    # TO DO: import Nuage class and add mapping
-                    pass
-
-    def unbind_address(self, subnet_id=None, ip_address=None):
-        LOG.debug(_('checking for removal of port bindings '
-                    'subnet_id: %s ip_address %s'
-                    % (subnet_id, ip_address)))
-        if subnet_id in self.l3_binding_mappings:
-            binding_list = self.l3_binding_mappings[subnet_id]
-            for (port_id, device_id) in binding_list:
-                if port_id:
-                    LOG.debug(_('removing IP mapping '
-                                'address: %s port: %s device %s'
-                                % (ip_address, port_id, device_id)))
-                    # TO DO: import Nuage class and remove mapping
-                    pass
