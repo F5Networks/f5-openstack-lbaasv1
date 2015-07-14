@@ -1,0 +1,8 @@
+recursive-include etc *
+recursive-include debian *
+recursive-include rhel *
+recursive-include doc *
+include SUPPORT
+include README
+include BUILD
+

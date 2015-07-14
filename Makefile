@@ -9,7 +9,11 @@ PROJECT_DIR := $(shell pwd)
 VERSION := $(shell cat VERSION|tr -d '\n';)
 RELEASE := $(shell cat RELEASE|tr -d '\n';)
 
-default: debs rpms
+default: debs rpms source
+
+source: build/f5-oslbaasv1-driver_$(VERSION)_all.src \
+	build/f5-oslbaasv1-agent_$(VERSION)_all.src \
+	build/f5-bigip-common_$(VERSION)_all.src
 
 debs: build/f5-oslbaasv1-driver_$(VERSION)_all.deb \
       build/f5-oslbaasv1-agent_$(VERSION)_all.deb \
@@ -19,6 +23,39 @@ rpms: build/f5-oslbaasv1-driver-$(VERSION).noarch.rpm \
       build/f5-oslbaasv1-agent-$(VERSION).noarch.rpm \
       build/f5-bigip-common-$(VERSION).noarch.rpm
 
+build/f5-oslbaasv1-driver_$(VERSION)_all.src:
+	(cd driver; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
+	python setup.py sdist; \
+	rm -rf MANIFEST; \
+	)
+	mkdir -p build
+	cp driver/dist/f5-oslbaasv1-driver-$(VERSION).tar.gz build/
+
+build/f5-oslbaasv1-agent_$(VERSION)_all.src:
+	(cd agent; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
+	python setup.py sdist; \
+	rm -rf MANIFEST; \
+	)
+	mkdir -p build
+	cp agent/dist/f5-oslbaasv1-agent-$(VERSION).tar.gz build/
+
+build/f5-bigip-common_$(VERSION)_all.src:
+	(cd common; \
+	export PROJECT_DIR=$(PROJECT_DIR); \
+	export VERSION=$(VERSION); \
+	export RELEASE=$(RELEASE); \
+	python setup.py sdist; \
+	rm -rf MANIFEST; \
+	)
+	mkdir -p build
+	cp common/dist/f5-bigip-common-$(VERSION).tar.gz build/
+
 build/f5-bigip-common_$(VERSION)_all.deb:
 	(cd common; \
 	rm -rf deb_dist; \
@@ -27,7 +64,7 @@ build/f5-bigip-common_$(VERSION)_all.deb:
 	export RELEASE=$(RELEASE); \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
 	rm -f stdeb.cfg; \
-        ) 
+	) 
 	mkdir -p build
 	cp common/deb_dist/f5-bigip-common_$(VERSION)-$(RELEASE)_all.deb build/
 
@@ -39,7 +76,7 @@ build/f5-oslbaasv1-driver_$(VERSION)_all.deb:
 	export RELEASE=$(RELEASE); \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
 	rm -f stdeb.cfg; \
-        ) 
+	) 
 	mkdir -p build
 	cp driver/deb_dist/f5-oslbaasv1-driver_$(VERSION)-$(RELEASE)_all.deb build/
 	
@@ -51,7 +88,7 @@ build/f5-oslbaasv1-agent_$(VERSION)_all.deb:
 	export RELEASE=$(RELEASE); \
 	python setup.py --command-packages=stdeb.command bdist_deb; \
 	rm -f stdeb.cfg; \
-        )
+	)
 	mkdir -p build
 	cp agent/deb_dist/f5-oslbaasv1-agent_$(VERSION)-$(RELEASE)_all.deb build/
 
@@ -60,8 +97,9 @@ build/f5-bigip-common-$(VERSION).noarch.rpm:
 	export PROJECT_DIR=$(PROJECT_DIR); \
 	export VERSION=$(VERSION); \
 	export RELEASE=$(RELEASE); \
-	python setup.py bdist_rpm --release $(RELEASE) --requires="python-suds > 0.3"; \
-        ) 
+	python setup.py bdist_rpm; \
+	rm -f setup.cfg; \
+	) 
 	mkdir -p build
 	cp common/dist/f5-bigip-common-$(VERSION)-$(RELEASE).noarch.rpm build
 
@@ -70,8 +108,9 @@ build/f5-oslbaasv1-driver-$(VERSION).noarch.rpm:
 	export PROJECT_DIR=$(PROJECT_DIR); \
 	export VERSION=$(VERSION); \
 	export RELEASE=$(RELEASE); \
-	python setup.py bdist_rpm --release $(RELEASE); \
-        ) 
+	python setup.py bdist_rpm; \
+    	rm -f setup.cfg; \
+	) 
 	mkdir -p build
 	cp driver/dist/f5-oslbaasv1-driver-$(VERSION)-$(RELEASE).noarch.rpm build
 
@@ -80,7 +119,8 @@ build/f5-oslbaasv1-agent-$(VERSION).noarch.rpm:
 	export PROJECT_DIR=$(PROJECT_DIR); \
 	export VERSION=$(VERSION); \
 	export RELEASE=$(RELEASE); \
-	python setup.py bdist_rpm --release $(RELEASE); \
+	python setup.py bdist_rpm; \
+	rm -f setup.cfg; \
 	)
 	mkdir -p build
 	cp agent/dist/f5-oslbaasv1-agent-$(VERSION)-$(RELEASE).noarch.rpm build
@@ -89,24 +129,28 @@ pdf:
 	html2pdf $(PROJECT_DIR)/doc/f5-oslbaasv1-readme.html \
              $(PROJECT_DIR)/doc/f5-oslbaasv1-readme.pdf
 
-clean: clean-debs clean-rpms 
+clean: clean-debs clean-rpms clean-source
 
 clean-debs:
 	find . -name "*.pyc" -exec rm -rf {} \;
 	rm -f driver/MANIFEST
 	rm -f agent/MANIFEST
+	rm -f common/MANIFEST
 	rm -f build/f5-bigip-common_*.deb
 	(cd common; \
 	rm -rf deb_dist; \
-        )
+	rm -rf build; \
+	)
 	rm -f build/f5-oslbaasv1-agent_*.deb
 	(cd agent; \
 	rm -rf deb_dist; \
-        )
-	rm -f build/f5-oslbaasv1-driver_*.deb
+	rm -rf build; \
+	)
+	rm -rf build; \
 	(cd driver; \
 	rm -rf deb_dist; \
-        )
+	rm -rf build; \
+	)
 
 clean-rpms:
 	find . -name "*.pyc" -exec rm -rf {} \;
@@ -116,18 +160,28 @@ clean-rpms:
 	rm -f build/f5-bigip-common-*.rpm
 	(cd common; \
 	rm -rf dist; \
-	rm -rf build/bdist.linux-x86_64; \
-        )
+	rm -rf build; \
+	)
 	rm -f build/f5-oslbaasv1-agent-*.rpm
 	(cd agent; \
 	rm -rf dist; \
-	rm -rf build/bdist.linux-x86_64; \
-        )
+	rm -rf build; \
+	)
 	rm -f build/f5-oslbaasv1-driver-*.rpm
 	(cd driver; \
 	rm -rf dist; \
-	rm -rf build/bdist.linux-x86_64; \
-        )
+	rm -rf build; \
+	)
+
+clean-source:
+	rm -rf build/*.tar.gz
+	rm -rf common/dist
+	rm -rf driver/dist
+	rm -rf driver/driver
+	rm -rf driver/doc
+	rm -rf agent/dist
+	rm -rf agent/agent
+	rm -rf agent/doc
 
 BDIR := f5/oslbaasv1agent/drivers/bigip
 IDIR := f5/bigip/interfaces

@@ -1,0 +1,8 @@
+LBaaS Plugin Provisioning Agent
+
+Instructions on preparing your BIG-IP devices and 
+configuring the plugin and agents for LBaaS deployment
+are found in the accompanying f5lbaas-readme.html or 
+f5lbaas-readme.pdf document in the doc directory of this
+project.
+

@@ -24,17 +24,6 @@ version = os.environ['VERSION']
 release = os.environ['RELEASE']
 project_dir = os.environ['PROJECT_DIR']
 
-data_files = [('/usr/bin',
-               [project_dir + '/agent/usr/bin/f5-oslbaasv1-agent']),
-              ('/etc/neutron',
-               [project_dir + '/agent/etc/neutron/f5-oslbaasv1-agent.ini']),
-              ('/usr/share/doc/f5-oslbaasv1-agent',
-               [project_dir + '/doc/f5-oslbaasv1-readme.pdf',
-                project_dir + '/SUPPORT'])]
-
-if 'bdist_rpm' in sys.argv:
-    os.environ['ADD_INIT_STARTUP_SCRIPT'] = 'true'
-
 if 'bdist_deb' in sys.argv:
     stdebcfg = open('stdeb.cfg', 'w')
     stdebcfg.write('[DEFAULT]\n')
@@ -42,6 +31,23 @@ if 'bdist_deb' in sys.argv:
     stdebcfg.write('Debian-Version: ' + release + '\n')
     stdebcfg.write('Depends: f5-bigip-common\n')
     stdebcfg.close()
+
+if 'bdist_rpm' in sys.argv:
+    os.environ['ADD_INIT_STARTUP_SCRIPT'] = 'true'
+    setupcfg = open('setup.cfg', 'w')
+    setupcfg.write('[bdist_rpm]\n')
+    setupcfg.write('release=%s\n' % release)
+    setupcfg.write('requires=f5-bigip-common\n')
+    setupcfg.write('post-install=rhel/f5-oslbaasv1-agent.postinst\n')
+    setupcfg.close()
+
+data_files = [('/usr/bin',
+               [project_dir + '/agent/usr/bin/f5-oslbaasv1-agent']),
+              ('/etc/neutron',
+               [project_dir + '/agent/etc/neutron/f5-oslbaasv1-agent.ini']),
+              ('/usr/share/doc/f5-oslbaasv1-agent',
+               [project_dir + '/doc/f5-oslbaasv1-readme.pdf',
+                project_dir + '/SUPPORT'])]
 
 if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
     data_files.append(
@@ -62,6 +68,7 @@ setup(name='f5-oslbaasv1-agent',
       author='F5 DevCentral',
       author_email='devcentral@f5.com',
       url='http://devcentral.f5.com/openstack',
+      platform='Linux',
       py_modules=[
                   'f5.oslbaasv1agent.drivers.bigip.agent',
                   'f5.oslbaasv1agent.drivers.bigip.agent_api',

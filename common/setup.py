@@ -20,9 +20,30 @@ import os
 
 from distutils.core import setup
 
-version = os.environ['VERSION']
-release = os.environ['RELEASE']
-project_dir = os.environ['PROJECT_DIR']
+if 'VERSION' in os.environ:
+    version = os.environ['VERSION']
+elif os.path.isfile('VERSION'):
+    version_file = open('VERSION', 'r')
+    version = version_file.read()
+    version = version.strip()
+    version_file.close()
+else:
+    version = 'Unknown'
+
+if 'RELEASE' in os.environ:
+    release = os.environ['RELEASE']
+elif os.path.isfile('RELEASE'):
+    release_file = open('RELEASE', 'r')
+    release = release_file.read()
+    release = release.strip()
+    release_file.close()
+else:
+    release = 'Unknown'
+
+if 'PROJECT_DIR' in os.environ:
+    project_dir = os.environ['PROJECT_DIR']
+else:
+    project_dir = os.path.curdir
 
 if 'bdist_deb' in sys.argv:
     stdebcfg = open('stdeb.cfg', 'w')
@@ -31,6 +52,13 @@ if 'bdist_deb' in sys.argv:
     stdebcfg.write('Debian-Version: ' + release + '\n')
     stdebcfg.write('Depends: python-suds\n')
     stdebcfg.close()
+
+if 'bdist_rpm' in sys.argv:
+    setupcfg = open('setup.cfg', 'w')
+    setupcfg.write('[bdist_rpm]\n')
+    setupcfg.write('release=%s\n' % release)
+    setupcfg.write('requires=python-suds > 0.3\n')
+    setupcfg.close()
 
 setup(name='f5-bigip-common',
       description='F5 LBaaS Agent for OpenStack',
@@ -72,5 +100,11 @@ setup(name='f5-bigip-common',
                 'f5.bigip.pycontrol',
                 'f5.bigiq',
                 'f5.common'
-                ]
+                ],
+      classifiers=['Development Status :: 5 - Production/Stable',
+                   'License :: OSI Approved :: Apache Software License',
+                   'Environment :: OpenStack',
+                   'Operating System :: OS Independent',
+                   'Programming Language :: Python',
+                   'Intended Audience :: System Administrators']
       )
