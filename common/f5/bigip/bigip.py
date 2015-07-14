@@ -297,7 +297,7 @@ class BigIP(object):
     @staticmethod
     def _get_icontrol(hostname, username, password, timeout=None):
         """ Initialize iControl interface """
-        #Logger.log(Logger.DEBUG,
+        # Logger.log(Logger.DEBUG,
         #           "Opening iControl connections to %s for interfaces %s"
         #            % (self.hostname, self.interfaces))
 
@@ -327,6 +327,10 @@ class BigIP(object):
         icr_session = requests.session()
         icr_session.auth = (username, password)
         icr_session.verify = False
+        ul3 = requests.packages.urllib3  # @UndefinedVariable
+        ul3.disable_warnings(
+            category=ul3.exceptions.InsecureRequestWarning              
+        )
         icr_session.headers.update({'Content-Type': 'application/json'})
         if timeout:
             socket.setdefaulttimeout(timeout)
