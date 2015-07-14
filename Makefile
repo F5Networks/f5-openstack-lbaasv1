@@ -2,7 +2,7 @@
 # 
 # You need to install these packages on Ubunutu 12.04 to make this work:
 # 
-#     sudo apt-get install -y make python-stdeb fakeroot python-all rpm
+#     sudo apt-get install -y make python-stdeb fakeroot python-all rpm pep8 pylint
 # 
 # 
 PROJECT_DIR := $(shell pwd)
