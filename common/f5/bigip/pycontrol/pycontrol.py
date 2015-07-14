@@ -16,13 +16,21 @@
 #
 
 import logging
-
-from urllib import pathname2url
-
-import urllib2
 import platform
-import StringIO
 import ssl
+
+try:
+    from urllib2 import ProxyHandler
+    from urllib2 import HTTPBasicAuthHandler
+    from urllib2 import HTTPSHandler
+    from urllib import pathname2url
+    import StringIO
+except ImportError:
+    from urllib.request import ProxyHandler  # @UnusedImport
+    from urllib.request import HTTPBasicAuthHandler  # @UnusedImport
+    from urllib.request import HTTPSHandler  # @UnusedImport
+    from urllib.request import pathname2url
+    from io import StringIO as StringIO  # @NoMove
 
 from suds.cache import Cache
 from suds.client import Client
@@ -395,21 +403,21 @@ class HTTPSUnVerifiedCertTransport(transport.https.HttpAuthenticated):
 
     def u2handlers(self):
         handlers = []
-        handlers.append(urllib2.ProxyHandler(self.proxy))
-        handlers.append(urllib2.HTTPBasicAuthHandler(self.pm))
+        handlers.append(ProxyHandler(self.proxy))
+        handlers.append(HTTPBasicAuthHandler(self.pm))
         # python ssl Context support - PEP 0466
         if hasattr(ssl, '_create_unverified_context'):
             ssl_context = ssl._create_unverified_context()
-            handlers.append(urllib2.HTTPSHandler(context=ssl_context))
+            handlers.append(HTTPSHandler(context=ssl_context))
         else:
-            handlers.append(urllib2.HTTPSHandler())
+            handlers.append(HTTPSHandler())
         return handlers
 
 
 def main():
     import sys
     if len(sys.argv) < 4:
-        print "Usage: %s <hostname> <username> <password>" % sys.argv[0]
+        print("Usage: %s <hostname> <username> <password>" % sys.argv[0])
         sys.exit()
 
     a = sys.argv[1:]
@@ -421,10 +429,10 @@ def main():
 
     pools = b.LocalLB.Pool.get_list()
     version = b.LocalLB.Pool.get_version()
-    print "Version is: %s\n" % version
-    print "Pools:"
+    print("Version is: %s\n" % version)
+    print("Pools:")
     for x in pools:
-        print "\t%s" % x
+        print("\t%s" % x)
 
 if __name__ == '__main__':
     main()
