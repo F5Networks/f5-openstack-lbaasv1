@@ -327,10 +327,11 @@ class BigIP(object):
         icr_session = requests.session()
         icr_session.auth = (username, password)
         icr_session.verify = False
-        ul3 = requests.packages.urllib3  # @UndefinedVariable
-        ul3.disable_warnings(
-            category=ul3.exceptions.InsecureRequestWarning              
-        )
+        if hasattr(requests, 'packages'):
+            ul3 = requests.packages.urllib3  # @UndefinedVariable
+            ul3.disable_warnings(
+                category=ul3.exceptions.InsecureRequestWarning
+            )
         icr_session.headers.update({'Content-Type': 'application/json'})
         if timeout:
             socket.setdefaulttimeout(timeout)
