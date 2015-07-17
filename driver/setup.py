@@ -32,14 +32,13 @@ if 'bdist_deb' in sys.argv:
     stdebcfg.write('[DEFAULT]\n')
     stdebcfg.write('Package: f5-oslbaasv1-driver\n')
     stdebcfg.write('Debian-Version: ' + release + '\n')
-    stdebcfg.write('Depends: f5-bigip-common, neutron-server\n')
+    stdebcfg.write('Depends: neutron-server\n')
     stdebcfg.close()
 
 if 'bdist_rpm' in sys.argv:
     setupcfg = open('setup.cfg', 'w')
     setupcfg.write('[bdist_rpm]\n')
     setupcfg.write('release=%s\n' % release)
-    setupcfg.write('requires=f5-bigip-common\n')
     setupcfg.write('post-install=rhel/f5-oslbaasv1-driver.postinst\n')
     setupcfg.close()
 
@@ -56,7 +55,8 @@ setup(
                 'f5.oslbaasv1driver.drivers.plugin_driver',
                 'f5.oslbaasv1driver.drivers.rpc',
                 'f5.oslbaasv1driver.drivers.constants'],
-    packages=['f5.oslbaasv1driver',
+    packages=['f5',
+              'f5.oslbaasv1driver',
               'f5.oslbaasv1driver.drivers',
               'f5.oslbaasv1driver.utils'],
     data_files=data_files)

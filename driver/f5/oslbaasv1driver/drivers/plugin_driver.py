@@ -66,7 +66,7 @@ except ImportError:
         import VipNotFound  # @UnresolvedImport @Reimport
     from neutron_lbaas.extensions.loadbalancer \
         import HealthMonitorNotFound  # @UnresolvedImport @Reimport
-    import f5.oslbaasv1agent.drivers.bigip.rpc as proxy
+    import f5.oslbaasv1driver.drivers.rpc as proxy
 
 LOG = logging.getLogger(__name__)
 

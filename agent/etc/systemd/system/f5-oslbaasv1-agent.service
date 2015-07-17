@@ -5,7 +5,7 @@ Requires=network-online.target
 
 [Service]
 User=neutron
-ExecStart=/usr/bin/f5-bigip-lbaas-agent --log-file /var/log/neutron/f5-oslbaasv1-agent.log --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/f5-oslbaasv1-agent.ini
+ExecStart=/usr/bin/f5-oslbaasv1-agent --log-file /var/log/neutron/f5-oslbaasv1-agent.log --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/f5-oslbaasv1-agent.ini
 Restart=always
 
 [Install]
