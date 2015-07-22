@@ -1,2 +1,2 @@
 #!/bin/bash
-python -m f5.oslbaasv1driver.utils.migrate_config
+python -m f5.oslbaasv1driver.utils.update_config

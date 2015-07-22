@@ -14,5 +14,5 @@ fi
 
 update-rc.d -f f5-oslbaasv1-agent remove >/dev/null || exit $?
 
-python -m f5.oslbaasv1agent.utils.migrate_config
+python -m f5.oslbaasv1agent.utils.update_config
 

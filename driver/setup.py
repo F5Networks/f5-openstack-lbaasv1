@@ -39,7 +39,7 @@ if 'bdist_rpm' in sys.argv:
     setupcfg = open('setup.cfg', 'w')
     setupcfg.write('[bdist_rpm]\n')
     setupcfg.write('release=%s\n' % release)
-    setupcfg.write('requires=openstack-neutron\n')
+    setupcfg.write('requires=python-neutron\n')
     setupcfg.write('pre-install=rhel/f5-oslbaasv1-driver.preinst\n')
     setupcfg.write('post-install=rhel/f5-oslbaasv1-driver.postinst\n')
     setupcfg.close()

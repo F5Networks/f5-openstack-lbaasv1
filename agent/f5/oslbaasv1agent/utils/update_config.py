@@ -31,7 +31,7 @@ def _inplace_change(filename, old_string, new_string):
         print("No occurances of %s found." % old_string)
 
 
-def migrate_configuration():
+def update_configuration():
     print("checking for old configuration file file format..")
     old_agent_config = '/etc/neutron/f5-bigip-lbaas-agent.ini'
     backup_agent_config = '/etc/neutron/f5-bigip-lbaas-agent.ini.bak'
@@ -57,4 +57,4 @@ def migrate_configuration():
         _inplace_change(new_agent_config, old_ns_path, new_ns_path)
 
 if __name__ == "__main__":
-    migrate_configuration()
+    update_configuration()

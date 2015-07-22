@@ -1,0 +1,2 @@
+#!/bin/bash
+python -m f5.oslbaasv1driver.utils.check_kilo_preinstall
