@@ -565,6 +565,25 @@ provider:physical_network does not match any other specified
 mapping.</td>
 </tr>
 <tr>
+<td>vlan_binding_driver</td>
+<td>vlan binding driver path</td>
+<td>f5.oslbaasv1agent.drivers.bigip.
+    vlan_binding.NullBinding</td>
+<td>
+Some systems require the need to bind and prune VLANs ids allowed
+to specific ports, often for security.
+</td>
+</tr>
+<tr>
+<td>interface_port_static_mappings</td>
+<td>JSON dictionary</td>
+<td>'' (blank string)</td>
+<td>
+The interface_port_static_mappings allows for a JSON encoded dictionary
+mapping BigIP devices and interfaces to corresponding ports.
+</td>
+</tr>
+<tr>
 <td nowrap="nowrap">f5_vtep_folder</td>
 <td>TMOS folder name</td>
 <td>Common</td>

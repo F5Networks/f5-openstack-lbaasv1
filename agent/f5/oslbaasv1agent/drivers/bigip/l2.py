@@ -237,6 +237,12 @@ class BigipL2Manager(object):
             name=vlan_name, vlanid=vlanid, interface=interface,
             folder=network_folder, description=network['id'],
             route_domain_id=network['route_domain_id'])
+        if bigip.vlan_binding:
+            bigip.vlan_binding.allow_vlan(
+                device_name=bigip.device_name,
+                interface=interface,
+                vlanid=vlanid
+            )
 
     def _assure_device_network_vxlan(self, network, bigip, network_folder):
         """ Ensure bigip has configured vxlan """
@@ -416,6 +422,33 @@ class BigipL2Manager(object):
                                        bigip.icontrol.hostname)
         bigip.vlan.delete(name=vlan_name,
                           folder=network_folder)
+        if bigip.vlan_binding:
+            interface = self.interface_mapping['default']
+            tagged = self.tagging_mapping['default']
+            vlanid = 0
+            # Do we have host specific mappings?
+            net_key = network['provider:physical_network']
+            if net_key + ':' + bigip.icontrol.hostname in \
+                    self.interface_mapping:
+                interface = self.interface_mapping[
+                    net_key + ':' + bigip.icontrol.hostname]
+                tagged = self.tagging_mapping[
+                    net_key + ':' + bigip.icontrol.hostname]
+            # Do we have a mapping for this network
+            elif net_key in self.interface_mapping:
+                interface = self.interface_mapping[net_key]
+                tagged = self.tagging_mapping[net_key]
+            if tagged:
+                vlanid = network['provider:segmentation_id']
+            else:
+                vlanid = 0
+
+            bigip.vlan_binding.prune_vlan(
+                device_name=bigip.device_name,
+                interface=interface,
+                vlanid=vlanid
+            )
+
         self._delete_vcmp_device_network(bigip, vlan_name)
 
     def _delete_device_flat(self, bigip, network, network_folder):
