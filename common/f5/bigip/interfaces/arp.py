@@ -182,8 +182,12 @@ class ARP(object):
             if 'items' in response_obj:
                 for arp in response_obj['items']:
                     ad_rd_div = arp['ipAddress'].find('%')
-                    address = netaddr.IPAddress(
-                        arp['ipAddress'][0:ad_rd_div])
+                    if ad_rd_div > -1:
+                        address = netaddr.IPAddress(
+                            arp['ipAddress'][0:ad_rd_div])
+                    else:
+                        address = netaddr.IPAddress(arp['ipAddress'])
+
                     if address in network:
                         mac_addresses.append(arp['macAddress'])
                         self.delete(arp['ipAddress'],

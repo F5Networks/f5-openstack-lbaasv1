@@ -203,16 +203,16 @@ proc convert_table { table_name } {
                         }
                     }
                     send_string {
-                        if { $column(type) ne "ping" } {
+                        if { $column(type) ne "ping" && $column(type) ne "tcp" } {
                             if { $column($name) eq "" } {
-                                append params " send \"GET $column(url_path) HTTP/1.0\""
+                                append params " send \"GET $column(url_path) HTTP/1.0\\r\\n\\r\\n\""
                             } else {
                                 append params " send \"$column($name)\""
                             }
                         }
                     }
                     recv_string {
-                        if { $column(type) ne "ping" } {
+                        if { $column(type) ne "ping" && $column(type) ne "tcp" } {
                             if { $column($name) eq "" } {
                                 if { [string first "-" $column(expected_codes)] >= 0 } {
                                     append params " recv \"HTTP/1.(0|1) \[$column(expected_codes)\]\""
