@@ -1,2 +1,14 @@
 #!/bin/bash
-python -m f5.oslbaasv1driver.utils.check_kilo_preinstall
+
+is_kilo=`rpm -q python-neutron|grep 2015|wc -l`
+
+if [ $is_kilo == 1 ]
+then
+     has_neutron_lbaas=`rpm -q python-neutron-lbaas|grep 2015|wc -l`
+     if [ ! $has_neutron_lbaas == 1 ]
+     then
+         echo 'Kilo package python-neutron-lbaas must be installed'
+         exit 1
+     fi
+fi
+
