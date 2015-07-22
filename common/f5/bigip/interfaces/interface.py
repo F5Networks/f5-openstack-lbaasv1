@@ -60,3 +60,21 @@ class Interface(object):
             Log.error('interface', response.text)
             raise exceptions.InterfaceQueryException(response.text)
         return None
+
+    def get_interface_macaddresses_dict(self):
+        """ Get dictionary of mac addresses keyed by their interface name """
+        request_url = self.bigip.icr_url + '/net/interface/'
+        request_url += '?$select=name,macAddress'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            return_dict = {}
+            response_obj = json.loads(response.text)
+            if 'items' in response_obj:
+                for interface in response_obj['items']:
+                    return_dict[interface['name']] = interface['macAddress']
+            return return_dict
+        elif response.status_code != 404:
+            Log.error('interface', response.text)
+            raise exceptions.InterfaceQueryException(response.text)
+        return None

@@ -155,6 +155,18 @@ OPTS = [
         help=_('create static arp entries based on service entries'),
     ),
     cfg.StrOpt(
+        'vlan_binding_driver',
+        default=None,
+        help=_('driver class for binding vlans to device ports'),
+    ),
+    cfg.StrOpt(
+        'interface_port_static_mappings',
+        default=None,
+        help=_('JSON encoded static mapping of'
+               'devices to list of '
+               'interface and port_id')
+    ),
+    cfg.StrOpt(
         'l3_binding_driver',
         default=None,
         help=_('driver class for binding l3 address to l2 ports'),
@@ -323,6 +335,10 @@ class iControlDriver(LBaaSBaseDriver):
         """ Run and Post Initialization Tasks """
         # run any post initialized tasks, now that the agent
         # is fully connected
+        if self.vlan_binding:
+            LOG.debug(
+                'Getting BIG-IP device interface for VLAN Binding')
+            self.vlan_binding.register_bigip_interfaces()
         if self.l3_binding:
             LOG.debug('Getting BIG-IP MAC Address for L3 Binding')
             self.l3_binding.register_bigip_mac_addresses()
@@ -333,6 +349,14 @@ class iControlDriver(LBaaSBaseDriver):
         self.tenant_manager = BigipTenantManager(
             self.conf, self)
 
+        if self.conf.vlan_binding_driver:
+            try:
+                self.vlan_binding = importutils.import_object(
+                    self.conf.vlan_binding_driver, self.conf, self)
+            except ImportError:
+                LOG.error(_('Failed to import VLAN binding driver: %s'
+                            % self.conf.vlan_binding_driver))
+                self.vlan_binding = None
         if self.conf.l3_binding_driver:
             try:
                 self.l3_binding = importutils.import_object(
@@ -519,6 +543,8 @@ class iControlDriver(LBaaSBaseDriver):
 
         bigip.device_name = bigip.device.get_device_name()
         bigip.mac_addresses = bigip.interface.get_mac_addresses()
+        bigip.device_interfaces = \
+            bigip.interface.get_interface_macaddresses_dict()
         bigip.assured_networks = []
         bigip.assured_tenant_snat_subnets = {}
         bigip.assured_gateway_subnets = []

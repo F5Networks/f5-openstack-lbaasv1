@@ -23,7 +23,7 @@ class RpcProxy(object):
     The original RpcProxy class has changed as oslo messaging was
     adopted. Kilo releases removed the RpcProxy class because the
     migration to oslo messaging was complete. This change broke
-    backwards compataibility.
+    backwards compatibility.
     '''
     RPC_API_NAMESPACE = None
 
