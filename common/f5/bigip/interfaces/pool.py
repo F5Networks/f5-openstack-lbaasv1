@@ -336,12 +336,21 @@ class Pool(object):
         if response.status_code < 400:
             return_obj = json.loads(response.text)
             if 'entries' in return_obj:
-                for stat in return_obj['entries']:
+                stats = return_obj['entries']
+                for stat in stats:
+                    if 'nestedStats' in stats[stat]:
+                        stats = stats[stat]['nestedStats']['entries']
+                        break
+                for stat in stats:
                     name = stat
-                    if 'value' in return_obj['entries'][name]:
-                        value = return_obj['entries'][name]['value']
-                    if 'description' in return_obj['entries'][name]:
-                        value = return_obj['entries'][name]['description']
+                    value = None
+                    if 'value' in stats[name]:
+                        value = stats[name]['value']
+                    if 'description' in stats[name]:
+                        value = stats[name]['description']
+                    if value is None:
+                        Log.error('poolstats', 'bad stats:' + response.text)
+                        continue
                     (st, val) = self._get_icontrol_stat(name, value)
                     if st:
                         return_stats[st] = val
@@ -399,7 +408,7 @@ class Pool(object):
                 request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['session'] = 'user-enabled'
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -431,7 +440,7 @@ class Pool(object):
                 request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['session'] = 'user-disabled'
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -463,7 +472,7 @@ class Pool(object):
                 request_url += urllib.quote(ip_address) + ':' + str(port)
             payload = dict()
             payload['ratio'] = ratio
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -601,7 +610,7 @@ class Pool(object):
                 payload['serviceDownAction'] = str(service_down_action).lower()
             else:
                 payload['serviceDownAction'] = 'none'
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -624,7 +633,7 @@ class Pool(object):
                     self._get_rest_lb_method_type(lb_method)
             else:
                 payload['loadBalancingMode'] = 'least-connections-member'
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -692,7 +701,7 @@ class Pool(object):
                 payload['description'] = description
             else:
                 payload['description'] = ''
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -788,7 +797,7 @@ class Pool(object):
                         request_url += '~' + folder + '~' + name
                         payload = dict()
                         payload['monitor'] = monitor_string
-                        response = self.bigip.icr_session.put(
+                        response = self.bigip.icr_session.patch(
                             request_url, data=json.dumps(payload),
                             timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code < 400:
@@ -803,7 +812,7 @@ class Pool(object):
                     payload['monitor'] = monitor_name
                     request_url = self.bigip.icr_url + '/ltm/pool/'
                     request_url += '~' + folder + '~' + name
-                    response = self.bigip.icr_session.put(
+                    response = self.bigip.icr_session.patch(
                         request_url, data=json.dumps(payload),
                         timeout=const.CONNECTION_TIMEOUT)
                     if response.status_code < 400:

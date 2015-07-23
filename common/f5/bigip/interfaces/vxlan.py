@@ -140,11 +140,9 @@ class VXLAN(object):
             payload = dict()
             payload['records'] = []
             tunnel_link = self.bigip.icr_link(response_obj['selfLink'])
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 tunnel_link, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
-            response = self.bigip.icr_session.delete(
-                tunnel_link, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code > 399:
                 Log.error('fdb', response.text)
                 raise exceptions.VXLANDeleteException(response.text)
@@ -247,7 +245,7 @@ class VXLAN(object):
 
         payload = dict()
         payload['records'] = records
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -308,7 +306,7 @@ class VXLAN(object):
 
             payload = dict()
             payload['records'] = new_records
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -354,7 +352,7 @@ class VXLAN(object):
                 records = None
             payload = dict()
             payload['records'] = records
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -397,7 +395,7 @@ class VXLAN(object):
                 new_records = None
             payload = dict()
             payload['records'] = new_records
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -415,7 +413,7 @@ class VXLAN(object):
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
         request_url += '~' + folder + '~' + tunnel_name
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps({'records': None}),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:

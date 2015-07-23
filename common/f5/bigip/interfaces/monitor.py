@@ -215,7 +215,7 @@ class Monitor(object):
         mon_type = self._get_monitor_rest_type(mon_type)
         request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
         request_url += '~' + folder + '~' + name
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -258,7 +258,7 @@ class Monitor(object):
         mon_type = self._get_monitor_rest_type(mon_type)
         request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
         request_url += '~' + folder + '~' + name
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -304,7 +304,7 @@ class Monitor(object):
         mon_type = self._get_monitor_rest_type(mon_type)
         request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
         request_url += '~' + folder + '~' + name
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -350,7 +350,7 @@ class Monitor(object):
         mon_type = self._get_monitor_rest_type(mon_type)
         request_url = self.bigip.icr_url + '/ltm/monitor/' + mon_type + '/'
         request_url += '~' + folder + '~' + name
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:

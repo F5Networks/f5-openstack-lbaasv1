@@ -901,6 +901,11 @@ class iControlDriver(LBaaSBaseDriver):
 
     def tunnel_sync(self):
         """ Advertise all bigip tunnel endpoints """
+        # Only sync when supported types are present
+        if not [i for i in self.agent_configurations['tunnel_types'] \
+                if i in ['gre', 'vxlan']]:
+            return
+
         tunnel_ips = []
         for bigip in self.get_all_bigips():
             if bigip.local_ip:

@@ -1066,7 +1066,7 @@ class VirtualServer(object):
                         Log.debug('virtual-server', 'add rule body: %s'
                                   % response_obj)
 
-                        response = self.bigip.icr_session.put(
+                        response = self.bigip.icr_session.patch(
                             request_url, data=json.dumps(rules),
                             timeout=const.CONNECTION_TIMEOUT)
                         if response.status_code < 400:
@@ -1083,7 +1083,7 @@ class VirtualServer(object):
                     rules = {'rules': ['/' + folder + '/' + rule_name]}
                     request_url = self.bigip.icr_url + '/ltm/virtual/'
                     request_url += '~' + folder + '~' + name
-                    response = self.bigip.icr_session.put(
+                    response = self.bigip.icr_session.patch(
                         request_url, data=json.dumps(rules),
                         timeout=const.CONNECTION_TIMEOUT)
                     if response.status_code < 400:
@@ -1159,7 +1159,7 @@ class VirtualServer(object):
             payload['persist'] = [{'name': profile_name}]
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1185,7 +1185,7 @@ class VirtualServer(object):
                 strip_folder_and_prefix(profile_name)
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1206,7 +1206,7 @@ class VirtualServer(object):
             payload['persist'] = []
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1237,7 +1237,7 @@ class VirtualServer(object):
             payload['enabled'] = True
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1257,7 +1257,7 @@ class VirtualServer(object):
             payload['disabled'] = True
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1399,7 +1399,7 @@ class VirtualServer(object):
             payload['pool'] = pool_name
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1431,7 +1431,7 @@ class VirtualServer(object):
                 payload['destination'] = ip_address + ":" + str(port)
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1505,7 +1505,7 @@ class VirtualServer(object):
             payload['mask'] = netmask
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1549,7 +1549,7 @@ class VirtualServer(object):
             payload['ipProtocol'] = protocol.lower()
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1593,7 +1593,7 @@ class VirtualServer(object):
             payload['description'] = description
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1648,7 +1648,7 @@ class VirtualServer(object):
                     va_req += urllib.quote(address).replace('/', '~')
                     payload = dict()
                     payload['trafficGroup'] = traffic_group
-                    va_response = self.bigip.icr_session.put(
+                    va_response = self.bigip.icr_session.patch(
                         va_req, data=json.dumps(payload),
                         timeout=const.CONNECTION_TIMEOUT)
                     if va_response.status_code < 400:
@@ -1707,7 +1707,7 @@ class VirtualServer(object):
             payload['connectionLimit'] = connection_limit
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1752,7 +1752,7 @@ class VirtualServer(object):
             payload['sourceAddressTranslation'] = {"type": "automap"}
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1773,7 +1773,7 @@ class VirtualServer(object):
                                                    "pool": pool_name}
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             request_url += '~' + folder + '~' + name
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -1987,7 +1987,7 @@ class VirtualServer(object):
             payload['trafficGroup'] = traffic_group
             request_url = self.bigip.icr_url + '/ltm/virtual-address/'
             request_url += '~' + folder + '~' + urllib.quote(named_address)
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
