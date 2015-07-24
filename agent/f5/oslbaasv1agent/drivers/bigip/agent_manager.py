@@ -261,6 +261,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         topic = lbaasv1constants.TOPIC_PROCESS_ON_HOST
         if self.conf.environment_specific_plugin:
             topic = topic + '_' + self.conf.environment_prefix
+            LOG.debug('agent in %s environment will send callbacks to %s'
+                      % (self.conf.environment_prefix, topic))
         self.plugin_rpc = agent_api.LbaasAgentApi(
             topic,
             self.context,
