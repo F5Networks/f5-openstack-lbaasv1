@@ -1499,7 +1499,7 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
         this_member_count = 0
         for service_member in service['members']:
             if service_member['address'] == member['address'] and \
-               service_member['protocol_port'] == member['protocol_port:']:
+               service_member['protocol_port'] == member['protocol_port']:
                 this_member_count += 1
         if this_member_count > 1:
             status_description = 'duplicate member %s:%s found in pool %s' \
