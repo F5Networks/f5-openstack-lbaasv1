@@ -191,7 +191,7 @@ class Route(object):
             vlans['vlans'] = existing_vlans
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + route_domain['name']
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(vlans),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -213,7 +213,7 @@ class Route(object):
             vlans['vlans'] = existing_vlans
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + folder
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(vlans),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -235,7 +235,7 @@ class Route(object):
             vlans['vlans'] = existing_vlans
             request_url = self.bigip.icr_url + '/net/route-domain/'
             request_url += '~' + folder + '~' + folder
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(vlans),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
@@ -448,7 +448,7 @@ class Route(object):
             request_url += '~' + folder + '~' + name
             payload = dict()
             payload['strict'] = state
-            response = self.bigip.icr_session.put(
+            response = self.bigip.icr_session.patch(
                 request_url, data=json.dumps(payload),
                 timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:

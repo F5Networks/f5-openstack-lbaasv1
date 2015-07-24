@@ -145,7 +145,7 @@ class Device(object):
         request_url += '~Common~' + dev_name
         payload = dict()
         payload['comment'] = lock_comment
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -232,7 +232,7 @@ class Device(object):
             payload['configsyncIp'] = None
         else:
             payload['configsyncIp'] = ip_address
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -293,7 +293,7 @@ class Device(object):
             payload['mirrorIp'] = '::'
         else:
             payload['mirrorIp'] = ip_address
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -314,7 +314,7 @@ class Device(object):
             payload['mirrorSecondaryIp'] = '::'
         else:
             payload['mirrorSecondaryIp'] = ip_address
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -367,7 +367,7 @@ class Device(object):
                                           'ip': ip_address,
                                           'port': 1026})
         payload['unicastAddress'] = unicast_addresses
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -472,7 +472,7 @@ class Device(object):
         request_url += name
         payload = dict()
         payload['description'] = base64.encodestring(str_comment)
-        response = self.bigip.icr_session.put(
+        response = self.bigip.icr_session.patch(
             request_url, data=json.dumps(payload),
             timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:

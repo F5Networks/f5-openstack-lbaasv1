@@ -304,6 +304,7 @@ class iControlDriver(LBaaSBaseDriver):
         self.tenant_manager = None
         self.fdb_connector = None
         self.bigip_l2_manager = None
+        self.vlan_binding = None
         self.l3_binding = None
         self.network_builder = None
         self.lbaas_builder_bigip_iapp = None
@@ -352,7 +353,6 @@ class iControlDriver(LBaaSBaseDriver):
             except ImportError:
                 LOG.error(_('Failed to import VLAN binding driver: %s'
                             % self.conf.vlan_binding_driver))
-                self.vlan_binding = None
         if self.conf.l3_binding_driver:
             try:
                 self.l3_binding = importutils.import_object(
@@ -360,7 +360,6 @@ class iControlDriver(LBaaSBaseDriver):
             except ImportError:
                 LOG.error(_('Failed to import L3 binding driver: %s'
                             % self.conf.l3_binding_driver))
-                self.l3_binding = None
         else:
             LOG.debug(_('No L3 binding driver configured.'
                         ' No L3 binding will be done.'))
@@ -898,6 +897,11 @@ class iControlDriver(LBaaSBaseDriver):
 
     def tunnel_sync(self):
         """ Advertise all bigip tunnel endpoints """
+        # Only sync when supported types are present
+        if not [i for i in self.agent_configurations['tunnel_types'] \
+                if i in ['gre', 'vxlan']]:
+            return
+
         tunnel_ips = []
         for bigip in self.get_all_bigips():
             if bigip.local_ip:
