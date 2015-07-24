@@ -92,6 +92,14 @@ OPTS = [
         'service_resync_interval',
         default=300,
         help=_('Number of seconds between service refresh check')
+    ),
+    cfg.StrOpt(
+        'environment_prefix', default='',
+        help=_('The object name prefix for this environment'),
+    ),
+    cfg.BoolOpt(
+        'environment_specific_plugin', default=False,
+        help=_('Use environment specific plugin topic')
     )
 ]
 
@@ -250,8 +258,11 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
     def _setup_rpc(self):
 
         # LBaaS Callbacks API
+        topic = lbaasv1constants.TOPIC_PROCESS_ON_HOST
+        if self.conf.environment_specific_plugin:
+            topic = topic + '_' + self.conf.environment_prefix
         self.plugin_rpc = agent_api.LbaasAgentApi(
-            lbaasv1constants.TOPIC_PROCESS_ON_HOST,
+            topic,
             self.context,
             self.agent_host
         )
@@ -260,8 +271,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         self.lbdriver.set_plugin_rpc(self.plugin_rpc)
 
         # Agent state Callbacks API
-        self.state_rpc = agent_rpc.PluginReportStateAPI(
-            lbaasv1constants.TOPIC_PROCESS_ON_HOST)
+        self.state_rpc = agent_rpc.PluginReportStateAPI(topic)
         report_interval = self.conf.AGENT.report_interval
         if report_interval:
             heartbeat = loopingcall.FixedIntervalLoopingCall(

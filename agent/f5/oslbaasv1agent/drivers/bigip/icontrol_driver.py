@@ -215,10 +215,6 @@ OPTS = [
         help=_('network uuid to existing Common networks mapping')
     ),
     cfg.StrOpt(
-        'environment_prefix', default='',
-        help=_('The object name prefix for this environment'),
-    ),
-    cfg.StrOpt(
         'icontrol_config_mode', default='objects',
         help=_('Whether to use iapp or objects for bigip configuration'),
     ),

@@ -86,7 +86,10 @@ OPTS = [
                         '.drivers.agent_scheduler'
                         '.TenantScheduler'),
                help=_('Driver to use for scheduling '
-                      'pool to a default loadbalancer agent'))
+                      'pool to a default loadbalancer agent')),
+    cfg.DictOpt('f5_loadbalancer_environments',
+                default={},
+                help=_('environments to load as service providers'))
 ]
 
 cfg.CONF.register_opts(OPTS)
@@ -1083,10 +1086,16 @@ class LoadBalancerAgentApi(proxy.RpcProxy):  # @UndefinedVariable
     #   1.0 Initial version
     #   1.1 Support agent_updated call
 
-    def __init__(self, topic):
-        LOG.debug('LoadBalancerAgentApi RPC publisher constructor called')
-        super(LoadBalancerAgentApi, self).__init__(
-            topic, default_version=self.BASE_RPC_API_VERSION)
+    def __init__(self, topic, env=None):
+        if env:
+            LOG.debug('Created LoadBalancerAgentApi RPC publisher for env %s'
+                      % env)
+            super(LoadBalancerAgentApi, self).__init__(
+                topic, default_version=self.BASE_RPC_API_VERSION)
+        else:
+            LOG.debug('Created LoadBalancerAgentApi RPC publisher')
+            super(LoadBalancerAgentApi, self).__init__(
+                topic, default_version=self.BASE_RPC_API_VERSION)
 
     @log.log
     def create_vip(self, context, vip, service, host):
@@ -1244,19 +1253,30 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
         invokes the LoadBalancerAgentApi class methods to
         send the RPC messages.
     """
-    def __init__(self, plugin):
-        LOG.debug('Initializing F5PluginDriver')
+    def __init__(self, plugin, env=None):
+        if env:
+            self.env = str(env).lower()
+            LOG.debug('Initializing F5PluginDriver for Environment %s' % env)
+        else:
+            self.env = None
+            LOG.debug('Initializing F5PluginDriver')
 
+        # Create RPM Message caster to agents
         self.agent_rpc = LoadBalancerAgentApi(
-            lbaasv1constants.TOPIC_LOADBALANCER_AGENT
+            lbaasv1constants.TOPIC_LOADBALANCER_AGENT,
+            env
         )
 
+        # keep reference to LBaaS plugin
         self.plugin = plugin
+        # create RPC listener for callback functions from agents
+        # to perform service queries and object updates
         self._set_callbacks()
-
+        # add this agent RPC to the neutron agent scheduler
+        # mixins agent_notifiers dictionary for it's env
         self.plugin.agent_notifiers.update(
             {q_const.AGENT_TYPE_LOADBALANCER: self.agent_rpc})
-
+        # what scheduler to use for pool selection
         self.pool_scheduler = importutils.import_object(
             cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
 
@@ -1267,19 +1287,22 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
     def _set_callbacks(self):
         """ Setup callbacks to receive calls from agent """
         self.callbacks = LoadBalancerCallbacks(self.plugin)
+        topic = lbaasv1constants.TOPIC_PROCESS_ON_HOST
+        if self.env:
+            topic = topic + "_" + self.env
 
         if PREJUNO:
             self.conn = rpc.create_connection(new=True)
             # register the callback consumer
             self.conn.create_consumer(
-                lbaasv1constants.TOPIC_PROCESS_ON_HOST,
+                topic,
                 self.callbacks.create_rpc_dispatcher(),
                 fanout=False)
             self.conn.consume_in_thread()
         else:
             self.conn = q_rpc.create_connection(new=True)  # @UndefinedVariable
             self.conn.create_consumer(
-                lbaasv1constants.TOPIC_PROCESS_ON_HOST,
+                topic,
                 [self.callbacks, agents_db.AgentExtRpcCallback(self.plugin)],
                 fanout=False)
             self.conn.consume_in_threads()
@@ -1290,7 +1313,22 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
         # for this pool.  This is in the plugin extension for loadbalancer.
         # It references the agent_scheduler and the scheduler class
         # will pick from the registered agents.
-        agent = self.plugin.get_lbaas_agent_hosting_pool(context, pool_id)
+
+        # If the env is set, get active agent in this env. If the agent
+        # which is associated with this pool is active, it will
+        # be used. Otherwise another agent in the env will be used.
+
+        # Note: without the env set, the orginal agent associated
+        # with the pool will be returned regardless if it is up
+        # or it is not. The RPC message will be set to his host
+        # name specific queue.
+        agent = self.pool_scheduler.get_lbaas_agent_hosting_pool(
+            self.plugin,
+            context,
+            pool_id,
+            active=False,
+            env=self.env
+        )
         if not agent:
             raise lbaas_agentscheduler.NoActiveLbaasAgent(pool_id=pool_id)
         return agent['agent']
@@ -1374,7 +1412,8 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
     def create_pool(self, context, pool):
         """ Handle LBaaS method by passing to agent """
         # which agent should handle provisioning
-        agent = self.pool_scheduler.schedule(self.plugin, context, pool)
+        agent = self.pool_scheduler.schedule(self.plugin, context,
+                                             pool, self.env)
         if not agent:
             raise lbaas_agentscheduler.NoEligibleLbaasAgent(pool_id=pool['id'])
         if not PREJUNO:
@@ -1460,7 +1499,7 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
         this_member_count = 0
         for service_member in service['members']:
             if service_member['address'] == member['address'] and \
-               service_member['protocol_port'] == member['protocol_port']:
+               service_member['protocol_port'] == member['protocol_port:']:
                 this_member_count += 1
         if this_member_count > 1:
             status_description = 'duplicate member %s:%s found in pool %s' \
@@ -1716,3 +1755,24 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
                                     agent['configurations']['tunneling_ip']
                                 )
         return endpoints
+
+
+class F5PluginDriverTest(F5PluginDriver):
+    """ Plugin Driver for Test environment """
+
+    def __init__(self, plugin, env='Test'):
+        super(F5PluginDriverTest, self).__init__(plugin, env)
+
+
+class F5PluginDriverProd(F5PluginDriver):
+    """ Plugin Driver for Test environment """
+
+    def __init__(self, plugin, env='Prod'):
+        super(F5PluginDriverProd, self).__init__(plugin, env)
+
+
+class F5PluginDriverDev(F5PluginDriver):
+    """ Plugin Driver for Test environment """
+
+    def __init__(self, plugin, env='Dev'):
+        super(F5PluginDriverDev, self).__init__(plugin, env)
