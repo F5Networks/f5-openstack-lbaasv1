@@ -370,7 +370,8 @@ class iControlDriver(LBaaSBaseDriver):
         else:
             self.fdb_connector = FDBConnectorML2(self.conf)
             self.bigip_l2_manager = BigipL2Manager(
-                self.conf, self.vcmp_manager, self.fdb_connector
+                self.conf, self.vcmp_manager, self.fdb_connector,
+                self.vlan_binding
             )
 
             # Direct means creating vlans, selfips, directly

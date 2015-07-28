@@ -63,10 +63,11 @@ def _get_tunnel_fake_mac(network, local_ip):
 
 class BigipL2Manager(object):
     """ Class for configuring L2 networks """
-    def __init__(self, conf, vcmp_manager, fdb_connector):
+    def __init__(self, conf, vcmp_manager, fdb_connector, vlan_binding):
         self.conf = conf
         self.vcmp_manager = vcmp_manager
         self.fdb_connector = fdb_connector
+        self.vlan_binding = vlan_binding
 
         self.interface_mapping = {}
         self.tagging_mapping = {}
@@ -237,8 +238,8 @@ class BigipL2Manager(object):
             name=vlan_name, vlanid=vlanid, interface=interface,
             folder=network_folder, description=network['id'],
             route_domain_id=network['route_domain_id'])
-        if bigip.vlan_binding:
-            bigip.vlan_binding.allow_vlan(
+        if self.vlan_binding:
+            self.vlan_binding.allow_vlan(
                 device_name=bigip.device_name,
                 interface=interface,
                 vlanid=vlanid
