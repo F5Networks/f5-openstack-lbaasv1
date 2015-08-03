@@ -16,7 +16,6 @@
 from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.interfaces import icontrol_rest_folder
-#from f5.bigip.interfaces import strip_folder_and_prefix
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -376,10 +375,6 @@ class Monitor(object):
             return 'PING'
         else:
             return parent
-
-    #TODO: turn this into iControl ReST.
-    #That will require us to know the type in every call
-    #to exists, because it's in the URL path.
 
     @icontrol_rest_folder
     @log

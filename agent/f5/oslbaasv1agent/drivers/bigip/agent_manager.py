@@ -100,6 +100,15 @@ OPTS = [
     cfg.BoolOpt(
         'environment_specific_plugin', default=False,
         help=_('Use environment specific plugin topic')
+    ),
+    cfg.IntOpt(
+        'environment_group_number',
+        default=1,
+        help=_('Agent group number for it environment')
+    ),
+    cfg.DictOpt(
+        'capacity_policy', default={},
+        help=_('Metrics to measure capacity and their limits.')
     )
 ]
 
@@ -218,7 +227,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             raise SystemExit(msg)
 
         agent_configurations = \
-            {'global_routed_mode': self.conf.f5_global_routed_mode}
+            {'environment_prefix': self.conf.environment_prefix,
+             'environment_group_number': self.conf.environment_group_number,
+             'global_routed_mode': self.conf.f5_global_routed_mode}
 
         if self.conf.static_agent_configuration_data:
             entries = \
@@ -343,6 +354,16 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 self.agent_state['configurations'].update(
                     self.lbdriver.agent_configurations
                 )
+            if self.conf.capacity_policy:
+                env_score = \
+                    self.lbdriver.generate_capcity_score(
+                        self.conf.capacity_policy
+                    )
+                self.agent_state['configurations'][
+                                 'environment_capacity_score'] = env_score
+            else:
+                self.agent_state['configurations'][
+                                 'environment_capacity_score'] = 0
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)

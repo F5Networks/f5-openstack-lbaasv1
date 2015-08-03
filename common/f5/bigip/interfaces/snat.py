@@ -75,7 +75,7 @@ class SNAT(object):
                     if response.status_code < 400:
                         response_obj = json.loads(response.text)
                         if 'members' in response_obj:
-                            if not sa_path in response_obj['members']:
+                            if sa_path not in response_obj['members']:
                                 members = response_obj['members']
                                 members.append(sa_path)
                             else:
@@ -314,7 +314,7 @@ class SNAT(object):
         if response.status_code < 400:
             response_obj = json.loads(response.text)
             if 'members' in response_obj:
-                if not sa_path in response_obj['members']:
+                if sa_path not in response_obj['members']:
                     members = response['members']
                     members.append(sa_path)
                 else:

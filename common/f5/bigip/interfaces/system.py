@@ -69,8 +69,8 @@ class System(object):
             if folder in self.existing_folders:
                 now = time.time()
                 if self.existint_folders_updated:
-                    if ((now - self.existint_folders_updated)
-                            < const.FOLDER_CACHE_TIMEOUT):
+                    if ((now - self.existint_folders_updated) <
+                            const.FOLDER_CACHE_TIMEOUT):
                         return True
                     else:
                         del self.existing_folders[folder]
@@ -211,7 +211,7 @@ class System(object):
         """ Purge Folder of contents """
         if not bigip:
             bigip = self.bigip
-        if not folder in self.exempt_folders:
+        if folder not in self.exempt_folders:
             bigip.virtual_server.delete_all(folder=folder)
             bigip.pool.delete_all(folder=folder)
             bigip.monitor.delete_all(folder=folder)
@@ -233,7 +233,7 @@ class System(object):
         """ Purge folder """
         if not bigip:
             bigip = self.bigip
-        if not folder in self.exempt_folders:
+        if folder not in self.exempt_folders:
             bigip.system.delete_folder(bigip.decorate_folder(folder))
         else:
             Log.error('folder',

@@ -221,8 +221,8 @@ class Cluster(object):
             else:
                 attempts += 1
                 Log.info('Cluster',
-                         "Device %s " % dev_name
-                         + "Synchronizing config attempt %s to group %s:"
+                         "Device %s " % dev_name +
+                         "Synchronizing config attempt %s to group %s:"
                          % (attempts, name) + " current state: %s" % state)
                 self.sync_local_device_to_group(name)
                 time.sleep(sleep_delay)
@@ -292,9 +292,9 @@ class Cluster(object):
                     if md_device_name:
                         if not md_device_name == local_device:
                             raise exceptions.BigIPClusterPeerAddFailure(
-                                'the device used to peer %s ' % name
-                                + ' was already itself peered from root'
-                                + ' device: %s'
+                                'the device used to peer %s ' % name +
+                                ' was already itself peered from root' +
+                                ' device: %s'
                                 % local_md['root_device_name'])
                 self.bigip.device.update_metadata(None, root_mgmt_dict)
                 Log.info('Cluster', 'Device %s - adding peer %s'
@@ -490,7 +490,7 @@ class Cluster(object):
             device_names = [device_names]
         need_to_update = False
         for device in device_names:
-            if not device in existing_devices:
+            if device not in existing_devices:
                 existing_devices.append(device)
                 need_to_update = True
         if need_to_update:

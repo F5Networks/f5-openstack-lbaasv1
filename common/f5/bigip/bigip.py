@@ -30,6 +30,7 @@ from f5.bigip.interfaces.iapp import IApp
 from f5.bigip.interfaces.monitor import Monitor
 from f5.bigip.interfaces.pool import Pool
 from f5.bigip.interfaces.route import Route
+from f5.bigip.interfaces.ssl import SSL
 from f5.bigip.interfaces.rule import Rule
 from f5.bigip.interfaces.selfip import SelfIP
 from f5.bigip.interfaces.snat import SNAT
@@ -267,6 +268,17 @@ class BigIP(object):
             self.interfaces['pool'] = pool
             pool.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
             return pool
+
+    @property
+    def ssl(self):
+        """ SSL interface """
+        if 'ssl' in self.interfaces:
+            return self.interfaces['ssl']
+        else:
+            ssl = SSL(self)
+            self.interfaces['ssl'] = ssl
+            ssl.OBJ_PREFIX = bigip_interfaces.OBJ_PREFIX
+            return ssl
 
     def set_timeout(self, timeout):
         """ Set iControl timeout """

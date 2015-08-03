@@ -16,7 +16,6 @@
 from f5.common.logger import Log
 from f5.common import constants as const
 from f5.bigip.interfaces import icontrol_rest_folder
-from f5.bigip.interfaces import strip_folder_and_prefix
 from f5.bigip import exceptions
 from f5.bigip.interfaces import log
 
@@ -185,7 +184,7 @@ class Route(object):
         if not route_domain:
             raise exceptions.RouteUpdateException(
                 "Cannot get route domain %s" % route_domain_id)
-        if not name in existing_vlans:
+        if name not in existing_vlans:
             existing_vlans.append(name)
             vlans = dict()
             vlans['vlans'] = existing_vlans
@@ -207,7 +206,7 @@ class Route(object):
         """ Add VLANs to Domain """
         folder = str(folder).replace('/', '')
         existing_vlans = self.get_vlans_in_domain(folder=folder)
-        if not name in existing_vlans:
+        if name not in existing_vlans:
             existing_vlans.append(name)
             vlans = dict()
             vlans['vlans'] = existing_vlans
@@ -362,7 +361,9 @@ class Route(object):
             if 'items' in response_obj:
                 route_domains = []
                 for route_domain in response_obj['items']:
-                    if route_domain['partition'] == folder:
+                    if not folder:
+                        route_domains.append(int(route_domain['id']))
+                    elif route_domain['partition'] == folder:
                         route_domains.append(int(route_domain['id']))
                 return route_domains
         elif response.status_code != 404:
@@ -384,7 +385,9 @@ class Route(object):
             if 'items' in response_obj:
                 route_domains = []
                 for route_domain in response_obj['items']:
-                    if route_domain['partition'] == folder:
+                    if not folder:
+                        route_domains.append(route_domain['name'])
+                    elif route_domain['partition'] == folder:
                         route_domains.append(route_domain['name'])
                 return route_domains
         elif response.status_code != 404:

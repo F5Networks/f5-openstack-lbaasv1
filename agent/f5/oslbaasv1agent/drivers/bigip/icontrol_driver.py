@@ -291,8 +291,6 @@ class iControlDriver(LBaaSBaseDriver):
                             self.conf.environment_prefix))
                 bigip_interfaces.OBJ_PREFIX = \
                     self.conf.environment_prefix + '_'
-                self.agent_configurations['environment_prefix'] = \
-                    self.conf.environment_prefix
 
             LOG.debug(_('Setting static ARP population to %s'
                         % self.conf.f5_populate_static_arp))
@@ -611,6 +609,45 @@ class iControlDriver(LBaaSBaseDriver):
         if self.bigip_l2_manager:
             self.agent_configurations['bridge_mappings'] = \
                 self.bigip_l2_manager.interface_mapping
+
+    def generate_capcity_score(self, capacity_policy=None):
+        """ Generate the capcity score of connected devices """
+        if capacity_policy:
+            highest_metric = 0.0
+            highest_metric_name = None
+            my_methods = dir(self)
+            for metric in capacity_policy:
+                func_name = 'get_' + metric
+                if func_name in my_methods:
+                    max_capacity = int(capacity_policy[metric])
+                    metric_func = getattr(self, func_name)
+                    global_stats = []
+                    metric_value = 0
+                    for host in self.__bigips:
+                        hostbigip = self.__bigips[host]
+                        global_stats = hostbigip.stat.get_global_statistics()
+                        value = int(
+                            metric_func(bigip=hostbigip,
+                                        global_statistics=global_stats)
+                        )
+                        LOG.debug(_('calling capacity %s on %s returned: %s'
+                                    % (func_name,
+                                       hostbigip.icontrol.hostname,
+                                       value)))
+                        if value > metric_value:
+                            metric_value = value
+                    metric_capacity = float(metric_value) / float(max_capacity)
+                    if metric_capacity > highest_metric:
+                        highest_metric = metric_capacity
+                        highest_metric_name = metric
+                else:
+                    LOG.warn(_('capacity policy has method '
+                               '%s which is not implemented in this driver'
+                               % metric))
+            LOG.debug('capcity score: %s based on %s'
+                      % (highest_metric, highest_metric_name))
+            return highest_metric * 100
+        return 0
 
     def set_context(self, context):
         """ Context to keep for database access """
@@ -1208,6 +1245,61 @@ class iControlDriver(LBaaSBaseDriver):
             return self.get_all_bigips()
         else:
             return [self.get_bigip()]
+
+    def get_inbound_throughput(self, bigip, global_statistics=None):
+        if bigip:
+            return bigip.stat.get_inbound_throughput(
+                       global_stats=global_statistics)
+
+    def get_outbound_throughput(self, bigip, global_statistics=None):
+        if bigip:
+            return bigip.stat.get_outbound_throughput(
+                       global_stats=global_statistics)
+
+    def get_throughput(self, bigip=None, global_statistics=None):
+        if bigip:
+            return bigip.stat.get_throughput(global_stats=global_statistics)
+
+    def get_active_connections(self, bigip=None, global_statistics=None):
+        if bigip:
+            return bigip.stat.get_active_connection_count(
+                   global_stats=global_statistics)
+
+    def get_ssltps(self, bigip=None, global_statistics=None):
+        if bigip:
+            return bigip.stat.get_active_SSL_TPS(
+                       global_stats=global_statistics)
+
+    def get_node_count(self, bigip=None, global_statistics=None):
+        if bigip:
+            return bigip.pool.get_all_node_count()
+
+    def get_clientssl_profile_count(self, bigip=None, global_statistics=None):
+        if bigip:
+            return len(bigip.ssl.all_client_profile_names())
+
+    def get_tenant_count(self, bigip=None, global_statistics=None):
+        if bigip:
+            folders = bigip.system.get_folders()
+            folders.remove('/')
+            folders.remove('Common')
+            return len(folders)
+
+    def get_tunnel_count(self, bigip=None, global_statistics=None):
+        if bigip:
+            vxlan_tunnels = bigip.vxlan.get_tunnels(folder='/')
+            gre_tunnels = bigip.l2gre.get_tunnels(folder='/')
+            return len(vxlan_tunnels) + len(gre_tunnels)
+
+    def get_vlan_count(self, bigip=None, global_statistics=None):
+        if bigip:
+            return len(bigip.vlan.get_vlans(folder='/'))
+
+    def get_route_domain_count(self, bigip=None, global_statistics=None):
+        if bigip:
+            domain_ids = bigip.route.get_domain_ids(folder='/')
+            domain_ids.remove(0)
+            return len(domain_ids)
 
     def _init_traffic_groups(self, bigip):
         """ Count vips and gws on traffic groups """

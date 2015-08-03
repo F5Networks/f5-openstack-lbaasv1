@@ -109,7 +109,7 @@ class Pool(object):
         if not (arp_res.status_code < 400):
             return
         arp_obj = json.loads(arp_res.text)
-        if not 'items' in arp_obj:
+        if 'items' not in arp_obj:
             return
         for arp in arp_obj['items']:
             if ip_address != arp['ipAddress']:
@@ -130,10 +130,10 @@ class Pool(object):
             if not response.status_code < 400:
                 continue
             fdb_obj = json.loads(response.text)
-            if not 'items' in fdb_obj:
+            if 'items' not in fdb_obj:
                 continue
             for tunnel in fdb_obj['items']:
-                if not 'records' in tunnel:
+                if 'records' not in tunnel:
                     continue
                 records = list(tunnel['records'])
                 need_to_update = False
@@ -582,7 +582,7 @@ class Pool(object):
                 request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
-                if not 'serviceDownAction' in response_obj:
+                if 'serviceDownAction' not in response_obj:
                     return 'NONE'
                 else:
                     if response_obj['serviceDownAction'] == 'drop':
@@ -655,7 +655,7 @@ class Pool(object):
                 request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
-                if not 'loadBalancingMode' in response_obj:
+                if 'loadBalancingMode' not in response_obj:
                     return 'round-robin'
                 else:
                     if response_obj['loadBalancingMode'] == \
@@ -723,7 +723,7 @@ class Pool(object):
                 request_url, timeout=const.CONNECTION_TIMEOUT)
             if response.status_code < 400:
                 response_obj = json.loads(response.text)
-                if not 'description' in response_obj:
+                if 'description' not in response_obj:
                     return None
                 else:
                     return response_obj['description']
@@ -781,7 +781,7 @@ class Pool(object):
                             existing_monitors.append(w)
                     fp_monitor = '/' + folder + '/' + monitor_name
                     monitor_string = ''
-                    if not fp_monitor in existing_monitors:
+                    if fp_monitor not in existing_monitors:
                         if response_obj['monitor'].startswith('min'):
                             min_count = w_split[1]
                             monitor_string = 'min ' + min_count + ' of { '
@@ -1027,3 +1027,19 @@ class Pool(object):
             Log.error('pool', response.text)
             raise exceptions.PoolQueryException(response.text)
         return False
+
+    @icontrol_rest_folder
+    @log
+    def get_all_node_count(self):
+        request_url = self.bigip.icr_url + '/ltm/node'
+        request_url += '?$top=1&$select=totalItems'
+        response = self.bigip.icr_session.get(
+            request_url, timeout=const.CONNECTION_TIMEOUT)
+        if response.status_code < 400:
+            response_obj = json.loads(response.text)
+            if 'totalItems' in response_obj:
+                return int(response_obj['totalItems'])
+        elif response.status_code != 404:
+            Log.error('pool', response.text)
+            raise exceptions.PoolQueryException(response.text)
+        return 0

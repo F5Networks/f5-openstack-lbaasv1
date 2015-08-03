@@ -1056,7 +1056,7 @@ class VirtualServer(object):
                 response_obj = json.loads(response.text)
                 if 'rules' in response_obj:
                     rule = '/' + folder + '/' + rule_name
-                    if not rule in response_obj['rules']:
+                    if rule not in response_obj['rules']:
                         rules_list = response_obj['rules']
                         rules_list.append(rule)
                         rules = {'rules': rules_list}
@@ -1457,7 +1457,7 @@ class VirtualServer(object):
                 if 'destination' in response_obj:
                     dest = os.path.basename(
                         response_obj['destination'])
-                    (ip_addr, port) = split_addr_port(dest)
+                    (ip_addr, port) = split_addr_port(dest)  # @UnusedVariable
                     return ip_addr
                 else:
                     return None
@@ -1484,7 +1484,7 @@ class VirtualServer(object):
                 if 'destination' in response_obj:
                     dest = os.path.basename(
                         response_obj['destination'])
-                    (ip_addr, port) = split_addr_port(dest)
+                    (ip_addr, port) = split_addr_port(dest)  # @UnusedVariable
                     return port
                 else:
                     return -1
@@ -1643,7 +1643,7 @@ class VirtualServer(object):
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
                     dest = response_obj['destination']
-                    (address, port) = split_addr_port(dest)
+                    (address, port) = split_addr_port(dest)  # @UnusedVariable
                     va_req = self.bigip.icr_url + '/ltm/virtual-address/'
                     va_req += urllib.quote(address).replace('/', '~')
                     payload = dict()
@@ -1677,7 +1677,7 @@ class VirtualServer(object):
                 response_obj = json.loads(response.text)
                 if 'destination' in response_obj:
                     dest = response_obj['destination']
-                    (address, port) = split_addr_port(dest)
+                    (address, port) = split_addr_port(dest)  # @UnusedVariable
                     va_req = self.bigip.icr_url + '/ltm/virtual-address/'
                     va_req += urllib.quote(address).replace('/', '~')
                     va_req += '?$select=trafficGroup'
@@ -2039,7 +2039,7 @@ class VirtualServer(object):
             Log.debug('profiles', 'getting common profile cache')
             self.get_all_profiles(folder='Common')
         if not folder == 'Common':
-            if not folder in self.folder_profiles.values():
+            if folder not in self.folder_profiles.values():
                 Log.debug('profiles',
                           'getting profile cache for %s' % folder)
                 self.get_all_profiles(folder=folder)
@@ -2071,7 +2071,7 @@ class VirtualServer(object):
             Log.debug('persistence',
                       'getting common persistence profile cache')
         if not folder == 'Common':
-            if not folder in self.folder_persistence_profiles.values():
+            if folder not in self.folder_persistence_profiles.values():
                 self.get_all_persistence_profiles(folder=folder)
                 Log.debug('persistence',
                           'getting persistence profile cache for %s' % folder)

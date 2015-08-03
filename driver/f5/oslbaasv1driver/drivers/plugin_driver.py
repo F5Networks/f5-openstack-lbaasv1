@@ -1326,7 +1326,6 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
             self.plugin,
             context,
             pool_id,
-            active=False,
             env=self.env
         )
         if not agent:
