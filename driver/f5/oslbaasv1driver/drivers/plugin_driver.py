@@ -93,10 +93,7 @@ OPTS = [
                         '.drivers.agent_scheduler'
                         '.TenantScheduler'),
                help=_('Driver to use for scheduling '
-                      'pool to a default loadbalancer agent')),
-    cfg.DictOpt('f5_loadbalancer_environments',
-                default={},
-                help=_('environments to load as service providers'))
+                      'pool to a default loadbalancer agent'))
 ]
 
 cfg.CONF.register_opts(OPTS)
