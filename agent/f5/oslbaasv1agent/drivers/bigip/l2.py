@@ -423,7 +423,7 @@ class BigipL2Manager(object):
                                        bigip.icontrol.hostname)
         bigip.vlan.delete(name=vlan_name,
                           folder=network_folder)
-        if bigip.vlan_binding:
+        if self.vlan_binding:
             interface = self.interface_mapping['default']
             tagged = self.tagging_mapping['default']
             vlanid = 0
@@ -444,7 +444,7 @@ class BigipL2Manager(object):
             else:
                 vlanid = 0
 
-            bigip.vlan_binding.prune_vlan(
+            self.vlan_binding.prune_vlan(
                 device_name=bigip.device_name,
                 interface=interface,
                 vlanid=vlanid
