@@ -18,4 +18,4 @@ F5ENVDRIVER_PROVIDER_NAME = 'f5env'
 
 # RPC channel names
 TOPIC_PROCESS_ON_HOST = 'f5-lbaas-process-on-controller'
-TOPIC_LOADBALANCER_AGENT = 'f5_lbaas_process_on_agent'
+TOPIC_LOADBALANCER_AGENT = 'f5-lbaas-process-on-agent'
