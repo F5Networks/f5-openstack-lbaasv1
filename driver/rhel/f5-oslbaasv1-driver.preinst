@@ -1,6 +1,6 @@
 #!/bin/bash
 
-is_kilo=`rpm -q python-neutron|grep 2015|wc -l`
+is_kilo=`rpm -q python-neutron|grep -F "2015."|wc -l`
 
 if [ $is_kilo == 1 ]
 then
