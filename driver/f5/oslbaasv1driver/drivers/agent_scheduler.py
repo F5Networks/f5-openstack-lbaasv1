@@ -44,27 +44,29 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                 # active or not active
                 if lbaas_agent:
                     rt_agent = lbaas_agent['agent']
-                    # which environment group is the agent in
-                    agent_conf = self.deserialize_agent_configurations(
-                        rt_agent['configurations']
-                    )
-                    if 'environment_group_number' in agent_conf:
-                        rt_agent_gn = agent_conf[
-                                   'environment_group_number']
-                    else:
-                        rt_agent_gn = 1
-
                     # is the agent alive return the agent for this pool
                     if rt_agent['alive']:
                         return lbaas_agent
                     else:
+                        # which environment group is the agent in
+                        agent_conf = self.deserialize_agent_configurations(
+                            rt_agent['configurations']
+                        )
+                        # get a evironment group number for the bound agent
+                        if 'environment_group_number' in agent_conf:
+                            rt_agent_gn = agent_conf[
+                                   'environment_group_number']
+                        else:
+                            rt_agent_gn = 1
                         # Agent is dead. Is there another in this
                         # environment and group? If so return that agent
                         # for this task.
-                        env_agents = self.get_active_agent_in_env(plugin,
-                                                                  context,
-                                                                  env,
-                                                                  rt_agent_gn)
+                        env_agents = self.get_active_agent_in_env(
+                            plugin,
+                            context,
+                            env,
+                            rt_agent_gn
+                        )
                         if env_agents:
                             return {'agent': env_agents[0]}
             # There is no environment for this lbaas_agent, return
@@ -85,13 +87,13 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                         candidate_env = agent_conf['environment_prefix']
                     else:
                         candidate_env = ""
-                if candidate_env == env:
-                    if group:
-                        if 'environment_group_number' in agent_conf and \
-                          agent_conf['environment_group_number'] == group:
+                    if candidate_env == env:
+                        if group:
+                            if 'environment_group_number' in agent_conf and \
+                              agent_conf['environment_group_number'] == group:
+                                return_agents.append(candidate)
+                        else:
                             return_agents.append(candidate)
-                    else:
-                        return_agents.append(candidate)
             return return_agents
 
     def get_capacity(self, configurations):
