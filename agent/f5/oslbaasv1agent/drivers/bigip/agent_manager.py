@@ -240,7 +240,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                     agent_configurations[nv[0]] = nv[1]
 
         self.agent_state = {
-            'binary': 'f5-bigip-lbaas-agent',
+            'binary': lbaasv1constants.AGENT_BINARY_NAME,
             'host': self.agent_host,
             'topic': lbaasv1constants.TOPIC_LOADBALANCER_AGENT,
             'agent_type': neutron_constants.AGENT_TYPE_LOADBALANCER,

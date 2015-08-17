@@ -15,6 +15,8 @@
 import random
 import json
 
+import f5.oslbaasv1driver.drivers.constants as lbaasv1const
+
 try:
     from neutron.services.loadbalancer import agent_scheduler
     from neutron.openstack.common import log as logging
@@ -34,44 +36,49 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
         super(TenantScheduler, self).__init__()
 
     def get_lbaas_agent_hosting_pool(self, plugin, context, pool_id, env=None):
-        LOG.debug(_('Getting agent for pool %s with env %s' % (pool_id, env)))
+        if env:
+            LOG.debug(_('Getting agent for pool %s with env %s' % (pool_id,
+                                                                   env)))
+        else:
+            LOG.debug(_('Getting agent for pool %s in default env' % pool_id))
+
         with context.session.begin(subtransactions=True):
             # returns {'agent': agent_dict}
             lbaas_agent = plugin.get_lbaas_agent_hosting_pool(context,
                                                               pool_id)
-            if env:
-                # find if there is a agent already bound to this pool
-                # active or not active
-                if lbaas_agent:
-                    rt_agent = lbaas_agent['agent']
-                    # is the agent alive return the agent for this pool
-                    if rt_agent['alive']:
-                        return lbaas_agent
-                    else:
-                        # which environment group is the agent in
-                        agent_conf = self.deserialize_agent_configurations(
-                            rt_agent['configurations']
-                        )
-                        # get a evironment group number for the bound agent
-                        if 'environment_group_number' in agent_conf:
-                            rt_agent_gn = agent_conf[
-                                   'environment_group_number']
-                        else:
-                            rt_agent_gn = 1
-                        # Agent is dead. Is there another in this
-                        # environment and group? If so return that agent
-                        # for this task.
-                        env_agents = self.get_active_agent_in_env(
-                            plugin,
-                            context,
-                            env,
-                            rt_agent_gn
-                        )
-                        if env_agents:
-                            return {'agent': env_agents[0]}
-            # There is no environment for this lbaas_agent, return
-            # previously scheduled agent regardless if it is alive
-            # or not. This is the pre environment aware behaviour.
+            # if the agent bound to this pool is alive, return it
+            if lbaas_agent['agent']['alive']:
+                return lbaas_agent
+            else:
+                # BASIC AGENT TASK REDUDANCY
+                # find another agent in the same environment
+
+                # which environment group is the agent in
+                ac = self.deserialize_agent_configurations(
+                    lbaas_agent['agent']['configurations']
+                )
+                # if the default env, use the bound agent's
+                # environment prefix to find another agent
+                # with the same environment prefix
+                if not env:
+                    env = ac['environment_prefix']
+                # get a environment group number for the bound agent
+                if 'environment_group_number' in ac:
+                    gn = ac['environment_group_number']
+                else:
+                    gn = 1
+                # find all active agents matching the environment
+                # an group number.
+                env_agents = self.get_active_agent_in_env(
+                    plugin,
+                    context,
+                    env,
+                    gn
+                )
+                if env_agents:
+                    # return the first active agent in the
+                    # group to process this task
+                    return {'agent': env_agents[0]}
             return lbaas_agent
 
     def get_active_agent_in_env(self, plugin, context, env, group=None):
@@ -80,20 +87,17 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
             return_agents = []
             if candidates:
                 for candidate in candidates:
-                    agent_conf = self.deserialize_agent_configurations(
-                        candidate['configurations']
+                    ac = self.deserialize_agent_configurations(
+                            candidate['configurations']
                     )
-                    if 'environment_prefix' in agent_conf:
-                        candidate_env = agent_conf['environment_prefix']
-                    else:
-                        candidate_env = ""
-                    if candidate_env == env:
-                        if group:
-                            if 'environment_group_number' in agent_conf and \
-                              agent_conf['environment_group_number'] == group:
+                    if 'environment_prefix' in ac:
+                        if ac['environment_prefix'] == env:
+                            if group:
+                                if 'environment_group_number' in ac and \
+                                  ac['environment_group_number'] == group:
+                                    return_agents.append(candidate)
+                            else:
                                 return_agents.append(candidate)
-                        else:
-                            return_agents.append(candidate)
             return return_agents
 
     def get_capacity(self, configurations):
@@ -118,23 +122,25 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
         is no enabled agent hosting it.
         """
         with context.session.begin(subtransactions=True):
-            if env:
-                # If the pool is hosted on an active agent
-                # already, return that agent or one in its env
-                lbaas_agent = plugin.get_lbaas_agent_hosting_pool(
-                    context, pool['id']
-                )
-                if lbaas_agent:
-                    lbaas_agent = lbaas_agent['agent']
-                    message = 'Pool %s already scheduled in env %s.' \
-                        % (pool['id'], env)
-                    message += ' Assigning task to agent %s.' \
-                        % (lbaas_agent['id'])
-                    LOG.debug(message)
-                    return lbaas_agent
+            # If the pool is hosted on an active agent
+            # already, return that agent or one in its env
+            lbaas_agent = plugin.get_lbaas_agent_hosting_pool(
+                context, pool['id']
+            )
+            if lbaas_agent:
+                lbaas_agent = lbaas_agent['agent']
+                message = 'Pool %s already scheduled in env %s.' \
+                    % (pool['id'], env)
+                message += ' Assigning task to agent %s.' \
+                    % (lbaas_agent['id'])
+                LOG.debug(message)
+                return lbaas_agent
 
+            if env:
                 # There is no existing pool agent binding.
                 # Find all active agent candidate in this env.
+                # We use environment_prefix to find f5 agents
+                # rather then map to the agent binary name.
                 candidates = self.get_active_agent_in_env(plugin,
                                                           context,
                                                           env)
@@ -151,17 +157,17 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                 for candidate in candidates:
                     # Organize agents by their evn group
                     # and collect each group's max capacity.
-                    agent_conf = self.deserialize_agent_configurations(
+                    ac = self.deserialize_agent_configurations(
                         candidate['configurations']
                     )
                     gn = 1
-                    if 'environment_group_number' in agent_conf:
-                        gn = agent_conf['environment_group_number']
+                    if 'environment_group_number' in ac:
+                        gn = ac['environment_group_number']
                     if gn not in agents_by_group.keys():
                         agents_by_group[gn] = []
                     agents_by_group[gn].append(candidate)
                     # populate each group's capacity
-                    group_capacity = self.get_capacity(agent_conf)
+                    group_capacity = self.get_capacity(ac)
                     if gn not in capacity_by_group.keys():
                         capacity_by_group[gn] = group_capacity
                     else:
@@ -225,38 +231,38 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                            'agent_id': chosen_agent['id']})
                 return chosen_agent
             else:
-                # preserve complete old behavior if env is not defined
-                lbaas_agent = plugin.get_lbaas_agent_hosting_pool(
-                    context, pool['id'])
-                if lbaas_agent:
-                    lbaas_agent = lbaas_agent['agent']
-                    LOG.debug(_('Pool %(pool_id)s has already been hosted'
-                                ' by lbaas agent %(agent_id)s'),
-                              {'pool_id': pool['id'],
-                               'agent_id': lbaas_agent['id']})
-                    return lbaas_agent
+                # If this is not a defined env driver, no capacity planning
+                # is done and the environment is chosen at random from
+                # all active agents with an corresponding binary name.
+                # Tenant affinity is still checked.
                 candidates = plugin.get_lbaas_agents(context, active=True)
                 if not candidates:
                     LOG.warn(_('No active lbaas agents for pool %s'
                                % pool['id']))
                     return
-                candidates = [a for a in candidates if 'f5' in a['binary']]
+                candidates = [a for a in candidates
+                              if lbaasv1const.AGENT_BINARY_NAME in a['binary']]
                 if not candidates:
                     LOG.warn(_('No f5 lbaas agents for pool %s'), pool['id'])
                     return
 
                 chosen_agent = None
                 for candidate in candidates:
+                    # get all assigned pools from each agent
                     assigned_pools = plugin.list_pools_on_lbaas_agent(
                         context, candidate['id'])
                     for assigned_pool in assigned_pools['pools']:
                         if pool['tenant_id'] == assigned_pool['tenant_id']:
+                            # if you found an agent with the tenant assigned
+                            # then use that agent.
                             chosen_agent = candidate
                             break
                     if chosen_agent:
                         break
 
                 if not chosen_agent:
+                    # not agent was found with tenant resources on it
+                    # matching this pool's tenant.
                     chosen_agent = random.choice(candidates)
 
                 binding = agent_scheduler.PoolLoadbalancerAgentBinding()

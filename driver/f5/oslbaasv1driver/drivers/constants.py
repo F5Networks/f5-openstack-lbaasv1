@@ -16,6 +16,8 @@
 # F5EnvironmentDriver provider name
 F5ENVDRIVER_PROVIDER_NAME = 'f5env'
 
+AGENT_BINARY_NAME = 'f5-oslbaasv1-agent'
+
 # RPC channel names
 TOPIC_PROCESS_ON_HOST = 'f5-lbaas-process-on-controller'
 TOPIC_LOADBALANCER_AGENT = 'f5-lbaas-process-on-agent'

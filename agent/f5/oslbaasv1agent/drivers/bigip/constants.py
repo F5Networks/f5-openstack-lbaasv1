@@ -28,8 +28,7 @@ TYPE_VXLAN = 'vxlan'
 VXLAN_UDP_PORT = 4789
 VTEP_SELFIP_NAME = 'vtep'
 
-# Inter-Agent Channel
-AGENT_STATUS = 'f5-agents'
+AGENT_BINARY_NAME = 'f5-oslbaasv1-agent'
 
 # RPC channel names
 TOPIC_PROCESS_ON_HOST = 'f5-lbaas-process-on-controller'
