@@ -313,11 +313,11 @@ class NetworkBuilderDirect(object):
             LOG.debug("rds_cache: processing bigip %s rd %s vlan %s self %s" %
                       (bigip.device_name, route_domain_id, rd_vlan,
                        selfip['name']))
-            if 'openstacklocal-' not in selfip['name']:
+            if bigip.device_name not in selfip['name']:
                 LOG.error("rds_cache: Found unexpected selfip %s for tenant %s"
                           % (selfip['name'], tenant_id))
                 continue
-            subnet_id = selfip['name'].split('openstacklocal-')[1]
+            subnet_id = selfip['name'].split(bigip.device_name + '-')[1]
 
             # convert 10.1.1.1%1/24 to 10.1.1.1/24
             addr = selfip['address'].split('/')[0]
