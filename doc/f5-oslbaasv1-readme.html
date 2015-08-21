@@ -1025,6 +1025,9 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
           <th nowrap="nowrap">Description</th>
         </tr>
         <tr>
+        <th colspan=4>General Settings</th>
+        </tr>
+        <tr>
           <td nowrap="nowrap">debug</td>
           <td>True or False</td>
           <td>False</td>
@@ -1063,12 +1066,6 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
           <td>This list of name:value attribues will be sent as part of the agent configuration data to the plugin.</td>
         </tr>
         <tr>
-          <td nowrap="nowrap">environment_prefix</td>
-          <td>String prefix</td>
-          <td>'' (blank string)</td>
-          <td>This is the prefix this agent will use for all BIG-IP objects. Default is a blank string which will result in BIG-IP objects prefixed with uuid_.</td>
-        </tr>
-        <tr>
           <td nowrap="nowrap">f5_device_type</td>
           <td>external</td>
           <td>external</td>
@@ -1086,6 +1083,36 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
           <td>replication</td>
           <td>This determines the way LBaaSv1 will be provisioned. For auto_sync, only a single TMOS device will be provisioned and DSG syncing used to replicate the configuration objects. For replication, each device will be provisioned independantly. Only
             replication mode is supported at this time.</td>
+        </tr>
+        <tr>
+        <th colspan=4>Environment Settings</th>
+        </tr>
+        <tr>
+          <td nowrap="nowrap">environment_prefix</td>
+          <td>String prefix</td>
+          <td>'' (blank string)</td>
+          <td>This is the prefix this agent will use for all BIG-IP objects. Default is a blank string which will result in BIG-IP objects prefixed with uuid_.</td>
+        </tr>
+        <tr>
+          <td nowrap="nowrap">environment_specific_plugin</td>
+          <td>True or False</td>
+          <td>False</td>
+          <td>Setting this to True will cause the agent to try and communicate with a service differentiated plugin driver associated with its environment.</td>
+        </tr>
+        <tr>
+          <td nowrap="nowrap">environment_group_number</td>
+          <td>integer group number</td>
+          <td>1</td>
+          <td>This puts the agent in a specific group used when scaling out an environment beyound one service group of BIG-IPs.</td>
+        </tr>
+        <tr>
+          <td nowrap="nowrap">capacity_policy</td>
+          <td>dictionary of metrics and max values</td>
+          <td>None</td>
+          <td>A policy of metric names and max values for this device service group used to report environment capacity. This is used to determine group scale out.</td>
+        </tr>
+        <tr>
+        <th colspan=4>VLAN Settings</th>
         </tr>
         <tr>
           <td nowrap="nowrap">f5_external_physical_mappings</td>
@@ -1111,6 +1138,9 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
           <td>
             The interface_port_static_mappings allows for a JSON encoded dictionary mapping BigIP devices and interfaces to corresponding ports.
           </td>
+        </tr>
+        <tr>
+        <th colspan=4>Tunnel Settings</th>
         </tr>
         <tr>
           <td nowrap="nowrap">f5_vtep_folder</td>
@@ -1143,6 +1173,9 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
         <td>True or False</td>
         <td>True</td>
         <td>The agent will register for Neutron L2 population updates and will populate tunnel fdb entries accordingly. Without L2 population, pool member migration will not function properly.</td>
+        </tr>
+        <tr>
+        <th colspan=4>L3 Settings</th>
         </tr>
         <tr>
           <td nowrap="nowrap">f5_global_routed_mode</td>
@@ -1195,6 +1228,9 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
           <td>Much like common network ids, if there are known subnets which are bound to BIG-IP neutron ports which need L3 binding, these can be specified statically.</td>
         </tr>
         <tr>
+        <th colspan=4>Device Driver Settings</th>
+        </tr>
+        <tr>
           <td>f5_bigip_LBaaSv1_device_driver</td>
           <td>python class name of the device driver to use</td>
           <td>
@@ -1242,7 +1278,6 @@ ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True</span></div>
           <td>objects</td>
           <td>Determines if iControl objects or the LBaaSv1 iApp are used to provision services. iApp support is experimental in this release.</td>
         </tr>
-
         <tr>
           <td>bigiq_hostname</td>
           <td>BIG-IQ API endpoint IP or FQDN</td>
