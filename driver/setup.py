@@ -57,7 +57,8 @@ setup(
                 'f5.oslbaasv1driver.drivers.plugin_driver',
                 'f5.oslbaasv1driver.drivers.rpc',
                 'f5.oslbaasv1driver.drivers.constants'],
-    packages=['f5.oslbaasv1driver',
+    packages=['f5',
+              'f5.oslbaasv1driver',
               'f5.oslbaasv1driver.drivers',
               'f5.oslbaasv1driver.utils'],
     data_files=data_files)

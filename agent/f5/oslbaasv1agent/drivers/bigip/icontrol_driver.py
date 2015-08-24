@@ -611,8 +611,8 @@ class iControlDriver(LBaaSBaseDriver):
             self.agent_configurations['bridge_mappings'] = \
                 self.bigip_l2_manager.interface_mapping
 
-    def generate_capcity_score(self, capacity_policy=None):
-        """ Generate the capcity score of connected devices """
+    def generate_capacity_score(self, capacity_policy=None):
+        """ Generate the capacity score of connected devices """
         if capacity_policy:
             highest_metric = 0.0
             highest_metric_name = None
@@ -645,7 +645,7 @@ class iControlDriver(LBaaSBaseDriver):
                     LOG.warn(_('capacity policy has method '
                                '%s which is not implemented in this driver'
                                % metric))
-            LOG.debug('capcity score: %s based on %s'
+            LOG.debug('capacity score: %s based on %s'
                       % (highest_metric, highest_metric_name))
             return highest_metric * 100
         return 0
@@ -916,18 +916,33 @@ class iControlDriver(LBaaSBaseDriver):
 
     def fdb_add(self, fdb):
         """ Add (L2toL3) forwarding database entries """
+        self.remove_ips_from_fdb_update(fdb)
         for bigip in self.get_all_bigips():
             self.bigip_l2_manager.add_bigip_fdb(bigip, fdb)
 
     def fdb_remove(self, fdb):
         """ Remove (L2toL3) forwarding database entries """
+        self.remove_ips_from_fdb_update(fdb)
         for bigip in self.get_all_bigips():
             self.bigip_l2_manager.remove_bigip_fdb(bigip, fdb)
 
     def fdb_update(self, fdb):
         """ Update (L2toL3) forwarding database entries """
+        self.remove_ips_from_fdb_update(fdb)
         for bigip in self.get_all_bigips():
             self.bigip_l2_manager.update_bigip_fdb(bigip, fdb)
+
+    # remove ips from fdb update so we do not try to
+    # add static arps for them because we do not have
+    # enough information to determine the route domain
+    def remove_ips_from_fdb_update(self, fdb):
+        for network_id in fdb:
+            network = fdb[network_id]
+            mac_ips_by_vtep = network['ports']
+            for vtep in mac_ips_by_vtep:
+                mac_ips = mac_ips_by_vtep[vtep]
+                for mac_ip in mac_ips:
+                    mac_ip[1] = None
 
     def tunnel_update(self, **kwargs):
         """ Tunnel Update from Neutron Core RPC """

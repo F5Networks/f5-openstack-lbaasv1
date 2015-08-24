@@ -356,7 +356,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 )
             if self.conf.capacity_policy:
                 env_score = \
-                    self.lbdriver.generate_capcity_score(
+                    self.lbdriver.generate_capacity_score(
                         self.conf.capacity_policy
                     )
                 self.agent_state['configurations'][
@@ -484,8 +484,12 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as e:
-            LOG.exception(_('Unable to validate service for pool: %s' +
-                            str(e.message)), pool_id)
+            # the pool may have been deleted in the moment
+            # between getting the list of pools and validation
+            active_pool_ids = set(self.plugin_rpc.get_active_pool_ids())
+            if pool_id in active_pool_ids:
+                LOG.exception(_('Unable to validate service for pool: %s' +
+                                str(e.message)), pool_id)
 
     @log.log
     def refresh_service(self, pool_id):

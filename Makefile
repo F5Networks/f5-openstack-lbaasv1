@@ -270,7 +270,7 @@ pylint: pylint-agent pylint-driver
 
 pylint-agent:
 	(cd agent; \
-	     mkdir neutron; \
+         mkdir neutron; \
          touch neutron/__init__.py; \
          mkdir neutron/services; \
          touch neutron/services/__init__.py; \
@@ -284,6 +284,7 @@ pylint-agent:
          ln -s $(NDIR)/services/constants neutron/services/constants; \
          ln -s $(NDIR)/services/loadbalancer/constants.py \
                neutron/services/loadbalancer/constants.py; \
+         ln -s ../../common/f5/bigip f5/bigip; \
          $(PYLINT) f5/bigiq/bigiq.py; \
          $(PYLINT) $(BDIR)/fdb_connector.py; \
          $(PYLINT) $(BDIR)/fdb_connector_ml2.py; \
@@ -311,6 +312,7 @@ pylint-agent:
          $(PYLINT) $(IDIR)/system.py; \
          $(PYLINT) $(IDIR)/virtual_server.py; \
          $(PYLINT) $(IDIR)/vxlan.py; \
+         rm -v f5/bigip; \
          rm -v neutron/plugins; \
          rm -v neutron/openstack; \
          rm -v neutron/common; \

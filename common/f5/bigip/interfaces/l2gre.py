@@ -119,7 +119,7 @@ class L2GRE(object):
         folder = str(folder).replace('/', '')
         # delete arp and fdb records for this tunnel first
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-        request_url += '~' + folder + '~' + name
+        request_url += '~' + folder + '~' + name + '?ver=11.5.0'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -194,7 +194,7 @@ class L2GRE(object):
         """ Add fdb entry for a tunnel """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-        request_url += '~' + folder + '~' + tunnel_name
+        request_url += '~' + folder + '~' + tunnel_name + '?ver=11.5.0'
         response = self.bigip.icr_session.get(
             request_url, timeout=const.CONNECTION_TIMEOUT)
         if response.status_code < 400:
@@ -221,7 +221,7 @@ class L2GRE(object):
                       folder=None):
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-        request_url += '~' + folder + '~' + tunnel_name
+        request_url += '~' + folder + '~' + tunnel_name + '?ver=11.5.0'
         records = self.get_fdb_entry(tunnel_name=tunnel_name,
                                      mac=None,
                                      folder=folder)
@@ -271,7 +271,8 @@ class L2GRE(object):
             if folder != 'Common':
                 folder = prefixed(folder)
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-            request_url += '~' + folder + '~' + self.OBJ_PREFIX + tunnel_name
+            request_url += '~' + folder + '~' + self.OBJ_PREFIX + \
+                tunnel_name + '?ver=11.5.0'
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
                                                   mac=None,
                                                   folder=folder)
@@ -286,7 +287,8 @@ class L2GRE(object):
                 fdb_entry['endpoint'] = tunnel_records[mac]['endpoint']
                 new_records.append(fdb_entry)
                 new_mac_addresses.append(mac)
-                new_arp_addresses[mac] = tunnel_records[mac]['ip_address']
+                if tunnel_records[mac]['ip_address']:
+                    new_arp_addresses[mac] = tunnel_records[mac]['ip_address']
 
             for record in existing_records:
                 if not record['name'] in new_mac_addresses:
@@ -331,7 +333,7 @@ class L2GRE(object):
                 self.bigip.arp.delete(ip_address=arp_ip_address,
                                       folder=folder)
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-        request_url += '~' + folder + '~' + tunnel_name
+        request_url += '~' + folder + '~' + tunnel_name + '?ver=11.5.0'
         records = self.get_fdb_entry(tunnel_name=tunnel_name,
                                      mac=None,
                                      folder=folder)
@@ -367,7 +369,7 @@ class L2GRE(object):
             if folder != 'Common':
                 folder = prefixed(folder)
             request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-            request_url += '~' + folder + '~' + tunnel_name
+            request_url += '~' + folder + '~' + tunnel_name + '?ver=11.5.0'
             existing_records = self.get_fdb_entry(tunnel_name=tunnel_name,
                                                   mac=None,
                                                   folder=folder)
@@ -376,7 +378,7 @@ class L2GRE(object):
 
             for record in existing_records:
                 for mac in fdb_entries[tunnel_name]['records']:
-                    if record['name'] == mac:
+                    if record['name'] == mac and mac['ip_address']:
                         arps_to_delete[mac] = mac['ip_address']
                         break
                 else:
@@ -403,11 +405,11 @@ class L2GRE(object):
         """ Delete all fdb entries for a tunnel """
         folder = str(folder).replace('/', '')
         request_url = self.bigip.icr_url + '/net/fdb/tunnel/'
-        request_url += '~' + folder + '~' + tunnel_name
+        request_url += '~' + folder + '~' + tunnel_name + '?ver=11.5.0'
         response = self.bigip.icr_session.patch(
             request_url, data=json.dumps({'records': None}),
             timeout=const.CONNECTION_TIMEOUT)
-        if response.status_code < 400:
+        if response.status_code < 400 or response.status_code == 404:
             return True
         else:
             Log.error('L2GRE', response.text)

@@ -334,19 +334,23 @@ class NetworkBuilderDirect(object):
 
     def get_route_domain_from_cache(self, network):
         """ Get route domain from cache by network """
-        for route_domain_id in self.rds_cache:
-            net_short_name = self.get_neutron_net_short_name(network)
-            if net_short_name in self.rds_cache[route_domain_id]:
-                return route_domain_id
+        net_short_name = self.get_neutron_net_short_name(network)
+        for tenant_id in self.rds_cache:
+            tenant_cache = self.rds_cache[tenant_id]
+            for route_domain_id in tenant_cache:
+                if net_short_name in tenant_cache[route_domain_id]:
+                    return route_domain_id
 
     def remove_from_rds_cache(self, network, subnet):
         """ Get route domain from cache by network """
-        for route_domain_id in self.rds_cache:
-            net_short_name = self.get_neutron_net_short_name(network)
-            if net_short_name in self.rds_cache[route_domain_id]:
-                net_entry = self.rds_cache[route_domain_id][net_short_name]
-                if subnet['id'] in net_entry:
-                    del net_entry[subnet['id']]
+        net_short_name = self.get_neutron_net_short_name(network)
+        for tenant_id in self.rds_cache:
+            tenant_cache = self.rds_cache[tenant_id]
+            for route_domain_id in tenant_cache:
+                if net_short_name in tenant_cache[route_domain_id]:
+                    net_entry = tenant_cache[route_domain_id][net_short_name]
+                    if subnet['id'] in net_entry:
+                        del net_entry[subnet['id']]
 
     @staticmethod
     def get_bigip_net_short_name(bigip, tenant_id, network_name):

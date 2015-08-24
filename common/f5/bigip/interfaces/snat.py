@@ -383,7 +383,7 @@ class SNAT(object):
                     else:
                         Log.error('snatpool', response.text)
                         raise exceptions.SNATUpdateException(response.text)
-        else:
+        elif response.status_code != 404:
             Log.error('snatpool', response.text)
             raise exceptions.SNATQueryException(response.text)
         return False
