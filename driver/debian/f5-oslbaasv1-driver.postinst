@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+sitedir=`python -c 'from distutils.sysconfig import get_python_lib; print(get_python_lib());'`
+f5_package_init="$sitedir/f5/__init__.py"
+touch $f5_package_init
+
 if which pycompile >/dev/null 2>&1; then
 	pycompile -p f5-oslbaasv1-driver 
 fi
