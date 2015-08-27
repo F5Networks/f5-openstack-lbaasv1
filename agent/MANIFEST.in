@@ -3,6 +3,7 @@ recursive-include usr *
 recursive-include debian *
 recursive-include rhel *
 recursive-include doc *
+include f5/oslbaasv1agent/iapps/*
 include SUPPORT
 include README
 include BUILD
