@@ -12,8 +12,8 @@ bundle install
 #install Pandoc from source
 set -ex
 wget https://github.com/jgm/pandoc/archive/1.15.1.tar.gz
-tar -xzvf pandoc-1.15.1.tar.gz
-cd pandoc-1.15.1 && ./configure --prefix=/usr && make && sudo make install
+tar -xzvf 1.15.1.tar.gz
+cd 1.15.1 && ./configure --prefix=/usr && make && sudo make install
 
 # run script to convert files
 FILES="*.md"
