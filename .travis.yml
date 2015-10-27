@@ -20,7 +20,7 @@ deploy:
   bucket: jodietestsite
   skip_cleanup: true 
   acl: private
-  local_dir: "_site"
+  local_dir: "$HOME/build"
   upload-dir: "lbaasv1"
   on:
     repo: $TRAVIS_REPO_SLUG
