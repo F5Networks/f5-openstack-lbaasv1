@@ -6,8 +6,7 @@
 #  Created by Jodie Putrino on 10/27/15.
 #
 
-bundle install --gemfile=../Gemfile
-
+bundle install
 
 FILES="*.md"
 for f in $FILES
