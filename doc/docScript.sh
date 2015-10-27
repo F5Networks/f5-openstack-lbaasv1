@@ -6,6 +6,8 @@
 #  Created by Jodie Putrino on 10/27/15.
 #
 
+brew update
+brew install pandoc
 
 FILES="*.md"
 for f in $FILES
