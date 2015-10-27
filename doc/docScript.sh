@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 #  docScript2.sh
 #  
@@ -6,8 +6,8 @@
 #  Created by Jodie Putrino on 10/27/15.
 #
 
-brew update
-brew install pandoc
+bundle install --gemfile=../Gemfile
+
 
 FILES="*.md"
 for f in $FILES
