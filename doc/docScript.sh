@@ -6,7 +6,7 @@
 #  Created by Jodie Putrino on 10/27/15.
 #
 
-bundle install "pandoc-ruby"
+bundle install pandoc-ruby
 
 FILES=*.md
 for f in $FILES
