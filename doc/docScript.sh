@@ -5,6 +5,7 @@
 #
 #  Created by Jodie Putrino on 10/27/15.
 #
+bundle install jekyll-pandoc
 
 FILES="*.md"
 for f in $FILES
