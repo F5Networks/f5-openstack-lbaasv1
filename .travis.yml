@@ -5,7 +5,12 @@ env:
   global:
   - NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 install: 
- - gem install pandoc-ruby jekyll-pandoc html-proofer
+ - gem install pandoc-ruby 
+ - gem install jekyll-pandoc 
+ - gem install html-proofer
+cache:
+ directories:
+ - vendor/bundle
 before-script:
  -chmod +x ./doc/docScript.sh
 script: 
