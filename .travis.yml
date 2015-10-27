@@ -6,9 +6,9 @@ env:
   - NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 cache: bundler
 before-script:
- -chmod +x ./doc/docScript.sh
+ -chmod +x ./docScript.sh
 script: 
- - ./doc/docScript.sh
+ - ./docScript.sh
 # whitelist
 branches:
  only:
