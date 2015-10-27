@@ -8,7 +8,7 @@ cache: bundler
 before-script:
  -chmod +x ./docScript.sh
 script: 
- - ./docScript.sh
+ - docScript.sh
 # whitelist
 branches:
  only:
