@@ -30,4 +30,5 @@ bundle exec jekyll build -s ./temp_site/ -d ./site_build
 echo "copying docs to $HOME"
 cp -R ./site_build/doc $HOME/site_build
 
+echo "listing contents of $HOME/site_build"
 ls -a $HOME/site_build
