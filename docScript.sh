@@ -18,7 +18,7 @@ bundle exec jekyll new temp_site
 
 # copy content of doc directory into new temp folder
 echo "copying doc directory into temp_site"
-cp -R /home/travis/build/jputrino/openstack-f5-lbaasv1/doc ./temp_site/doc
+cp -R ./doc ./temp_site/doc
 
 # build site
 echo "building site with jekyll"
@@ -27,4 +27,4 @@ bundle exec jekyll build -s ./temp_site/ -d ./site_build
 #echo "proofing site with htmlproofer"
 #bundle exec htmlproof ./site_build
 
-cp -R ./site_build/doc $HOME/build
+cp -R ./site_build/doc $HOME/doc
