@@ -27,4 +27,4 @@ bundle exec jekyll build -s ./temp_site/ -d ./site_build
 #echo "proofing site with htmlproofer"
 #bundle exec htmlproof ./site_build
 
-cp -R ./site_build/doc $HOME/doc
+cp -R ./site_build/doc $HOME/site_build
