@@ -25,6 +25,6 @@ echo "building site with jekyll"
 bundle exec jekyll build -s ./temp_site/ -d ./site_build
 
 #echo "proofing site with htmlproofer"
-#bundle exec htmlproof ./temp_site
+#bundle exec htmlproof ./site_build
 
 cp -R ./site_build/doc $HOME/build
