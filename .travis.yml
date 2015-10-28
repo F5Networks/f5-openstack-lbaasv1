@@ -19,7 +19,7 @@ deploy:
     secure: $AWS_ACCESSKEY
   bucket: jodietestsite
   skip_cleanup: true 
-  acl: private
+  acl: authenticated_read
   local_dir: "./site_build"
   upload-dir: "lbaasv1"
   on:
