@@ -1,3 +1,4 @@
+# This section configures testing and deployment of the docs
 language: ruby
 rvm:
 - 2.1
@@ -6,7 +7,7 @@ env:
   - NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 cache: bundler
 script: 
- - ./docScript.sh
+ - script/project_buildScript.sh
 # whitelist
 branches:
  only:
@@ -14,14 +15,33 @@ branches:
   - develop
 deploy:
   provider: s3
+  region: us-west-2
   access_key_id: AKIAJXW2OUXQMW3DE7PA
   secret_access_key:
     secure: $AWS_ACCESSKEY
-  bucket: jodietestsite
+  bucket: f5-openstack-dev-lbaas
   skip_cleanup: true 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+ #acl: authenticated_read
+  local_dir: $HOME/site_build/
+ #upload-dir: "f5-os-lbaasv1"
+=======
   acl: authenticated_read
   local_dir: $HOME/site_build
-  upload-dir: "lbaasv1"
+  upload-dir: "f5-os-lbaasv1"
+>>>>>>> d89cf77... Fixes: I corrected the source dir for deployment to s3 in .travis.yml.
+=======
+ #acl: authenticated_read
+  local_dir: $HOME/site_build/
+ #upload-dir: "f5-os-lbaasv1"
+>>>>>>> 1295fbd... Summary - I'm testing out deploying each project repo to a separate Amazon S3 bucket. In this commit, I changed .travis.yml to deploy to a new bucket. This is in conjunction with the changes to the build script made in the previous commit.
+=======
+ #acl: authenticated_read
+  local_dir: $HOME/site_build/
+ #upload-dir: "f5-os-lbaasv1"
+>>>>>>> 1295fbd... Summary - I'm testing out deploying each project repo to a separate Amazon S3 bucket. In this commit, I changed .travis.yml to deploy to a new bucket. This is in conjunction with the changes to the build script made in the previous commit.
   on:
     repo: $TRAVIS_REPO_SLUG
-    branch: develop
+    branch: $TRAVIS_BRANCH

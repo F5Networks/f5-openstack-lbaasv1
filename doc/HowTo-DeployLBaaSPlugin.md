@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: docs_page
 title: How to Deploy the F5 LBaaS Plug-In
 ---
 
@@ -21,17 +21,17 @@ Use these instructions to install the F5 LBaaS Plug-in and deploy it in your Ope
 
 ## Install the Driver on the Neutron Server
 
-    **NOTE:** Errors and other relevant log messages are stored on the Neutron server in */var/log/neutron/server.log*.
+**NOTE:**
+    
+    Errors and other relevant log messages are stored on the Neutron server in '/var/log/neutron/server.log'.
 
-### For Red Hat/CentOS:
+### Red Hat/CentOS:
 
 `rpm -i f5-lbaas-driver-1.0.7-1.noarch.rpm`
 
-### For Ubuntu:
+### Ubuntu:
 
 `dpkg -i f5-lbaas-driver_1.0.7-1_all.deb`
-
-    **NOTE:** The actual names of the packages may vary from version to version.
 
 ## Configure Neutron
 
@@ -59,10 +59,11 @@ Restart the Neutron server by running the following command:
 
 # What's Next?
 
-[Deploy the F5 LBaaS Agent](HowTo-DeployLBaaSAgent.md)
+
+[Deploy the F5 LBaaS Agent]({{ f5-os-agent/HowTo-DeployLBaaSAgent.html | prepend: site.url }})
 
 # Additional Resources
 
-[F5 TMOS Virtual Edition OpenStack Deployment Guide]()
+[F5 TMOS Virtual Edition OpenStack Deployment Guide]({{ f5-os-odk/HowTo-DeployVEinOS.html | prepend: site.url }})
 
-[OpenStack Deployment Tips](OpenStackDeploymentTips.md)
+[OpenStack Deployment Tips]({{ f5-os-odk/OpenStackDeploymentTips.html | prepend: site.url }})
