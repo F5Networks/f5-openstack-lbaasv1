@@ -140,6 +140,27 @@ class BigipSnatManager(object):
 
         return self._delete_bigip_snats(bigip, subnetinfo, tenant_id)
 
+    def _remove_assured_tenant_snat_subnet(self, bigip, tenant_id, subnet):
+        """" Remove ref for the subnet for this tenant"""
+        if tenant_id in bigip.assured_tenant_snat_subnets:
+            tenant_snat_subnets = \
+                bigip.assured_tenant_snat_subnets[tenant_id]
+            if tenant_snat_subnets and subnet['id'] in tenant_snat_subnets:
+                LOG.debug(_(
+                    'Remove subnet id %s from ' \
+                    'bigip.assured_tenant_snat_subnets for tenant %s' % \
+                    (subnet['id'], tenant_id)))
+                tenant_snat_subnets.remove(subnet['id'])
+            else:
+                LOG.debug(_(
+                    'Subnet id %s does not exist in ' \
+                    'bigip.assured_tenant_snat_subnets for tenant %s' % \
+                    (subnet['id'], tenant_id)))
+        else:
+            LOG.debug(_(
+                'Tenant id %s does not exist in ' \
+                'bigip.assured_tenant_snat_subnets' % tenant_id))
+
     def _delete_bigip_snats(self, bigip, subnetinfo, tenant_id):
         """ Assure snats deleted in standalone mode """
         network = subnetinfo['network']
@@ -178,27 +199,37 @@ class BigipSnatManager(object):
                                            folder=tenant_id)
             # Check if subnet in use by any tenants/snatpools. If in use,
             # add subnet to hints list of subnets in use.
-            LOG.debug(_('Check cache for subnet in use by other tenant'))
+            self._remove_assured_tenant_snat_subnet(bigip, tenant_id, subnet)
+            LOG.debug(_(
+                'Check cache for subnet %s in use by other tenant' % \
+                subnet['id']))
             in_use_count = 0
-            for tenant_id in bigip.assured_tenant_snat_subnets:
+            for loop_tenant_id in bigip.assured_tenant_snat_subnets:
                 tenant_snat_subnets = \
-                    bigip.assured_tenant_snat_subnets[tenant_id]
+                    bigip.assured_tenant_snat_subnets[loop_tenant_id]
                 if subnet['id'] in tenant_snat_subnets:
+                    LOG.debug(_(
+                        'Subnet %s in use (tenant %s)' % \
+                        (subnet['id'], loop_tenant_id)))
                     in_use_count += 1
 
-            if in_use_count > 1:
-                LOG.debug(_('Cache - subnet is in use'))
+            if in_use_count:
                 in_use_subnets.add(subnet['id'])
             else:
-                LOG.debug(_('Check self ip subnet in use by any tenant'))
+                LOG.debug(_('Check subnet in use by any tenant'))
                 if bigip.snat.get_snatpool_member_use_count(subnet['id']):
-                    LOG.debug(_('Self ip subnet in use - do not delete'))
+                    LOG.debug(_('Subnet in use - do not delete'))
                     in_use_subnets.add(subnet['id'])
+                else:
+                    LOG.debug(_('Subnet not in use - delete'))
 
             # Check if trans addr in use by any snatpool.  If not in use,
             # okay to delete associated neutron port.
+            LOG.debug(_('Check trans addr %s in use.' % tmos_snat_name))
             if not bigip.snat.get_snatpool_member_use_count(tmos_snat_name):
-                LOG.debug(_('Trans addr not in use - delete neutron port'))
+                LOG.debug(_('Trans addr not in use - delete'))
                 deleted_names.add(index_snat_name)
+            else:
+                LOG.debug(_('Trans addr in use - do not delete'))
 
         return deleted_names, in_use_subnets
