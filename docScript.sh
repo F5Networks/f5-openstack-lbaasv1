@@ -22,7 +22,7 @@ cp -R ./$TRAVISREPOSLUG/doc ./temp_site/doc
 
 # build site
 echo "building site with jekyll"
-bundle exec jekyll build -s ./temp_site/ -d ./site_build
+bundle exec jekyll build --config _lbaasconfig.yml -s ./temp_site/ -d ./site_build
 
 #echo "proofing site with htmlproofer"
 #bundle exec htmlproof ./site_build
