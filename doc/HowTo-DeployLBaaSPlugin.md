@@ -59,10 +59,11 @@ Restart the Neutron server by running the following command:
 
 # What's Next?
 
-[Deploy the F5 LBaaS Agent](HowTo-DeployLBaaSAgent.md)
+
+[Deploy the F5 LBaaS Agent]({{ f5-os-agent/HowTo-DeployLBaaSAgent.html | prepend: site.url }})
 
 # Additional Resources
 
-[F5 TMOS Virtual Edition OpenStack Deployment Guide]()
+[F5 TMOS Virtual Edition OpenStack Deployment Guide]({{ f5-os-odk/HowTo-DeployVEinOS.html | prepend: site.url }})
 
-[OpenStack Deployment Tips](OpenStackDeploymentTips.md)
+[OpenStack Deployment Tips]({{ f5-os-odk/OpenStackDeploymentTips.html | prepend: site.url }})
