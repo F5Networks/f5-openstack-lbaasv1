@@ -21,7 +21,7 @@ deploy:
   skip_cleanup: true 
   acl: authenticated_read
   local_dir: $HOME/site_build
-  upload-dir: "lbaasv1"
+  upload-dir: "f5-os-lbaasv1"
   on:
     repo: $TRAVIS_REPO_SLUG
     branch: develop
