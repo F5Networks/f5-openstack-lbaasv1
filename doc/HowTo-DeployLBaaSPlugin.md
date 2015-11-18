@@ -1,5 +1,5 @@
 ---
-layout: landing_page
+layout: docs_page
 title: How to Deploy the F5 LBaaS Plug-In
 ---
 
