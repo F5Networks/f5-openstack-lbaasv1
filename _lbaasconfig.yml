@@ -1,0 +1,9 @@
+baseurl: f5-os-lbaasv1
+
+defaults:
+ - 
+    values:
+        layout: "docs_page"
+
+lsi: BOOL
+
