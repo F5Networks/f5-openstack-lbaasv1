@@ -7,9 +7,9 @@ env:
   - NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 cache: bundler
 before_install:
- - ./buildDocs.sh
+ - script/buildDocs.sh
 script: 
- - ./docScript.sh
+ - script/docScript.sh
 # whitelist
 branches:
  only:
