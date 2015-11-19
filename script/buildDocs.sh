@@ -9,7 +9,7 @@
 
 # clone the website source repo
 
-git clone --verbose https://github.com/jputrino/f5-openstack-docs.git
+git clone --verbose git@github.com:jputrino/openstack-f5-lbaasv1.git
 
-mkdir f5-os-lbaasv1
+mkdir f5-openstack-docs/f5-os-lbaasv1
 
