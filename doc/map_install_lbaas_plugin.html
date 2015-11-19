@@ -1,0 +1,38 @@
+---
+layout: docs_page
+title: Install the F5 LBaaS Plug-In
+tags: lbaasv1, plug-in
+resource: true
+---
+<div class="container-margin-top-2x">
+    <div class="bs-docs-header">
+        <h1>{{ page.title }}</h1>
+    </div>
+    <div class="container">
+
+        <h1 id="overview">Overview</h1>
+        <p>{% include lbaasv1_overview.html %}</p>
+
+        <h1 id="prerequisites">Prerequisites</h1>
+        <p>{% include lbaasv1_prerequisites.html %}</p>
+
+        <h1 id="tasks">Tasks</h1>
+
+        <h2 id="install-the-f5-lbaas-plug-in-on-the-neutron-server">Install the F5 LBaaS Plug-in on the Neutron Server</h2>
+        <p>{% include lbaasv1_install_the_neutron_server_overview-note.html %}</p>
+
+        <h3 id="redhatcentos">RedHat/CentOS</h3>
+        <p>{% include lbaasv1_install_the_driver_neutron_server_redhat-centos.html %}</p>
+
+        <h3 id="ubuntu">Ubuntu</h3>
+        <p>{% include lbaasv1_install_the_driver_neutron_server_ubuntu.html %}</p>
+
+        <h2 id="configure-the-neutron-server">Configure the Neutron Server</h2>
+        <ol style="list-style-type: decimal">
+        <li>{% include lbaasv1_install_the_driver_neutron_server_set-default-lbaas-service.html %}</li>
+        <li>{% include lbaasv1_install_the_driver_neutron_server_set-default-lbaas-service-provider.html %}</li>     
+        <li>Save the changes to the Neutron server config file.</li>
+        </ol>
+
+<h2 id="restart-the-neutron-server">Restart the Neutron Server</h2>
+<p>{% include lbaasv1_install_the_driver_neutron_server_restart.html %}</p>

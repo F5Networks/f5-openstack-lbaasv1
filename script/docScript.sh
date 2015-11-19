@@ -24,9 +24,12 @@ bundle exec jekyll build --verbose --trace --config _lbaasconfig.yml -s f5-opens
 #echo "proofing site with htmlproofer"
 #bundle exec htmlproof ./site_build
 
-echo "copying docs to $HOME"
-cp -R ./site_build/f5-os-lbaasv1 $HOME/f5-os-lbaasv1
+echo "copying site_build to $HOME"
+cp -R ./site_build/ $HOME/$TRAVISREPOSLUG
 
-echo "listing contents of $HOME/f5-os-lbaasv1"
-ls -a $HOME/f5-os-lbaasv1/doc
+cd $HOME/site_build
+
+ls
+
+
 
