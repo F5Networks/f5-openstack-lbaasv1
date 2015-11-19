@@ -6,10 +6,8 @@ env:
   global:
   - NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 cache: bundler
-before_install:
- - script/buildDocs.sh
 script: 
- - script/docScript.sh
+ - script/project_buildScript.sh
 # whitelist
 branches:
  only:
@@ -21,11 +19,29 @@ deploy:
   access_key_id: AKIAJXW2OUXQMW3DE7PA
   secret_access_key:
     secure: $AWS_ACCESSKEY
-  bucket: f5-openstack-dev
+  bucket: f5-openstack-dev-lbaas
   skip_cleanup: true 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+ #acl: authenticated_read
+  local_dir: $HOME/site_build/
+ #upload-dir: "f5-os-lbaasv1"
+=======
   acl: authenticated_read
-  local_dir: $HOME/f5-os-lbaasv1/doc
+  local_dir: $HOME/site_build
   upload-dir: "f5-os-lbaasv1"
+>>>>>>> d89cf77... Fixes: I corrected the source dir for deployment to s3 in .travis.yml.
+=======
+ #acl: authenticated_read
+  local_dir: $HOME/site_build/
+ #upload-dir: "f5-os-lbaasv1"
+>>>>>>> 1295fbd... Summary - I'm testing out deploying each project repo to a separate Amazon S3 bucket. In this commit, I changed .travis.yml to deploy to a new bucket. This is in conjunction with the changes to the build script made in the previous commit.
+=======
+ #acl: authenticated_read
+  local_dir: $HOME/site_build/
+ #upload-dir: "f5-os-lbaasv1"
+>>>>>>> 1295fbd... Summary - I'm testing out deploying each project repo to a separate Amazon S3 bucket. In this commit, I changed .travis.yml to deploy to a new bucket. This is in conjunction with the changes to the build script made in the previous commit.
   on:
     repo: $TRAVIS_REPO_SLUG
     branch: $TRAVIS_BRANCH
