@@ -9,26 +9,24 @@
 #install gems in Gemfile
 #bundle install
 
-# remove the temp directory if it currently exists
-#rm -rf ./temp_site
+# remove the project directory if it currently exists
+#rm -rf ./f5-os-lbaasv1
 
-# create new jekyll site framework in $HOME
-echo "creating new jekyll site in temp_site directory"
-bundle exec jekyll new temp_site
 
-# copy content of doc directory into new temp folder
-echo "copying doc directory into ~/temp_site"
-cp -R ./$TRAVISREPOSLUG/doc ./temp_site/doc
+# copy content of doc directory into project folder
+echo "copying doc directory into f5-os-lbaasv1"
+cp -R ./$TRAVISREPOSLUG/doc ./f5-os-lbaasv1
 
 # build site
 echo "building site with jekyll"
-bundle exec jekyll build --config _lbaasconfig.yml -s ./temp_site/ -d ./site_build
+bundle exec jekyll build --config _lbaasconfig.yml -d ./site_build
 
 #echo "proofing site with htmlproofer"
 #bundle exec htmlproof ./site_build
 
 echo "copying docs to $HOME"
-cp -R ./site_build/doc $HOME/site_build
+cp -R ./site_build/f5-os-lbaasv1 $HOME/f5-os-lbaasv1
 
-echo "listing contents of $HOME/site_build"
-ls -a $HOME/site_build
+echo "listing contents of $HOME/f5-os-lbaasv1"
+ls -a $HOME/f5-os-lbaasv1
+
