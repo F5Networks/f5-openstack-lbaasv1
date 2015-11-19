@@ -1,3 +1,4 @@
+# This section configures testing and deployment of the docs
 language: ruby
 rvm:
 - 2.1
@@ -5,6 +6,8 @@ env:
   global:
   - NOKOGIRI_USE_SYSTEM_LIBRARIES=true
 cache: bundler
+before_install:
+ - ./buildDocs.sh
 script: 
  - ./docScript.sh
 # whitelist
@@ -20,8 +23,8 @@ deploy:
   bucket: f5-openstack-dev
   skip_cleanup: true 
   acl: authenticated_read
-  local_dir: $HOME/site_build
+  local_dir: $HOME/f5-os-lbaasv1
   upload-dir: "f5-os-lbaasv1"
   on:
     repo: $TRAVIS_REPO_SLUG
-    branch: develop
+    branch: $TRAVIS_BRANCH
