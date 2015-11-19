@@ -24,7 +24,7 @@ deploy:
   bucket: f5-openstack-dev
   skip_cleanup: true 
   acl: authenticated_read
-  local_dir: $HOME/f5-os-lbaasv1
+  local_dir: $HOME/f5-os-lbaasv1/doc
   upload-dir: "f5-os-lbaasv1"
   on:
     repo: $TRAVIS_REPO_SLUG
