@@ -44,24 +44,49 @@ class LbaasAgentApi(RpcProxy):
 
     API_VERSION = '1.0'
 
-    def __init__(self, topic, context, host):
+    def __init__(self, topic, context, env, group, host):
         super(LbaasAgentApi, self).__init__(topic, self.API_VERSION)
         self.context = context
+        self.env = env
+        self.group = group
         self.host = host
 
     @log.log
-    def get_active_pool_ids(self):
+    def get_all_pools(self):
         return self.call(
             self.context,
-            self.make_msg('get_active_pool_ids', host=self.host),
+            self.make_msg(
+                'get_all_pools',
+                env=self.env,
+                group=self.group,
+                host=self.host
+            ),
             topic=self.topic
         )
 
     @log.log
-    def get_pending_pool_ids(self):
+    def get_active_pools(self):
         return self.call(
             self.context,
-            self.make_msg('get_pending_pool_ids', host=self.host),
+            self.make_msg(
+                'get_active_pools',
+                env=self.env,
+                group=self.group,
+                host=self.host
+            ),
+            topic=self.topic
+        )
+
+    @log.log
+    def get_pending_pools(self):
+        return self.call(
+            self.context,
+            self.make_msg(
+                'get_pending_pools',
+                env=self.env,
+                group=self.group,
+                host=self.host
+            ),
             topic=self.topic
         )
 

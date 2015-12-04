@@ -14,7 +14,7 @@
 #
 
 import datetime
-from oslo.config import cfg
+from oslo.config import cfg  # @UnresolvedImport
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
 from neutron import context
@@ -118,16 +118,24 @@ class LogicalServiceCache(object):
 
     class Service(object):
         """Inner classes used to hold values for weakref lookups."""
-        def __init__(self, port_id, pool_id, tenant_id):
+        def __init__(self, port_id, pool_id, tenant_id, agent_host):
             self.port_id = port_id
             self.pool_id = pool_id
             self.tenant_id = tenant_id
+            self.agent_host = agent_host
 
         def __eq__(self, other):
             return self.__dict__ == other.__dict__
 
         def __hash__(self):
-            return hash((self.port_id, self.pool_id, self.tenant_id))
+            return hash(
+                (
+                 self.port_id,
+                 self.pool_id,
+                 self.tenant_id,
+                 self.agent_host
+                )
+            )
 
     def __init__(self):
         LOG.debug(_("Initializing LogicalServiceCache version %s"
@@ -138,7 +146,7 @@ class LogicalServiceCache(object):
     def size(self):
         return len(self.services)
 
-    def put(self, service):
+    def put(self, service, agent_host):
         if 'port_id' in service['vip']:
             port_id = service['vip']['port_id']
         else:
@@ -146,12 +154,13 @@ class LogicalServiceCache(object):
         pool_id = service['pool']['id']
         tenant_id = service['pool']['tenant_id']
         if pool_id not in self.services:
-            s = self.Service(port_id, pool_id, tenant_id)
+            s = self.Service(port_id, pool_id, tenant_id, agent_host)
             self.services[pool_id] = s
         else:
             s = self.services[pool_id]
             s.tenant_id = tenant_id
             s.port_id = port_id
+            s.agent_host = agent_host
 
     def remove(self, service):
         if not isinstance(service, self.Service):
@@ -179,6 +188,12 @@ class LogicalServiceCache(object):
         for service in self.services:
             tenant_ids[service.tenant_id] = 1
         return tenant_ids.keys()
+
+    def get_agent_hosts(self):
+        agent_hosts = {}
+        for service in self.services:
+            agent_hosts[service.agent_host] = 1
+        return agent_hosts.keys()
 
 
 class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
@@ -214,6 +229,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 conf.f5_bigip_lbaas_device_driver, self.conf)
             if self.lbdriver.agent_id:
                 self.agent_host = conf.host + ":" + self.lbdriver.agent_id
+                self.lbdriver.agent_host = self.agent_host
                 LOG.debug('setting agent host to %s' % self.agent_host)
             else:
                 self.agent_host = None
@@ -277,6 +293,8 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         self.plugin_rpc = agent_api.LbaasAgentApi(
             topic,
             self.context,
+            self.conf.environment_prefix,
+            self.conf.environment_group_number,
             self.agent_host
         )
         # Allow driver to make callbacks using the
@@ -413,21 +431,23 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
     def collect_stats(self, context):
         if not self.plugin_rpc:
             return
-        pool_ids = self.cache.get_pool_ids()
-        LOG.debug('collecting stats on pools: %s' % pool_ids)
-        for pool_id in pool_ids:
-            try:
-                stats = self.lbdriver.get_stats(
-                    self.plugin_rpc.get_service_by_pool_id(
-                        pool_id,
-                        self.conf.f5_global_routed_mode
+        for pool_id in self.cache.services:
+            service = self.cache.services[pool_id]
+            if self.agent_host == service.agent_host:
+                try:
+                    LOG.debug("collecting stats for pool %s" % service.pool_id)
+                    stats = self.lbdriver.get_stats(
+                        self.plugin_rpc.get_service_by_pool_id(
+                            service.pool_id,
+                            self.conf.f5_global_routed_mode
+                        )
                     )
-                )
-                if stats:
-                    self.plugin_rpc.update_pool_stats(pool_id, stats)
-            except Exception as e:
-                LOG.exception(_('Error upating stats' + str(e.message)))
-                self.needs_resync = True
+                    if stats:
+                        self.plugin_rpc.update_pool_stats(service.pool_id,
+                                                          stats)
+                except Exception as e:
+                    LOG.exception(_('Error upating stats' + str(e.message)))
+                    self.needs_resync = True
 
     @periodic_task.periodic_task(spacing=600)
     def backup_configuration(self, context):
@@ -441,27 +461,53 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         if not self.plugin_rpc:
             return
         resync = False
-        known_services = set(self.cache.get_pool_ids())
+        known_services = set()
+        for service in self.cache.services:
+            if self.agent_host == self.cache.services[service].agent_host:
+                known_services.add(service)
         try:
-            active_pool_ids = set(self.plugin_rpc.get_active_pool_ids())
+            # this produces a list of active pools for this agent
+            # or for this agents env + group if using specific env
+            active_pools = self.plugin_rpc.get_active_pools()
+            active_pool_ids = set()
+            for pool in active_pools:
+                if self.agent_host == pool['agent_host']:
+                    active_pool_ids.add(pool['pool_id'])
             LOG.debug(_('plugin produced the list of active pool ids: %s'
                         % list(active_pool_ids)))
             LOG.debug(_('currently known pool ids before sync are: %s'
                         % list(known_services)))
+            # remove any pools in cache which Neutron plugin does
+            # not know about.
             for deleted_id in known_services - active_pool_ids:
                 self.destroy_service(deleted_id)
+            # validate each service we are supposed to know about
             for pool_id in active_pool_ids:
                 if not self.cache.get_by_pool_id(pool_id):
                     self.validate_service(pool_id)
-            pending_pool_ids = self.plugin_rpc.get_pending_pool_ids()
+            # this produces a list of pools with pending tasks
+            # to be performed
+            pending_pools = self.plugin_rpc.get_pending_pools()
+            pending_pool_ids = set()
+            for pool in pending_pools:
+                if self.agent_host == pool['agent_host']:
+                    pending_pool_ids.add(pool['pool_id'])
             LOG.debug(_('plugin produced the list of pending pool ids: %s'
                         % pending_pool_ids))
+            # complete each pending task
             for pool_id in pending_pool_ids:
                 self.refresh_service(pool_id)
-            known_services = set(self.cache.get_pool_ids())
+            # get a list of any cached service we know now after
+            # refreshing services
+            known_services = set()
+            for service in self.cache.services:
+                if self.agent_host == self.cache.services[service].agent_host:
+                    known_services.add(service)
             LOG.debug(_('currently known pool ids after sync are: %s'
                         % list(known_services)))
-            self.remove_orphans()
+            # remove any orphaned services we find on the bigips
+            all_pools = self.plugin_rpc.get_all_pools()
+            self.remove_orphans(all_pools)
         except Exception:
             LOG.exception(_('Unable to retrieve ready services'))
             resync = True
@@ -476,7 +522,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 pool_id,
                 self.conf.f5_global_routed_mode
             )
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
             if not self.lbdriver.exists(service):
                 LOG.error(_('active pool %s is not on BIG-IP.. syncing'
                             % pool_id))
@@ -486,7 +532,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         except Exception as e:
             # the pool may have been deleted in the moment
             # between getting the list of pools and validation
-            active_pool_ids = set(self.plugin_rpc.get_active_pool_ids())
+            active_pool_ids = set()
+            for active_pool in self.plugin_rpc.get_active_pools():
+                if self.agent_host == active_pool['agent_host']:
+                    active_pool_ids.add(active_pool['pool_id'])
             if pool_id in active_pool_ids:
                 LOG.exception(_('Unable to validate service for pool: %s' +
                                 str(e.message)), pool_id)
@@ -500,7 +549,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                 pool_id,
                 self.conf.f5_global_routed_mode
             )
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
             self.lbdriver.sync(service)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
@@ -528,9 +577,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         self.cache.remove_by_pool_id(pool_id)
 
     @log.log
-    def remove_orphans(self):
+    def remove_orphans(self, all_pools):
         try:
-            self.lbdriver.remove_orphans(self.cache.services)
+            self.lbdriver.remove_orphans(all_pools)
         except NotImplementedError:
             pass  # Not all drivers will support this
 
@@ -564,7 +613,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to create_vip"""
         try:
             self.lbdriver.create_vip(vip, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -575,7 +624,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to update_vip"""
         try:
             self.lbdriver.update_vip(old_vip, vip, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -586,7 +635,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_vip"""
         try:
             self.lbdriver.delete_vip(vip, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -597,7 +646,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to create_pool"""
         try:
             self.lbdriver.create_pool(pool, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -608,7 +657,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to update_pool"""
         try:
             self.lbdriver.update_pool(old_pool, pool, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -630,7 +679,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to create_member"""
         try:
             self.lbdriver.create_member(member, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("create_member: NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -641,7 +690,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to update_member"""
         try:
             self.lbdriver.update_member(old_member, member, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("update_member: NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -652,7 +701,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_member"""
         try:
             self.lbdriver.delete_member(member, service)
-            self.cache.put(service)
+            self.cache.put(service. self.agent_host)
         except NeutronException as exc:
             LOG.error("delete_member: NeutronException: %s" % exc.msg)
         except Exception as exc:
@@ -665,7 +714,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         try:
             self.lbdriver.create_pool_health_monitor(health_monitor,
                                                      pool, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error(_("create_pool_health_monitor: NeutronException: %s"
                         % exc.msg))
@@ -681,7 +730,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
             self.lbdriver.update_health_monitor(old_health_monitor,
                                                 health_monitor,
                                                 pool, service)
-            self.cache.put(service)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("update_health_monitor: NeutronException: %s" % exc.msg)
         except Exception as exc:
