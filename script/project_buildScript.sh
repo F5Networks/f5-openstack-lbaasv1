@@ -5,10 +5,6 @@
 #
 #  Created by Jodie Putrino on 11/23/15.
 #
-echo "pwd"
-pwd
-
-
 echo "cd $HOME"
 cd $HOME
 pwd
@@ -65,14 +61,14 @@ ls -l doc/_includes/f5-os-lbaasv1/
 # build the site with Jekyll
 
 echo "Building site with Jekyll"
-bundle exec jekyll build --verbose --trace -s ./doc -d ./site_build --config ./doc/_config.yml,./doc/_lbaasconfig.yml
+bundle exec jekyll build -d ./doc/site_build --config ./doc/_config.yml,./doc/_lbaasconfig.yml
 
 # check the html and validate links with html-proofer
 #echo "proofing site with htmlproofer"
 #bundle exec htmlproof ./site_build
 
 echo "copying site_build to $HOME"
-cp -R ./site_build/ $HOME/site_build
+cp -R ./doc/site_build/ $HOME/site_build
 cd $HOME/site_build
 
 echo "listing contents of $HOME/site_build"
