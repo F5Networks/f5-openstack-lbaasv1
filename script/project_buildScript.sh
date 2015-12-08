@@ -11,13 +11,11 @@ pwd
 
 echo "cd $HOME"
 cd $HOME
-
-echo "pwd"
 pwd
 
 # clone the website source repo into the travis build dir
 echo "git clone --verbose git@github.com:jputrino/f5-openstack-docs.git"
-git clone --verbose git@github.com:jputrino/f5-openstack-docs.git
+git clone -b develop --verbose git@github.com:jputrino/f5-openstack-docs.git
 
 # cd back into the project dir
 echo "cd /home/travis/build/jputrino/openstack-f5-lbaasv1"
