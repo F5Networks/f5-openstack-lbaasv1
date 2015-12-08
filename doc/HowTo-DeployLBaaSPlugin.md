@@ -21,17 +21,17 @@ Use these instructions to install the F5 LBaaS Plug-in and deploy it in your Ope
 
 ## Install the Driver on the Neutron Server
 
-    **NOTE:** Errors and other relevant log messages are stored on the Neutron server in */var/log/neutron/server.log*.
+**NOTE:**
+    
+    Errors and other relevant log messages are stored on the Neutron server in '/var/log/neutron/server.log'.
 
-### For Red Hat/CentOS:
+### Red Hat/CentOS:
 
 `rpm -i f5-lbaas-driver-1.0.7-1.noarch.rpm`
 
-### For Ubuntu:
+### Ubuntu:
 
 `dpkg -i f5-lbaas-driver_1.0.7-1_all.deb`
-
-    **NOTE:** The actual names of the packages may vary from version to version.
 
 ## Configure Neutron
 
