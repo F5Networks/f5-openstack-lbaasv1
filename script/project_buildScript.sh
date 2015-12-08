@@ -27,22 +27,22 @@ pwd
 echo "copying formatting and styling content to $TRAVISREPOSLUG/doc"
 
 echo "cp $HOME/f5-openstack-docs/_config.yml doc/_config.yml"
-cp $HOME/f5-openstack-docs/_config.yml doc/_config.yml
+cp $HOME/f5-openstack-docs/_config.yml doc/
 
-echo "mkdir ./doc/_layouts"
-mkdir ./doc/_layouts
+#echo "mkdir ./doc/_layouts"
+#mkdir ./doc/_layouts
 
-echo "cp -R $HOME/f5-openstack-docs/_layouts/ doc/_layouts/"
-cp -R $HOME/f5-openstack-docs/_layouts/ doc/_layouts/
+echo "cp -R $HOME/f5-openstack-docs/_layouts/ doc/"
+cp -R $HOME/f5-openstack-docs/_layouts/ doc/
 
-echo "mkdir ./doc/_includes"
-mkdir ./doc/_includes
+#echo "mkdir ./doc/_includes"
+#mkdir ./doc/_includes
 
 echo "cp -R $HOME/f5-openstack-docs/_includes doc/_includes/"
 cp -R $HOME/f5-openstack-docs/_includes doc/_includes/
 
-echo "mkdir ./doc/assets"
-mkdir ./doc/assets
+#echo "mkdir ./doc/assets"
+#mkdir ./doc/assets
 
 echo "cp -R $HOME/f5-openstack-docs/assets doc/assets/"
 cp -R $HOME/f5-openstack-docs/assets doc/assets/
