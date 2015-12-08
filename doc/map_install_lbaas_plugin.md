@@ -39,32 +39,10 @@ resource: true
 
 {% include f5-os-lbaasv1/install_the_driver_neutron_server_ubuntu.md %}
 
-## Configure the Neutron Server
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_set-default-lbaas-service.md %}
-
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_set-default-lbaas-service-provider.md %}
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_overview-note.md %}
-
-### RedHat/CentOS
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_redhat-centos.md %}
-
-### Ubuntu
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_ubuntu.md %}
-
-## Configure the Neutron Server
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_set-default-lbaas-service.md %}
-
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_set-default-lbaas-service-provider.md %}
-
 1. Save the changes to the Neutron server config file.
 
 ## Restart the Neutron Server
 
-{% include f5-os-lbaasv1/install_the_driver_neutron_server_restart.md %}
+{% include f5-os-lbaasv1/install_the_driver_neutron_server_restart-ubuntu.md %}
 
+{% include f5-os-lbaasv1/install_the_driver_neutron_server_restart_redhat-centos.md %}

@@ -1,11 +1,9 @@
-1. A running [OpenStack]() installation using one of the supported OSes / distros. 
+Before you install the F5 OpenStack LBaaS Plug-in, you'll need the following:
 
-2. The [F5 LBaaS Plug-in]().
+1. A functional [OpenStack]() network. 
+2. Licensed BIG-IP hardware or Virtual Edition.
 
-3. BIG-IP hardware or licensed BIG-IP VE software.
-
-See the [compatibility matrix]() for information regarding various operating systems' compatibility with BIG-IP. 
+See the [F5 OpenStack LBaaS compatibility matrix]() for information regarding various distributions' compatibility with the F5 OpenStack LBaaSv1 Plug-in and BIG-IP. 
 
 [OpenStack]:http://www.openstack.org/ 
-[F5 LBaaS Plug-in]:TBD
-[compatibility matrix]:TBD
+[F5 OpenStack LBaaS compatibility matrix]:TBD
