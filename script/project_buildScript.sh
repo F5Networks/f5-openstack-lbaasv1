@@ -75,5 +75,6 @@ echo "copying site_build to $HOME"
 cp -R ./site_build/ $HOME/site_build
 cd $HOME/site_build
 
+echo "listing contents of $HOME/site_build"
 ls -l
 
