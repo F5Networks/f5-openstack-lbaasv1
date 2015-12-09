@@ -6,7 +6,7 @@ current_version: 1.0.10
 repo: https://github.com/F5Networks/openstack-f5-lbaasv1
 brand: F5 Networks
 github_username: F5Networks
-product: LBaaSv1
+product: F5 OpenStack LBaaSv1 Plug-in
 
 defaults:
  - 
@@ -18,10 +18,4 @@ defaults:
 
 lsi: BOOL
 
-<<<<<<< HEAD
-includes_dir: ./_includes/f5-os-lbaasv1/
-=======
 includes_dir: ./doc/_includes
->>>>>>> 38abf0e... Fixes: travis build 81 failed
-
-
