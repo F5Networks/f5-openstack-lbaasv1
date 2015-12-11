@@ -14,6 +14,7 @@
 #
 
 import datetime
+import copy
 from oslo.config import cfg  # @UnresolvedImport
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
@@ -129,12 +130,10 @@ class LogicalServiceCache(object):
 
         def __hash__(self):
             return hash(
-                (
-                 self.port_id,
+                (self.port_id,
                  self.pool_id,
                  self.tenant_id,
-                 self.agent_host
-                )
+                 self.agent_host)
             )
 
     def __init__(self):
@@ -378,10 +377,10 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
                         self.conf.capacity_policy
                     )
                 self.agent_state['configurations'][
-                                 'environment_capacity_score'] = env_score
+                    'environment_capacity_score'] = env_score
             else:
                 self.agent_state['configurations'][
-                                 'environment_capacity_score'] = 0
+                    'environment_capacity_score'] = 0
             LOG.debug(_('reporting state of agent as: %s' % self.agent_state))
             self.state_rpc.report_state(self.context, self.agent_state)
             self.agent_state.pop('start_flag', None)
@@ -431,8 +430,9 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
     def collect_stats(self, context):
         if not self.plugin_rpc:
             return
-        for pool_id in self.cache.services:
-            service = self.cache.services[pool_id]
+        pool_services = copy.deepcopy(self.cache.services)
+        for pool_id in pool_services:
+            service = pool_services[pool_id]
             if self.agent_host == service.agent_host:
                 try:
                     LOG.debug("collecting stats for pool %s" % service.pool_id)
@@ -701,7 +701,7 @@ class LbaasAgentManagerBase(periodic_task.PeriodicTasks):
         """Handle RPC cast from plugin to delete_member"""
         try:
             self.lbdriver.delete_member(member, service)
-            self.cache.put(service. self.agent_host)
+            self.cache.put(service, self.agent_host)
         except NeutronException as exc:
             LOG.error("delete_member: NeutronException: %s" % exc.msg)
         except Exception as exc:
