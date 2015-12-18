@@ -1,7 +1,11 @@
 import gettext
 gettext.install('test')
 
-from oslo.config import cfg
+try:
+    from oslo.config import cfg
+except ImportError:
+    from oslo_config import cfg
+
 from neutron.plugins.common import constants as plugin_const
 from neutron.services.loadbalancer.drivers.f5.bigip.icontrol_driver \
     import iControlDriver, OPTS as icontrol_OPTS

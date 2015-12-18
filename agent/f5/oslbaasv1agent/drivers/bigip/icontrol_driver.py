@@ -1,5 +1,5 @@
 """ F5 Networks LBaaS Driver using iControl API of BIG-IP """
-# Copyright 2014 F5 Networks Inc.
+# Copyright 2014-2016 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,10 @@
 #
 # pylint: disable=broad-except,star-args,no-self-use
 
-from oslo.config import cfg  # @UnresolvedImport
+try:
+    from oslo.config import cfg  # @UnresolvedImport
+except ImportError:
+    from oslo_config import cfg
 
 try:
     from neutron.openstack.common import log as logging
