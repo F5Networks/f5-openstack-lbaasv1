@@ -3,26 +3,38 @@ layout: default
 title: BUILD
 ---
 
-The source code is python and thus is not specific to a 
-particular CPU architecture. 
+Debian Packages
+---------------
+In order to build debian packages use Docker/debian/Dockerfile to create a container that has the necessary prerequisites installed
+to create a package for the Trusty Ubuntu disto.
 
-The build process was designed to be run on an Ubuntu 12.04
-workstation. It requires build tools which are not suitable
-for a production server.
+$ docker build -t deb-pkg-builder ./Docker/debian
 
-To install all required packages to build both Debian and 
-RPM packages on an Ubuntu 12.04 workstation, run:
+Then package the driver, agent, and common code by executing:
 
-    sudo apt-get install make python-stdeb fakeroot python-all rpm
+$ docker run -v "$PWD:/var/build" deb-pkg-builder /bin/bash /build-debs.sh
 
-To build Debian and RPM binary packages run:
+The debs are in the following directories:
 
-    make
+./agent/deb_dist
+./common/deb_dist
+./driver/deb_dist
 
-The packages will be placed in the build directory for the project.
+RPM Packages
+------------
+In order to build RPMs use Docker/redhad/Dockerfile to create a container that has the necessary prerequisites installed to build
+a package for Centos/RedHat 7.
 
-The f5-lbaas-driver can then be distributed to the Neutron controller(s)
-and installed. The f5-bigip-lbaas-agent can be distributed to host(s)
-which will run the agent process and installed.
+$ docker build -t rpm-pkg-builder ./Docker/redhat
+
+hen package the driver, agent, and common code by executing:
+
+$ docker run -v "$PWD:/var/build" rpm-pkg-builder /bin/bash /build-rpms.sh
+
+The rpms are in the following directories:
+
+./agent/dist
+./common/dist
+./driver/dist
 
 
