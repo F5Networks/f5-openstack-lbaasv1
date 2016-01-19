@@ -1,4 +1,4 @@
-openstack-f5-lbaasv1
+f5-openstack-lbassv1
 ====================
 
 |Build Status|
