@@ -41,3 +41,6 @@ nosetests.xml
 
 # Translations
 *.mo
+
+# Ignore the Travis CI ssh key file
+f5repos_key

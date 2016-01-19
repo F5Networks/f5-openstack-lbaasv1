@@ -19,7 +19,7 @@ import netaddr
 import datetime
 
 from time import time
-from oslo.config import cfg
+from oslo.config import cfg  # @UnresolvedImport
 
 from neutron.api.v2 import attributes
 from neutron.common import constants as q_const
@@ -106,9 +106,11 @@ class LoadBalancerCallbacks(object):
     """Callbacks made by the agent to update the data model."""
     RPC_API_VERSION = '1.0'
 
-    def __init__(self, plugin):
+    def __init__(self, plugin, env, scheduler):
         LOG.debug('LoadBalancerCallbacks RPC subscriber initialized')
         self.plugin = plugin
+        self.env = env
+        self.scheduler = scheduler
         self.net_cache = {}
         self.subnet_cache = {}
 
@@ -119,80 +121,152 @@ class LoadBalancerCallbacks(object):
         return self.plugin._core_plugin
 
     @log.log
-    def get_active_pool_ids(self, context, host=None):
-        """ Get pools that are active """
+    def get_all_pools(self, context, env=None, group=0, host=None):
+        """ Get all pools for this group in this env"""
         with context.session.begin(subtransactions=True):
             if not host:
                 return []
-            agents = self.plugin.get_lbaas_agents(context,
-                                                  filters={'host': [host]})
+            agents = self.scheduler.get_agents_in_env(self.plugin,
+                                                      context,
+                                                      env,
+                                                      group)
             if not agents:
                 return []
-            elif len(agents) > 1:
-                LOG.warning(_('Multiple lbaas agents found on host %s'), host)
-            pools = self.plugin.list_pools_on_lbaas_agent(context,
-                                                          agents[0].id)
-            pool_ids = [pool['id'] for pool in pools['pools']]
-            active_pool_ids = set()
-            pools = self.plugin.get_pools(
-                context,
-                filters={
-                    'status': [constants.ACTIVE],
-                    'id': pool_ids,
-                    'admin_state_up': [True]
-                },
-                fields=['id'])
-            for pool in pools:
-                active_pool_ids.add(pool['id'])
-            return active_pool_ids
+
+            # get all pools associated with this agents in this
+            # env + group a build a set of known ACTIVE pools
+            # to return
+            pool_ids = []
+            for agent in agents:
+                agent_pools = self.plugin.list_pools_on_lbaas_agent(
+                    context,
+                    agent.id
+                )
+                for pool in agent_pools['pools']:
+                    pool_ids.append(
+                        {
+                         'agent_host': agent['host'],
+                         'pool_id': pool['id'],
+                         'tenant_id': pool['tenant_id']
+                        }
+                    )
+            return pool_ids
 
     @log.log
-    def get_pending_pool_ids(self, context, host=None):
-        """ Get pools that are not active """
+    def get_active_pools(self, context, env=None, group=0, host=None):
+        """ Get pools that are active for this group in this env"""
         with context.session.begin(subtransactions=True):
             if not host:
                 return []
-            agents = self.plugin.get_lbaas_agents(context,
-                                                  filters={'host': [host]})
+            agents = self.scheduler.get_agents_in_env(self.plugin,
+                                                      context,
+                                                      env,
+                                                      group)
             if not agents:
                 return []
-            elif len(agents) > 1:
-                LOG.warning(_('Multiple lbaas agents found on host %s'), host)
-            pools = self.plugin.list_pools_on_lbaas_agent(context,
-                                                          agents[0].id)
-            pool_ids = [pool['id'] for pool in pools['pools']]
 
-            pools_to_update = set()
+            # get all pools associated with this agents in this
+            # env + group a build a set of known ACTIVE pools
+            # to return
+            pool_ids = []
+            for agent in agents:
+                agent_pools = self.plugin.list_pools_on_lbaas_agent(
+                    context,
+                    agent.id
+                )
+                for pool in agent_pools['pools']:
+                    if pool['status'] == constants.ACTIVE:
+                        # add agent reference
+                        pool_ids.append(
+                            {
+                             'agent_host': agent['host'],
+                             'pool_id': pool['id'],
+                             'tenant_id': pool['tenant_id']
+                            }
+                        )
+            return pool_ids
 
-            pools = self.plugin.get_pools(context, filters={'id': pool_ids, })
-            for pool in pools:
-                if pool['status'] != constants.ACTIVE:
-                    pools_to_update.add(pool['id'])
-                for hms in pool['health_monitors_status']:
-                    if hms['status'] != constants.ACTIVE:
-                        pools_to_update.add(pool['id'])
+    @log.log
+    def get_pending_pools(self, context, env=None, group=0, host=None):
+        """ Get pools that have pending task for this group in this env"""
+        with context.session.begin(subtransactions=True):
+            if not host:
+                return []
+            agents = self.scheduler.get_agents_in_env(self.plugin,
+                                                      context,
+                                                      env,
+                                                      group)
+            if not agents:
+                return []
 
-            # get vips associated with pools which are not active
-            vips = self.plugin.get_vips(
-                context,
-                filters={'pool_id': pool_ids, },
-                fields=['id', 'pool_id', 'status']
-            )
-            for vip in vips:
-                if vip['status'] != constants.ACTIVE:
-                    pools_to_update.add(vip['pool_id'])
+            pool_ids_by_agent_host = {}
+            pools_to_update = []
 
-            members = self.plugin.get_members(
-                context,
-                filters={'pool_id': pool_ids, },
-                fields=['id', 'pool_id', 'status']
-            )
+            # get all pools associated with this agents in this
+            # env + group, build a filter list of pool_ids and
+            # a set of known non-ACTIVE pools
+            for agent in agents:
+                agent_pools = self.plugin.list_pools_on_lbaas_agent(
+                    context,
+                    agent.id
+                )
+                for pool in agent_pools['pools']:
+                    # add this to our filter list to query
+                    # VIPS and Members
+                    if agent['host'] not in pool_ids_by_agent_host:
+                        pool_ids_by_agent_host[agent['host']] = []
+                    pool_ids_by_agent_host[agent['host']].append(pool['id'])
+                    # can we tell if this pool needs updates
+                    # just from the pool or health monitor
+                    # status already?
+                    if pool['status'] != constants.ACTIVE:
+                        pools_to_update.append(
+                            {
+                             'agent_host': agent['host'],
+                             'pool_id': pool['id'],
+                             'tenant_id': pool['tenant_id']
+                            }
+                        )
+                    for hms in pool['health_monitors_status']:
+                        if hms['status'] != constants.ACTIVE:
+                            pools_to_update.append(
+                                {
+                                 'agent_host': agent['host'],
+                                 'pool_id': pool['id'],
+                                 'tenant_id': pool['tenant_id']
+                                }
+                            )
+            for agent_host in pool_ids_by_agent_host.keys():
+                pool_ids = pool_ids_by_agent_host[agent_host]
+                # get vips associated with pools which are not active
+                vips = self.plugin.get_vips(
+                    context,
+                    filters={'pool_id': pool_ids, },
+                    fields=['id', 'pool_id', 'status']
+                )
+                for vip in vips:
+                    if vip['status'] != constants.ACTIVE:
+                        pools_to_update.append(
+                            {
+                             'agent_host': agent_host,
+                             'pool_id': pool['id']
+                            }
+                        )
+                members = self.plugin.get_members(
+                    context,
+                    filters={'pool_id': pool_ids, },
+                    fields=['id', 'pool_id', 'status']
+                )
+                for member in members:
+                    if member['status'] != constants.ACTIVE:
+                        pools_to_update.append(
+                            {
+                             'agent_host': agent_host,
+                             'pool_id': pool['id']
+                            }
+                        )
 
-            for member in members:
-                if member['status'] != constants.ACTIVE:
-                    pools_to_update.add(member['pool_id'])
-
-            return list(pools_to_update)
+            return pools_to_update
 
     @log.log
     def get_service_by_pool_id(
@@ -1265,6 +1339,10 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
             self.env = None
             LOG.debug('Initializing F5PluginDriver')
 
+        # what scheduler to use for pool selection
+        self.pool_scheduler = importutils.import_object(
+            cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
+
         # Create RPM Message caster to agents
         self.agent_rpc = LoadBalancerAgentApi(
             lbaasv1constants.TOPIC_LOADBALANCER_AGENT,
@@ -1280,9 +1358,6 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
         # mixins agent_notifiers dictionary for it's env
         self.plugin.agent_notifiers.update(
             {q_const.AGENT_TYPE_LOADBALANCER: self.agent_rpc})
-        # what scheduler to use for pool selection
-        self.pool_scheduler = importutils.import_object(
-            cfg.CONF.f5_loadbalancer_pool_scheduler_driver)
 
     def _core_plugin(self):
         """ Get the core plugin """
@@ -1290,7 +1365,9 @@ class F5PluginDriver(LoadBalancerAbstractDriver):
 
     def _set_callbacks(self):
         """ Setup callbacks to receive calls from agent """
-        self.callbacks = LoadBalancerCallbacks(self.plugin)
+        self.callbacks = LoadBalancerCallbacks(self.plugin,
+                                               self.env,
+                                               self.pool_scheduler)
         topic = lbaasv1constants.TOPIC_PROCESS_ON_HOST
         if self.env:
             topic = topic + "_" + self.env

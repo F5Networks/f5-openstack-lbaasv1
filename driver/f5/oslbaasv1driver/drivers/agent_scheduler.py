@@ -20,10 +20,13 @@ import f5.oslbaasv1driver.drivers.constants as lbaasv1const
 try:
     from neutron.services.loadbalancer import agent_scheduler
     from neutron.openstack.common import log as logging
+    from neutron.extensions.lbaas_agentscheduler import NoActiveLbaasAgent
 except ImportError:
     # Kilo
     from neutron_lbaas.services.loadbalancer import agent_scheduler
     from oslo_log import log as logging
+    from neutron_lbaas.extensions.lbaas_agentscheduler \
+        import NoActiveLbaasAgent
 
 LOG = logging.getLogger(__name__)
 
@@ -46,6 +49,9 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
             # returns {'agent': agent_dict}
             lbaas_agent = plugin.get_lbaas_agent_hosting_pool(context,
                                                               pool_id)
+            if not lbaas_agent:
+                raise NoActiveLbaasAgent(pool_id=pool_id)
+
             # if the agent bound to this pool is alive, return it
             if lbaas_agent['agent']['alive']:
                 return lbaas_agent
@@ -69,7 +75,7 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                     gn = 1
                 # find all active agents matching the environment
                 # an group number.
-                env_agents = self.get_active_agent_in_env(
+                env_agents = self.get_active_agents_in_env(
                     plugin,
                     context,
                     env,
@@ -81,9 +87,28 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                     return {'agent': env_agents[0]}
             return lbaas_agent
 
-    def get_active_agent_in_env(self, plugin, context, env, group=None):
+    def get_active_agents_in_env(self, plugin, context, env, group=None):
         with context.session.begin(subtransactions=True):
             candidates = plugin.get_lbaas_agents(context, active=True)
+            return_agents = []
+            if candidates:
+                for candidate in candidates:
+                    ac = self.deserialize_agent_configurations(
+                            candidate['configurations']
+                    )
+                    if 'environment_prefix' in ac:
+                        if ac['environment_prefix'] == env:
+                            if group:
+                                if 'environment_group_number' in ac and \
+                                  ac['environment_group_number'] == group:
+                                    return_agents.append(candidate)
+                            else:
+                                return_agents.append(candidate)
+            return return_agents
+
+    def get_agents_in_env(self, plugin, context, env, group=None):
+        with context.session.begin(subtransactions=True):
+            candidates = plugin.get_lbaas_agents(context)
             return_agents = []
             if candidates:
                 for candidate in candidates:
@@ -141,9 +166,9 @@ class TenantScheduler(agent_scheduler.ChanceScheduler):
                 # Find all active agent candidate in this env.
                 # We use environment_prefix to find f5 agents
                 # rather then map to the agent binary name.
-                candidates = self.get_active_agent_in_env(plugin,
-                                                          context,
-                                                          env)
+                candidates = self.get_active_agents_in_env(plugin,
+                                                           context,
+                                                           env)
                 if not candidates:
                     LOG.warn(_('No f5 lbaas agents are active env %s' % env))
                     return None
