@@ -125,7 +125,7 @@ class NullBinding(VLANBindingBase):
                        self.interface_binding_mappings[device_name][interface])
                 ))
 
-    def prun_address(self, device_name=None, interface=None, vlanid=None):
+    def prune_vlan(self, device_name=None, interface=None, vlanid=None):
         if not device_name:
             return
         if not interface:

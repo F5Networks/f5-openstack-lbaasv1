@@ -15,7 +15,7 @@
 #
 # pylint: disable=broad-except,star-args,no-self-use
 
-from oslo.config import cfg
+from oslo.config import cfg  # @UnresolvedImport
 
 try:
     from neutron.openstack.common import log as logging
@@ -647,7 +647,7 @@ class iControlDriver(LBaaSBaseDriver):
                                % metric))
             LOG.debug('capacity score: %s based on %s'
                       % (highest_metric, highest_metric_name))
-            return highest_metric * 100
+            return highest_metric
         return 0
 
     def set_context(self, context):
@@ -891,17 +891,15 @@ class iControlDriver(LBaaSBaseDriver):
         return stats
 
     @serialized('remove_orphans')
-    def remove_orphans(self, services):
+    def remove_orphans(self, all_pools):
         """ Remove out-of-date configuration on big-ips """
         existing_tenants = []
         existing_pools = []
-        for service in services:
-            existing_tenants.append(services[service].tenant_id)
-            existing_pools.append(services[service].pool_id)
-
+        for pool in all_pools:
+            existing_tenants.append(pool['tenant_id'])
+            existing_pools.append(pool['pool_id'])
         for bigip in self.get_all_bigips():
             bigip.pool.purge_orphaned_pools(existing_pools)
-
         for bigip in self.get_all_bigips():
             bigip.system.purge_orphaned_folders_contents(existing_tenants)
 
