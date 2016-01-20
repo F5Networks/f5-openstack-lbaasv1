@@ -23,6 +23,23 @@ rpms: build/f5-oslbaasv1-driver-$(VERSION).noarch.rpm \
       build/f5-oslbaasv1-agent-$(VERSION).noarch.rpm \
       build/f5-bigip-common-$(VERSION).noarch.rpm
 
+docker_all: docker_debs docker_el7_rpms docker_el6_rpms
+
+package: docker_all
+	tar czvf build/f5-lbaas_$(VERSION).tgz README.rst SUPPORT.md build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
+
+docker_debs:
+	(docker build -t deb-pkg-builder ./Docker/debian)
+	docker run -v $(PROJECT_DIR):/var/bdir deb-pkg-builder /bin/bash /build-debs.sh
+
+docker_el7_rpms:
+	(docker build -t centos7-pkg-builder ./Docker/redhat/7)
+	docker run -v $(PROJECT_DIR):/var/bdir centos7-pkg-builder /bin/bash /build-rpms.sh
+
+docker_el6_rpms:
+	(docker build -t centos6-pkg-builder ./Docker/redhat/6)
+	docker run -v $(PROJECT_DIR):/var/bdir centos6-pkg-builder /bin/bash /build-rpms.sh
+
 build/f5-oslbaasv1-driver_$(VERSION)_all.src:
 	(cd driver; \
 	export PROJECT_DIR=$(PROJECT_DIR); \
@@ -31,8 +48,8 @@ build/f5-oslbaasv1-driver_$(VERSION)_all.src:
 	python setup.py sdist; \
 	rm -rf MANIFEST; \
 	)
-	mkdir -p build
-	cp driver/dist/f5-oslbaasv1-driver-$(VERSION).tar.gz build/
+	mkdir -p build/src
+	cp driver/dist/f5-oslbaasv1-driver-$(VERSION).tar.gz build/src
 
 build/f5-oslbaasv1-agent_$(VERSION)_all.src:
 	(cd agent; \
@@ -42,8 +59,8 @@ build/f5-oslbaasv1-agent_$(VERSION)_all.src:
 	python setup.py sdist; \
 	rm -rf MANIFEST; \
 	)
-	mkdir -p build
-	cp agent/dist/f5-oslbaasv1-agent-$(VERSION).tar.gz build/
+	mkdir -p build/src
+	cp agent/dist/f5-oslbaasv1-agent-$(VERSION).tar.gz build/src
 
 build/f5-bigip-common_$(VERSION)_all.src:
 	(cd common; \
@@ -53,8 +70,8 @@ build/f5-bigip-common_$(VERSION)_all.src:
 	python setup.py sdist; \
 	rm -rf MANIFEST; \
 	)
-	mkdir -p build
-	cp common/dist/f5-bigip-common-$(VERSION).tar.gz build/
+	mkdir -p build/src
+	cp common/dist/f5-bigip-common-$(VERSION).tar.gz build/src
 
 build/f5-bigip-common_$(VERSION)_all.deb:
 	(cd common; \
@@ -79,7 +96,7 @@ build/f5-oslbaasv1-driver_$(VERSION)_all.deb:
 	) 
 	mkdir -p build
 	cp driver/deb_dist/f5-oslbaasv1-driver_$(VERSION)-$(RELEASE)_all.deb build/
-	
+
 build/f5-oslbaasv1-agent_$(VERSION)_all.deb:
 	(cd agent; \
 	rm -rf deb_dist; \
@@ -109,7 +126,7 @@ build/f5-oslbaasv1-driver-$(VERSION).noarch.rpm:
 	export VERSION=$(VERSION); \
 	export RELEASE=$(RELEASE); \
 	python setup.py bdist_rpm; \
-    	rm -f setup.cfg; \
+	rm -f setup.cfg; \
 	) 
 	mkdir -p build
 	cp driver/dist/f5-oslbaasv1-driver-$(VERSION)-$(RELEASE).noarch.rpm build
