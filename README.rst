@@ -179,5 +179,5 @@ Agreement <http://f5networks.github.io/f5-openstack-docs/cla_landing/index.html>
 to Openstack_CLA@f5.com prior to their
 | code submission being included in this project.
 
-.. |Build Status| image:: https://travis-ci.org/F5Networks/openstack-f5-lbaasv1.svg?token=9DzDpZ48B74dRXvdFxM2&branch=1.0
-   :target: https://travis-ci.org/F5Networks/openstack-f5-lbaasv1
+.. |Build Status| image:: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1.svg?token=9DzDpZ48B74dRXvdFxM2&branch=1.0
+   :target: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1
