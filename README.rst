@@ -35,51 +35,58 @@ See `Contributing <CONTRIBUTING.md>`__
 Build
 -----
 
+| Creating packages requires that docker engine being installed and running
+on the build machine.  Instructions on how to accomplish this are located at
+https://docs.docker.com
+
 Debian Packages
 ```````````````
 
-| In order to build debian packages use Docker/debian/Dockerfile to
-create a container that has the necessary prerequisites installed
-| to create a package for the Trusty Ubuntu disto.
+| Specify the docker_debs makefile target to build debian packages for the
+Ubuntu 14.04 LTS (Trusty) release.
 
 ::
 
-    $ docker build -t deb-pkg-builder ./Docker/debian
+    $ make docker_debs
 
-Then package the driver, agent, and common code by executing:
+Packages are built in the following directory:
 
-::
-
-    $ docker run -v "$PWD:/var/build" deb-pkg-builder /bin/bash /build-debs.sh
-
-The debs are in the following directories:
-
-| ./agent/deb\_dist
-| ./common/deb\_dist
-| ./driver/deb\_dist
+| ./build/deb_dist
 
 RPM Packages
 ````````````
 
-| In order to build RPMs use Docker/redhad/Dockerfile to create a
-container that has the necessary prerequisites installed to build
-| a package for Centos/RedHat 7.
+|  Specify the docker_el7_rpms makefile target to build RPM packages for the
+CentOS/RedHat 7 release.
 
 ::
 
-    $ docker build -t rpm-pkg-builder ./Docker/redhat
+    $ make docker_el7_rpms
 
-Then package the driver, agent, and common code by executing:
+Packages are built in the following directory:
+
+| ./build/el7
+
+|  Specify the docker_el6_rpms makefile target to build RPM packages for the
+CentOS/RedHat 6 release.
 
 ::
 
-    $ docker run -v "$PWD:/var/build" rpm-pkg-builder /bin/bash /build-rpms.sh
+    $ make docker_el6_rpms
 
-The rpms are in the following directories:
+Packages are built in the following directory:
 
-| ./agent/dist
-| ./common/dist
-| ./driver/dist
+| ./build/el6
+
+All Packages
+````````````
+
+|  Specify the package makefile target to build packages for all supported
+releases
+
+::
+
+    $ make package
 
 PyPI
 ----
