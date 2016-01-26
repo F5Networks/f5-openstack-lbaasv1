@@ -1,9 +1,9 @@
 ---
 layout: default
-title: F5 LbaaS Plugin for Neutron LBaaS v1.0.10
+title: F5 LbaaS Plugin for Neutron LBaaS v2.0.1
 ---
 
-#Neutron LBaaSv1 - Version 1.0.10 Release {#firstHeading .firstHeading}
+#Neutron LBaaSv1 - Version 2.0.1 Release {#firstHeading .firstHeading}
 ========================================
 
 -   [Supported Neutron Releases](#Supported_Neutron_Releases)
@@ -22,11 +22,9 @@ title: F5 LbaaS Plugin for Neutron LBaaS v1.0.10
 
 ##<span id="Supported_Neutron_Releases" class="mw-headline"> Supported Neutron Releases </span>
 
-The F5 LBaaSv1 service provider drivers and agents support the following OpenStack releases: 
+This release of the F5 LBaaSv1 service provider driver and agent supports the following OpenStack releases: 
   
-  - Icehouse 
-  - Juno 
-  - Kilo.
+  - Liberty 
 
 The F5 LBaaSv1 drivers and agent do not encompass any alterations to the OpenStack community LBaaSv1 database schema; no additional database tables have been generated. The service plugin uses the stock community LoadBalancerPlugin class. 
 
@@ -209,12 +207,12 @@ host(s) and install it.
 Debian / Ubuntu example:
 
 <span class="command_text">dpkg -i
-f5-oslbaasv1-driver\_1.0.10-1\_all.deb</span>
+f5-oslbaasv1-driver\_2.0.1\_all.deb</span>
 
 Rad Hat example:
 
 <span class="command_text">rpm -ivh
-f5-oslbaasv1-driver-1.0.10-1.noarch.el7.rpm</span>
+f5-oslbaasv1-driver-2.0.1.noarch.el7.rpm</span>
 
 Changes to the neutron server configuration file will then need to be
 made to enable LBaaSv1 services and reference the f5 LBaaSv1 service
@@ -242,7 +240,7 @@ class="command_text">service\_providers</span> section of the neutron
 server configuration, will be examined. In Icehouse and Juno the default
 location for the <span class="command_text">service\_providers</span>
 section was in the <span
-class="command_text">/etc/neutron/neutron.conf</span> file. In Kilo the
+class="command_text">/etc/neutron/neutron.conf</span> file. Starting in Kilo the
 <span class="command_text">service\_providers</span> for LBaaS services
 can be found in the <span
 class="command_text">/etc/neutron/neutron\_lbaas.conf</span> file.
@@ -281,16 +279,16 @@ be the Neutron controller, but does not have to be.
 Debian / Ubuntu example:
 
 <span class="command_text">dpkg -i
-f5-bigip-common\_1.0.10-1\_all.deb</span> <span
+f5-bigip-common\_2.0.1\_all.deb</span> <span
 class="command_text">dpkg -i
-f5-oslbaasv1-driver\_1.0.10-1\_all.deb</span>
+f5-oslbaasv1-agent\_2.0.1\_all.deb</span>
 
 Rad Hat example:
 
 <span class="command_text">rpm -ivh
-f5-bigip-common-1.0.10-1.noarch.el7.rpm</span> <span
+f5-bigip-common-2.0.1.noarch.el7.rpm</span> <span
 class="command_text">rpm -ivh
-f5-oslbaasv1-driver-1.0.10-1.noarch.el7.rpm</span>
+f5-oslbaasv1-agent-2.0.1.noarch.el7.rpm</span>
 
 The installation will start a service called <span
 class="command_text">f5-oslbaasv1-agent</span>. Stop this service and
@@ -1561,7 +1559,7 @@ respective hosts.
 
 <div id="footer" name="footer">
 
-© 2014,2015 F5 Networks
+© 2014-2016 F5 Networks
 
 </div>
 

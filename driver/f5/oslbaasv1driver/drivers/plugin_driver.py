@@ -1,5 +1,5 @@
 """ F5 LBaaS Driver """
-# Copyright 2014 F5 Networks Inc.
+# Copyright 2014-2016 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,12 @@ import uuid
 import netaddr
 import datetime
 
+try:
+    from oslo.config import cfg  # @UnresolvedImport
+except ImportError:
+    from oslo_config import cfg
+
 from time import time
-from oslo.config import cfg  # @UnresolvedImport
 
 from neutron.api.v2 import attributes
 from neutron.common import constants as q_const

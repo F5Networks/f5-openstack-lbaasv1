@@ -1,4 +1,4 @@
-# Copyright 2014 F5 Networks Inc.
+# Copyright 2014-2016 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from oslo import messaging
+preLiberty = False
+try:
+    from oslo import messaging
+    preLiberty = True
+except ImportError:
+    import oslo_messaging as messaging
 from neutron.common.rpc import get_client
 
 
@@ -78,6 +83,10 @@ class RpcCallback(object):
     '''
     RPC_API_VERSION = '1.0'
 
-    def __init__(self):
-        super(RpcCallback, self).__init__()
+    def __init__(self, conf):
+        self.conf = conf
+        if preLiberty:
+            super(RpcCallback, self).__init__()
+        else:
+            super(RpcCallback, self).__init__(conf)
         self.target = messaging.Target(version=self.RPC_API_VERSION)

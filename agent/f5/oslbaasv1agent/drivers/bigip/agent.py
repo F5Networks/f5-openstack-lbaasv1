@@ -1,4 +1,4 @@
-# Copyright 2014 F5 Networks Inc.
+# Copyright 2014-2016 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,9 +15,17 @@
 
 import sys
 # import eventlet
-from oslo.config import cfg
+
+preLiberty = False
+try:
+    from oslo.config import cfg
+    from neutron.openstack.common import service
+    preLiberty = True
+except ImportError:
+    from oslo_config import cfg
+    from oslo_service import service
+
 from neutron.agent.common import config
-from neutron.openstack.common import service
 from f5.oslbaasv1agent.drivers.bigip import agent_manager as manager
 import f5.oslbaasv1agent.drivers.bigip.constants as lbaasconstants
 
@@ -72,7 +80,10 @@ def main():
         topic=lbaasconstants.TOPIC_LOADBALANCER_AGENT,
         manager=mgr
     )
-    service.launch(svc).wait()
+    if preLiberty:
+        service.launch(svc).wait()
+    else:
+        service.launch(cfg.CONF, svc).wait()
 
 if __name__ == '__main__':
     main()

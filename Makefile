@@ -27,7 +27,7 @@ docker_all: docker_debs docker_el7_rpms docker_el6_rpms
 
 package: docker_all
 	sudo chmod 777 build
-	tar czvf build/f5-lbaas_$(VERSION)$(RELEASE).tgz README.rst SUPPORT.md build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
+	tar czvf build/f5-lbaasv1_$(VERSION)$(RELEASE).tgz README.rst SUPPORT.md build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
 
 docker_debs:
 	(docker build -t deb-pkg-builder ./Docker/debian)
