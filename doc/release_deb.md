@@ -21,7 +21,7 @@ service_provider=LOADBALANCER:F5:f5.oslbaasv1driver.drivers.plugin_driver.F5Plug
 ```
 # service neutron-server restart
 ```
-4. Enable LBaaS on the Controller Node
+4. Enable LBaaS on the Controller Node (**NOTE:** This step is not necessary from Kilo forward.)
 ```
 # vi 'local_settings'
 OPENSTACK_NEUTRON_NETWORK = { 'enable_lb': True, ...}"

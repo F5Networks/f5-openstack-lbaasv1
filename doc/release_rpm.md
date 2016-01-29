@@ -8,7 +8,6 @@ In order to use the Neutron command set, you need source a user file that has ad
 ### Configure the F5 LBaaSv1 Plugin
 1. Configure the agent (/etc/neutron/f5-oslbaasv1-agent.ini).
 2. Configure the Neutron service to use the F5 plugin.
-3. Set the LBaaS service provider.
 **NOTE:** In the service providers section, the f5.os.lbaasv1driver entry will most likely be present, but commented out. *Uncomment this line and comment out the HA proxy line to identify the F5 plugin as the lbaas service provider.* Add ':default' to the end of the line as shown below to set it as the default LBaaS service.
 ```
 # vi /etc/neutron/neutron_lbaas.conf
@@ -16,20 +15,20 @@ In order to use the Neutron command set, you need source a user file that has ad
 [service providers]
 service_provider=LOADBALANCER:F5:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriver:default
 ```   
-4. Restart the neutron-server service:
+3. Restart the neutron-server service:
 ```
 # systemctl restart neutron-server
 ```
-5. Enable LBaaS on the Controller Node
+4. Enable LBaaS on the Controller Node (**NOTE:** This step is not necessary from Kilo forward.)
 ```
 # vi 'local_settings'
 OPENSTACK_NEUTRON_NETWORK = { 'enable_lb': True, ...}"
 ```
-6. Restart the http service.
+5. Restart the http service.
 ```
 # service httpd restart
 ```
-7. Start the agent. 
+6. Start the agent. 
 ```
 # service f5-oslbaasv1-agent start
 ```
