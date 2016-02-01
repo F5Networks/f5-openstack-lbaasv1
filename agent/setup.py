@@ -41,12 +41,21 @@ if 'bdist_rpm' in sys.argv:
     setupcfg.write('post-install=rhel/f5-oslbaasv1-agent.postinst\n')
     setupcfg.close()
 
+# Find the correct readme to build into the package based on OS distribution
+release_readme = '/doc/release_readme.md'
+if 'install' in sys.argv: # exact match on arguments
+    if any('rpm' in argv for argv in sys.argv):
+        release_readme = '/doc/release_rpm.md'
+    else:
+        release_readme = '/doc/release_deb.md'
+
 data_files = [('/usr/bin',
                [project_dir + '/agent/usr/bin/f5-oslbaasv1-agent']),
               ('/etc/neutron',
                [project_dir + '/agent/etc/neutron/f5-oslbaasv1-agent.ini']),
               ('/usr/share/doc/f5-oslbaasv1-agent',
                [project_dir + '/doc/f5-oslbaasv1-readme.md',
+                project_dir + release_readme,
                 project_dir + '/SUPPORT.md'])]
 
 if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
