@@ -2,7 +2,7 @@
 
 ## Release Version
 
-**1.10.12**
+**1.0.12**
 
 ## Compatibility
 
@@ -14,12 +14,12 @@ Red Hat Enterprise Linux / CentOS | 6, 7
 Ubuntu | 12.04, 14.04
 
 ## Package Contents
+- Release Readme (this document)
+- Support.md
 - build
     - deb_dist : Ubuntu installation files
     - el6 : Red Hat / CentOS 6 installation files 
     - el7 : Red Hat / CentOS 7 installation files
-    - Release Readme (this document)
-    - Support.md
 
 
 ## Installation
@@ -46,7 +46,7 @@ Ubuntu | 12.04, 14.04
 ### Ubuntu
 1. Install the F5 BIG-IP common libraries.
 ```
-dpkg -i f5-bigip-common_1.0.12_all.deb
+# dpkg -i f5-bigip-common_1.0.12_all.deb
 ```
 2. Install the plugin driver.
 ```
