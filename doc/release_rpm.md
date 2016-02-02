@@ -1,4 +1,4 @@
-# f5-openstack-lbaasv1 v1.0.12
+# f5-openstack-lbaasv1 v2.0.1
 
 ## Red Hat / CentOS Configuration instructions
 
