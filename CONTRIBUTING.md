@@ -1,5 +1,5 @@
 <!--
-Copyright 2015 F5 Networks Inc.
+Copyright 2015-2016 F5 Networks Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,6 +21,43 @@ help or just want to say hi shoot us an email at <f5_openstack_lbaasv1@f5.com>.
 
 ## Issues
 Creating issues is good, creating good issues is even better.  By filing meaningful bug reports will lots of information in them helps us figure out what to fix when and how it impacts our users.  We like bugs because it means people are using our code, and we like fixing them even more.
+
+* Title: A short but descriptive summary of the issue, whether it be a bug or enhancement.
+* Labels: Click on the gear icon and give us some direction on the type of issue you are filing.
+* Milestone: Leave this field empty.
+* Assignee: If you're not fixing the issue, leave this field empty.
+* Attachments: For bugs, attach the agent log and configuration files
+  * /etc/neutron/f5-oslbaasv1-agent.ini
+  * /var/log/neutron/f5-oslbaasv1-agent.log
+* Details: For bugs, copy and paste the following template into your new issue and fill it out.
+
+```
+#### Agent Version
+<Fill in the version you have installed, such as 1.0.12>
+
+#### Operating System
+<Fill in the host OS of the machine running the agent, such as Ubuntu 14.04>
+
+#### OpenStack Release
+<Fill in the OpenStack release, such as Kilo>
+
+#### Description
+<Describe the bug in detail, steps taken prior to encountering the issue, yand a short explanation of you have deployed openstack and F5 agent>
+
+#### Deployment
+<Explain in reasonable detail your OpenStack deployment, the F5 OpenStack agent, and BIG-IP(s)>
+<Example: Single OpenStack controller with one F5 agent managing a cluster of 4 BIG-IP VEs>
+<Example: Three OpenStack controllers in HA, each with one standalone F5 agent managing a single BIG-IP appliance>
+```
+* Details: For enhancements, copy and paste the following template into your new issue and fill it out.
+
+```
+#### OpenStack Release
+<The earliest release in which you would like to see the enhancement>
+
+#### Description
+<Describe the enhancement request in detail>
+```
  
 ## Pull Requests
 If you are submitting a pull request you need to make sure that you have done a few things first.
