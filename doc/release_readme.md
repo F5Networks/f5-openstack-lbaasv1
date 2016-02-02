@@ -2,13 +2,13 @@
 
 ## Release Version
 
-**1.0.12**
+**2.0.1**
 
 ## Compatibility
 
 Product | Version(s) 
 ---|---
-OpenStack LBaaSv1 | Havana - Kilo
+OpenStack LBaaSv1 | Liberty
 BIG-IP | 11.5.x, 11.6.x, 12.0.x
 Red Hat Enterprise Linux / CentOS | 6, 7
 Ubuntu | 12.04, 14.04
@@ -32,29 +32,29 @@ Ubuntu | 12.04, 14.04
 
 1. Install the F5 BIG-IP common libraries.
 ```
-# rpm -ivh f5-bigip-common_1.0.12.noarch.el7.rpm
+# rpm -ivh f5-bigip-common_2.0.1-final.noarch.el7.rpm
 ``` 
 2. Install the plugin driver.
 ```
-# rpm -i f5-lbaas-driver-1.0.12.noarch.el7.rpm 
+# rpm -i f5-lbaas-driver-2.0.1-final.noarch.el7.rpm 
 ```
 3. Install the agent.
 ```
-# rpm -i f5-bigip-lbaas-agent-1.0.12.noarch.el7.rpm
+# rpm -i f5-bigip-lbaas-agent-2.0.1-final.noarch.el7.rpm
 ```
 
 ### Ubuntu
 1. Install the F5 BIG-IP common libraries.
 ```
-# dpkg -i f5-bigip-common_1.0.12_all.deb
+# dpkg -i f5-bigip-common_2.0.1-final_all.deb
 ```
 2. Install the plugin driver.
 ```
-# dpkg -i f5-lbaas-driver_1.0.12_all.deb
+# dpkg -i f5-lbaas-driver_2.0.1-final_all.deb
 ```
 3. Install the plugin agent.
 ```
-# dpkg -i f5-bigip-lbaas-agent_1.0.12_all.deb
+# dpkg -i f5-bigip-lbaas-agent_2.0.1-final_all.deb
 ```
 
 ## Contact

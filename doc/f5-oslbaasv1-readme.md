@@ -207,12 +207,12 @@ host(s) and install it.
 Debian / Ubuntu example:
 
 <span class="command_text">dpkg -i
-f5-oslbaasv1-driver\_2.0.1\_all.deb</span>
+f5-oslbaasv1-driver\_2.0.1-final\_all.deb</span>
 
 Rad Hat example:
 
 <span class="command_text">rpm -ivh
-f5-oslbaasv1-driver-2.0.1.noarch.el7.rpm</span>
+f5-oslbaasv1-driver-2.0.1-final.noarch.el7.rpm</span>
 
 Changes to the neutron server configuration file will then need to be
 made to enable LBaaSv1 services and reference the f5 LBaaSv1 service
@@ -279,16 +279,16 @@ be the Neutron controller, but does not have to be.
 Debian / Ubuntu example:
 
 <span class="command_text">dpkg -i
-f5-bigip-common\_2.0.1\_all.deb</span> <span
+f5-bigip-common\_2.0.1-final\_all.deb</span> <span
 class="command_text">dpkg -i
-f5-oslbaasv1-agent\_2.0.1\_all.deb</span>
+f5-oslbaasv1-agent\_2.0.1-final\_all.deb</span>
 
 Rad Hat example:
 
 <span class="command_text">rpm -ivh
-f5-bigip-common-2.0.1.noarch.el7.rpm</span> <span
+f5-bigip-common-2.0.1-final.noarch.el7.rpm</span> <span
 class="command_text">rpm -ivh
-f5-oslbaasv1-agent-2.0.1.noarch.el7.rpm</span>
+f5-oslbaasv1-agent-2.0.1-final.noarch.el7.rpm</span>
 
 The installation will start a service called <span
 class="command_text">f5-oslbaasv1-agent</span>. Stop this service and
