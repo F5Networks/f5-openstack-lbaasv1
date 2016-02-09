@@ -23,8 +23,8 @@ version = os.environ['VERSION']
 release = os.environ['RELEASE']
 project_dir = os.environ['PROJECT_DIR']
 
-data_files = [('/usr/share/doc/f5-oslbaasv1-driver',
-               [project_dir + '/doc/f5-oslbaasv1-readme.md',
+data_files = [('/usr/share/docs/f5-oslbaasv1-driver',
+               [project_dir + '/docs/f5-oslbaasv1-readme.md',
                 project_dir + '/SUPPORT.md'])]
 
 if 'bdist_deb' in sys.argv:
