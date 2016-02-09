@@ -42,18 +42,18 @@ if 'bdist_rpm' in sys.argv:
     setupcfg.close()
 
 # Find the correct readme to build into the package based on OS distribution
-release_readme = '/docs/release_readme.md'
+release_readme = '/docs/release_readme.rst'
 if 'install' in sys.argv: # exact match on arguments
     if any('rpm' in argv for argv in sys.argv):
-        release_readme = '/docs/release_rpm.md'
+        release_readme = '/docs/release_rpm.rst'
     else:
-        release_readme = '/docs/release_deb.md'
+        release_readme = '/docs/release_deb.rst'
 
 data_files = [('/usr/bin',
                [project_dir + '/agent/usr/bin/f5-oslbaasv1-agent']),
               ('/etc/neutron',
                [project_dir + '/agent/etc/neutron/f5-oslbaasv1-agent.ini']),
-              ('/usr/share/docs/f5-oslbaasv1-agent',
+              ('/usr/share/doc/f5-oslbaasv1-agent',
                [project_dir + '/docs/f5-oslbaasv1-readme.md',
                 project_dir + release_readme,
                 project_dir + '/SUPPORT.md'])]

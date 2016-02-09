@@ -28,7 +28,7 @@ docker_all: docker_debs docker_el7_rpms docker_el6_rpms
 package: docker_all
 	sudo chmod 777 build
 	cp docs/release_readme.rst RELEASE_README.rst
-	tar czvf build/f5-lbaasv1_$(VERSION)$(RELEASE).tgz RELEASE_README.rst SUPPORT.rst build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
+	tar czvf build/f5-lbaasv1_$(VERSION)$(RELEASE).tgz RELEASE_README.rst SUPPORT.md build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
 	rm RELEASE_README.rst
 
 docker_debs:

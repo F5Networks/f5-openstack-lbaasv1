@@ -9,12 +9,12 @@ F5 OpenStack LBaaSv1
 Contents:
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
 Introduction
 ------------
 
-This site hosts the documentation for the F5 OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5 BIG-IP devices in OpenStack. You can access the code and download release packages over on `GitHub <https://github.com/F5Networks/f5-openstack-lbaasv1>`__ 
+This site hosts the documentation for the F5 OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5 BIG-IP devices in OpenStack. You can access the code and download release packages at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__ .
 
 
 Contact
