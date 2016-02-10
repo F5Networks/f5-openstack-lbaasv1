@@ -44,3 +44,10 @@ nosetests.xml
 
 # Ignore the Travis CI ssh key file
 f5repos_key
+
+# Ignore the sphinx build directories
+_build
+_build_html
+
+# Ignore the venv directory
+venv
