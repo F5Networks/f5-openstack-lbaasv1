@@ -1,4 +1,4 @@
-f5-openstack-lbaasv1
+Overview and Installation
 ====================
 
 Release Version
@@ -45,43 +45,43 @@ Red Hat / CentOS
 ~~~~~~~~~~~~~~~~
 
 1. Install the F5 BIG-IP common libraries.
+   
+   .. code-block:: shell:: 
 
-   .. :code:: shell
-
-   # rpm -ivh f5-bigip-common_1.0.12.noarch.el7.rpm
+      # rpm -ivh f5-bigip-common_1.0.12.noarch.el7.rpm
 
 2. Install the plugin driver.
+  
+   .. code-block:: shell:: 
 
-   .. :code:: shell
-
-   # rpm -i f5-lbaas-driver-1.0.12.noarch.el7.rpm 
+      # rpm -i f5-lbaas-driver-1.0.12.noarch.el7.rpm 
 
 3. Install the agent.
+  
+   .. code-block:: shell:: 
 
-   .. :code:: shell
-
-   # rpm -i f5-bigip-lbaas-agent-1.0.12.noarch.el7.rpm
+      # rpm -i f5-bigip-lbaas-agent-1.0.12.noarch.el7.rpm
 
 Ubuntu
 ~~~~~~
 
 1. Install the F5 BIG-IP common libraries.
+  
+   .. code-block:: shell:: 
 
-   .. :code:: shell
-
-   # dpkg -i f5-bigip-common_1.0.12_all.deb
+      # dpkg -i f5-bigip-common_1.0.12_all.deb
 
 2. Install the plugin driver.
+  
+   .. code-block:: shell:: 
 
-   .. :code:: shell
-
-   # dpkg -i f5-lbaas-driver_1.0.12_all.deb
+      # dpkg -i f5-lbaas-driver_1.0.12_all.deb
 
 3. Install the plugin agent.
+   
+   .. code-block:: shell:: 
 
-   .. :code:: shell
-
-   # dpkg -i f5-bigip-lbaas-agent_1.0.12_all.deb
+      # dpkg -i f5-bigip-lbaas-agent_1.0.12_all.deb
 
 Contact
 -------
