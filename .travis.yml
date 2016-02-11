@@ -8,7 +8,9 @@ install:
 
 script:
   - make package
-  - cd docs; make html
+  - cd docs
+  - make html
+  - cd ..
 
 deploy:
   provider: releases
