@@ -210,7 +210,7 @@ class VirtualServer(object):
             if not traffic_group:
                 traffic_group = \
                     const.SHARED_CONFIG_DEFAULT_FLOATING_TRAFFIC_GROUP
-            payload['profiles'] = ['fastL4']
+            payload['profiles'] = ['/Common/fastL4']
 
             request_url = self.bigip.icr_url + '/ltm/virtual/'
             response = self.bigip.icr_session.post(
