@@ -87,9 +87,9 @@ Upgrading
 ---------
 
 If you are upgrading from an earlier version, F5 recommends that the
-current version be uninstalled prior to installing the new version.  Note
-that you need to perform the following steps on every server running the F5
-agent.
+current version be uninstalled prior to installing the new version.
+
+NOTE: Perform the following steps on every server running the F5 agent.
 
 1. Make a copy of the F5 agent configuration file.
    An existing configuration file in /etc/neutron will be overwritten during
