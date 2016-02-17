@@ -83,6 +83,50 @@ Ubuntu
 
       # dpkg -i f5-bigip-lbaas-agent_1.0.12_all.deb
 
+Upgrading
+---------
+
+If you are upgrading from an earlier version, F5 recommends that the
+current version be uninstalled prior to installing the new version.  Note
+that you need to perform the following steps on every server running the F5
+agent.
+
+1. Make a copy of the F5 agent configuration file.
+   An existing configuration file in /etc/neutron will be overwritten during
+   installation.
+
+   .. code-block:: shell::
+
+      # cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
+
+2. Stop and remove the old version of the libraries, plugin driver and agent.
+
+Red Hat / CentOS
+~~~~~~~~~~~~~~~~
+
+   .. code-block:: shell::
+
+      # service f5-oslbaasv1-agent stop
+      # yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
+
+Ubuntu
+~~~~~~
+
+   .. code-block:: shell::
+
+      # service f5-oslbaasv1-agent stop
+      # dpkg -r f5-bigip-common f5-lbaas-driver f5-bigip-lbaas-agent
+
+3. Follow the installation instructions in the previous section.
+
+4. Restore the F5 agent configuration file.
+   Compare the backup file with the new one created during installation
+   to make sure only the necessary settings are modified for your deployment.
+
+   .. code-block:: shell::
+
+      # sudo cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
+
 Contact
 -------
 
