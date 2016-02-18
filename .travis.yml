@@ -3,8 +3,14 @@ sudo: required
 services:
   - docker
 
+install:
+    - sudo pip install -r requirements.docs.txt
+
 script:
   - make package
+  - cd docs
+  - make html
+  - cd ..
 
 deploy:
   provider: releases
