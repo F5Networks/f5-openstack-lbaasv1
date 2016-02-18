@@ -1,4 +1,4 @@
-# Copyright 2014 F5 Networks Inc.
+# Copyright 2014-2016 F5 Networks Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,15 +15,24 @@
 
 import datetime
 import copy
-from oslo.config import cfg  # @UnresolvedImport
+
+preLiberty = False
+try:
+    from oslo.config import cfg  # @UnresolvedImport
+    from neutron.openstack.common import loopingcall
+    from neutron.openstack.common import periodic_task
+    preLiberty = True
+except ImportError:
+    from oslo_config import cfg
+    from oslo_service import loopingcall
+    from oslo_service import periodic_task
+
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
 from neutron import context
 from neutron.common import log
 from neutron.common import topics
 from neutron.common.exceptions import NeutronException
-from neutron.openstack.common import loopingcall
-from neutron.openstack.common import periodic_task
 
 from f5.oslbaasv1agent.drivers.bigip import agent_api
 from f5.oslbaasv1agent.drivers.bigip import constants
@@ -821,5 +830,5 @@ else:
         RPC_API_VERSION = '1.1'
 
         def __init__(self, conf):
-            super(LbaasAgentManager, self).__init__()
+            super(LbaasAgentManager, self).__init__(conf)
             LbaasAgentManagerBase.do_init(self, conf)
