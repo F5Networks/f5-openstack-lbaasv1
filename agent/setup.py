@@ -54,7 +54,7 @@ data_files = [('/usr/bin',
               ('/etc/neutron',
                [project_dir + '/agent/etc/neutron/f5-oslbaasv1-agent.ini']),
               ('/usr/share/doc/f5-oslbaasv1-agent',
-               [project_dir + '/docs/f5-oslbaasv1-readme.md',
+               [project_dir + '/docs/f5-oslbaasv1-readme.rst',
                 project_dir + release_readme,
                 project_dir + '/SUPPORT.md'])]
 
