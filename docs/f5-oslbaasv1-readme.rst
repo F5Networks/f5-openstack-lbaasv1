@@ -1,12 +1,12 @@
-Neutron LBaaSv1 - Version 2.0.1 Release
-=======================================
+User Guide
+==========
 
 Supported Neutron Release(s)
 ----------------------------
 
-This release of the F5 OpenStack LBaaSv1 plugin supports the following OpenStack release(s):
+This release, v |release|, of the F5 OpenStack LBaaSv1 plugin supports the following OpenStack release(s):
 
--  Liberty
+-  |openstack|
 
 The F5 OpenStack LBaaSv1 plugin does not encompass any alterations to the
 OpenStack community LBaaSv1 database schema; no additional database
@@ -28,7 +28,7 @@ Neutron Networking Requirements
 The F5 OpenStack LBaaSv1 plugin supports two modes of
 network operation: `global routed mode <#global-routed-mode>`__ and
 `L2 adjacent mode <#l2-adjacent-mode>`__ (the default). The Neutron
-core provider requirements are different for each mode. You can configure this in the ``L3 Segmentation Mode Settings`` section of the agent configuration file, as described `below<#configure-the-f5-lbaasv1-plugin>`__.
+core provider requirements are different for each mode. You can configure this in the ``L3 Segmentation Mode Settings`` section of the agent configuration file, as described `below <#configure-the-f5-lbaasv1-plugin>`__.
 
 Global Routed Mode
 ~~~~~~~~~~~~~~~~~~
@@ -44,9 +44,9 @@ all provisioned L2 networks.
 Global routed mode provides a simplified mode of operation for BIG-IP devices deployed only as edge-routed devices  -- meaning they are directly connected to provider networks only.
 
 .. figure:: ./media/global_routed_mode_topology.png
-   :alt: Figure 1. Global Routed Mode Topology
+   :alt: Global Routed Mode Topology
 
-   Figure 1. Global Routed Mode Topology
+Figure 1. Global Routed Mode Topology
 
 Because all routing is pre-provisioned on networking devices, global
 routed mode's requirements for networking orchestration in Neutron are
@@ -63,15 +63,15 @@ tenant network that has a VIP or pool member. VIP listeners are restricted to
 their designated Neutron tenant network. L3 addresses associated with
 pool members are automatically allocated from Neutron subnets.
 
-L2 adjacent mode follows the `micro-segmentation<https://devcentral.f5.com/articles/microservices-versus-microsegmentation>`__ security model for gateways. Since each BIG-IP device is L2-adjacent to all tenant networks for which LBaaSv1 objects are provisioned, the traffic flows do not
+L2 adjacent mode follows the `micro-segmentation <https://devcentral.f5.com/articles/microservices-versus-microsegmentation>`__ security model for gateways. Since each BIG-IP device is L2-adjacent to all tenant networks for which LBaaSv1 objects are provisioned, the traffic flows do not
 logically pass through another L3 forwarding device. Instead, traffic flows are
 restricted to direct L2 communication between the cloud network element
 and the BIG-IP devices.
 
 .. figure:: ./media/l2_adjacent_mode_topology.png
-   :alt: Figure 2. L2 Adjacent Mode Topology
+   :alt: L2 Adjacent Mode Topology
 
-   Figure 2. L2 Adjacent Mode Topology
+Figure 2. L2 Adjacent Mode Topology
 
 Because the agents manage the BIG-IP device associations for many tenant
 networks, L2 adjacent mode is a much more complex orchestration. It
@@ -88,10 +88,10 @@ Neutron ML2 core plugin
 
 **Neutron server configuration:**
 
-::
+    .. code-block:: shell
 
-    # vi /etc/neutron/neutron.conf
-    core_plugin = neutron.plugins.ml2.plugin.Ml2Plugin
+        # vi /etc/neutron/neutron.conf
+        core_plugin = neutron.plugins.ml2.plugin.Ml2Plugin
 
 The ML2 core plugin uses standard GRE and VxLAN tunnel overlay networks.
 When you use BIG-IP as a VTEP with the ML2 core plugin, the ML2 L2
@@ -111,24 +111,24 @@ L2 isolation and tenancy on your BIG-IP devices.
 **To see if your Neutron networks support the providernet extension:**
 **IMPORTANT:** The \*starred\* attributes must be present for the agent to function properly.
 
-::
+    .. code-block:: shell
 
-    # neutron net-show [network_name]
-    +-----------------------------+--------------------------------------+
-    | Field                       | Value                                |
-    +-----------------------------+--------------------------------------+
-    | admin_state_up              | True                                 |
-    | id                          | 07f92400-4bb6-4ebc-9b5e-eb8ffcd5b34c |
-    | name                        | Provider-VLAN-62                     |
-    | *provider:network_type*     | vlan                                 |
-    | *provider:physical_network* | ph-eth3                              |
-    | *provider:segmentation_id*  | 62                                   |
-    | router:external             | False                                |
-    | shared                      | True                                 |
-    | status                      | ACTIVE                               |
-    | subnets                     | a89aa39e-3a8e-4f2f-9b57-45aa052b87bf |
-    | tenant_id                   | 3aef8f59a43943359932300f634513b3     |
-    +-----------------------------+--------------------------------------+
+        # neutron net-show [network_name]
+        +-----------------------------+--------------------------------------+
+        | Field                       | Value                                |
+        +-----------------------------+--------------------------------------+
+        | admin_state_up              | True                                 |
+        | id                          | 07f92400-4bb6-4ebc-9b5e-eb8ffcd5b34c |
+        | name                        | Provider-VLAN-62                     |
+        | *provider:network_type*     | vlan                                 |
+        | *provider:physical_network* | ph-eth3                              |
+        | *provider:segmentation_id*  | 62                                   |
+        | router:external             | False                                |
+        | shared                      | True                                 |
+        | status                      | ACTIVE                               |
+        | subnets                     | a89aa39e-3a8e-4f2f-9b57-45aa052b87bf |
+        | tenant_id                   | 3aef8f59a43943359932300f634513b3     |
+        +-----------------------------+--------------------------------------+
 
 
 F5 OpenStack LBaaSv1 Plugin Components
@@ -140,7 +140,7 @@ The F5 OpenStack LBaaSv1 plugin is comprised of three packages:
 - f5-oslbaasv1-agent
 - f5-oslbaasv1-driver.
 
-All are open source and accessible on GitHub at `F5Networks/f5-openstack-lbaasv1<https://github.com/F5Networks/f5-openstack-lbaasv1>`__.
+All are open source and accessible on GitHub at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__.
 
 F5 BIG-IP Common
 ~~~~~~~~~~~~~~~~
@@ -168,7 +168,7 @@ each agent process registers its own specific named queue to receive
 tasks from one or multiple Neutron controllers.
 
 .. figure:: ./media/plugin_agent_architecture.png
-   :alt: Figure 3. Plugin Agent Architecture
+   :alt: Plugin Agent Architecture
 
    Figure 3. Plugin Agent Architecture
 
@@ -202,7 +202,7 @@ API agent interfaces. Using the CLI client, use the ``neutron agent-list`` and `
 
 
 Deploying the F5 OpenStack LBaaSv1 Plugin
-=========================================
+-----------------------------------------
 
 The most basic deployment consists of one F5 OpenStack LBaaSv1 driver and
 one LBaaSv1 agent installed on the same Neutron controller. This is the recommended configuration for testing / POCs. Scale out and redundant installations can be added at any time. Alterations to the default installed services to add redundancy and scale out are referenced later in this document.
@@ -215,60 +215,60 @@ or Red Hat installation package. To install the plugin,
 download the release package from GitHub (`F5Networks/f5-openstack-lbaasv1<https://github.com/F5Networks/f5-openstack-lbaasv1/releases/tag/2.0.1final>`__) to your Neutron controller host(s), then install the components using the instructions appropriate for your OS.
 
 Debian / Ubuntu:
-----------------
+````````````````
 
 1. Install the F5 BIG-IP common libraries.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-      # dpkg -i f5-bigip-common_2.0.1_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-common_2.0.1_all.deb
 
 2. Install the plugin driver.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-      # dpkg -i f5-lbaas-driver_2.0.1_all.deb
+      # dpkg -i build/deb_dist/f5-lbaas-driver_2.0.1_all.deb
 
 3. Install the plugin agent.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-      # dpkg -i f5-bigip-lbaas-agent_2.0.1_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_2.0.1_all.deb
 
 
 Red Hat / CentOS:
------------------
+`````````````````
 
 1. Install the F5 BIG-IP common libraries.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-      # rpm -ivh f5-bigip-common_1.0.12.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-common_2.0.1.noarch.el7.rpm
 
 2. Install the plugin driver.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-      # rpm -i f5-lbaas-driver-1.0.12.noarch.el7.rpm
+      # rpm -i build/el7/f5-lbaas-driver-2.0.1.noarch.el7.rpm
 
 3. Install the agent.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-      # rpm -i f5-bigip-lbaas-agent-1.0.12.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-lbaas-agent-2.0.1.noarch.el7.rpm
 
 
 Configuration
 ~~~~~~~~~~~~~
 
 Before you begin
-----------------
+````````````````
 
 In order to use the Neutron command sets, you need source a user file
 that has admin permissions. (for example, ``source keystonerc_admin``).
 
 Configure the F5 LBaaSv1 Plugin
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```````````````````````````````
 
 1. Configure the agent settings in */etc/neutron/f5-bigip-lbaas-agent.ini*. The file contains detailed explanations of each option.
 
@@ -278,14 +278,14 @@ Configure the F5 LBaaSv1 Plugin
 
     **NOTE:** In the service providers section, the f5.os.lbaasv1driver entry will be present, but commented out. *Uncomment this line to identify the F5 plugin as the LBaaSv1 service provider.*  Add ':default' to the end of the line as shown below to set it as the default LBaaS service provider.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-    # vi /etc/neutron/neutron_lbaas.conf
-    [DEFAULT]
-    loadbalancer_plugin = neutron.services.loadbalancer.plugin.LoadBalancerPlugin
-    ...
-    [service providers]
-    service_provider=LOADBALANCER:F5:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriver:default
+        # vi /etc/neutron/neutron_lbaas.conf
+        [DEFAULT]
+        loadbalancer_plugin = neutron.services.loadbalancer.plugin.LoadBalancerPlugin
+        ...
+        [service providers]
+        service_provider=LOADBALANCER:F5:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriver:default
 
 3. (Optional) Set the agent scheduler.
 
@@ -293,119 +293,119 @@ Configure the F5 LBaaSv1 Plugin
 
 4. Restart the neutron service:
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-    # service neutron-server restart
+        # service neutron-server restart
 
 4. Restart the http service:
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-    # service apache2 restart
+        # service apache2 restart
 
 5. Restart the agent:
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-    # service f5-oslbaasv1-agent start
+        # service f5-oslbaasv1-agent start
 
 Verify the F5 LBaaSv1 Plugin is Active
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``````````````````````````````````````
 
 To check the agent's status, run ``neutron agent-list``.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-   # neutron agent-list
-   +--------------------------------------+--------------------+----------------------------------------------+-------+----------------+---------------------------+
-   | id                                   | agent_type         | host                                         | alive | admin_state_up | binary                    |
-   +--------------------------------------+--------------------+----------------------------------------------+-------+----------------+---------------------------+
-   | 11b4c7ca-aaf9-4ac8-8b9f-2003e021cf23 | Metadata agent     | host-29                                      | :-)   | True           | neutron-metadata-agent    |
-   | 13c25ea9-ca58-4b69-af27-fb1ea8824f65 | L3 agent           | host-29                                      | :-)   | True           | neutron-l3-agent          |
-   | 4c71878e-ac49-4a60-81d3-af3793705460 | Open vSwitch agent | host-29                                      | :-)   | True           | neutron-openvswitch-agent |
-   | 4e9df1b2-4fb7-4d01-8758-ca139038b0c8 | Loadbalancer agent | host-29                                      | :-)   | True           | neutron-lbaas-agent       |
-   | 640c19de-4362-4c4e-88b1-650092e62169 | DHCP agent         | host-29                                      | :-)   | True           | neutron-dhcp-agent        |
-   | e4921123-000c-4172-8a79-72e8f0d357e2 | Loadbalancer agent | host-29:3eb793cb-fa51-549d-a15b-253ce5405fcf | :-)   | True           | f5-oslbaasv1-agent        |
-   +--------------------------------------+--------------------+----------------------------------------------+-------+----------------+---------------------------+
+       # neutron agent-list
+       +--------------------------------------+--------------------+----------------------------------------------+-------+----------------+---------------------------+
+       | id                                   | agent_type         | host                                         | alive | admin_state_up | binary                    |
+       +--------------------------------------+--------------------+----------------------------------------------+-------+----------------+---------------------------+
+       | 11b4c7ca-aaf9-4ac8-8b9f-2003e021cf23 | Metadata agent     | host-29                                      | :-)   | True           | neutron-metadata-agent    |
+       | 13c25ea9-ca58-4b69-af27-fb1ea8824f65 | L3 agent           | host-29                                      | :-)   | True           | neutron-l3-agent          |
+       | 4c71878e-ac49-4a60-81d3-af3793705460 | Open vSwitch agent | host-29                                      | :-)   | True           | neutron-openvswitch-agent |
+       | 4e9df1b2-4fb7-4d01-8758-ca139038b0c8 | Loadbalancer agent | host-29                                      | :-)   | True           | neutron-lbaas-agent       |
+       | 640c19de-4362-4c4e-88b1-650092e62169 | DHCP agent         | host-29                                      | :-)   | True           | neutron-dhcp-agent        |
+       | e4921123-000c-4172-8a79-72e8f0d357e2 | Loadbalancer agent | host-29:3eb793cb-fa51-549d-a15b-253ce5405fcf | :-)   | True           | f5-oslbaasv1-agent        |
+       +--------------------------------------+--------------------+----------------------------------------------+-------+----------------+---------------------------+
 
 
 To to view more details, run ``neutron agent-show [agent-id]``.
 
-   .. code-block:: shell::
+   .. code-block:: shell
 
-   # neutron agent-show e4921123-000c-4172-8a79-72e8f0d357e2
-    +---------------------+--------------------------------------------------------------------------+
-    | Field               | Value                                                                    |
-    +---------------------+--------------------------------------------------------------------------+
-    | admin_state_up      | True                                                                     |
-    | agent_type          | Loadbalancer agent                                                       |
-    | alive               | True                                                                     |
-    | binary              | f5-oslbaasv1-agent                                                       |
-    | configurations      | {                                                                        |
-    |                     |      "icontrol_endpoints": {                                             |
-    |                     |           "10.190.6.253": {                                              |
-    |                     |                "device_name": "host-10-20-0-4.int.lineratesystems.com",  |
-    |                     |                "platform": "Virtual Edition",                            |
-    |                     |                "version": "BIG-IP_v11.6.0",                              |
-    |                     |                "serial_number": "65d1af65-d236-407a-779a9e02c4d9"        |
-    |                     |           }                                                              |
-    |                     |      },                                                                  |
-    |                     |      "request_queue_depth": 0,                                           |
-    |                     |      "environment_prefix": "",                                           |
-    |                     |      "tunneling_ips": [],                                                |
-    |                     |      "common_networks": {},                                              |
-    |                     |      "services": 0,                                                      |
-    |                     |      "environment_capacity_score": 0,                                    |
-    |                     |      "tunnel_types": [                                                   |
-    |                     |           "gre",                                                         |
-    |                     |           "vlan",                                                        |
-    |                     |           "vxlan"                                                        |
-    |                     |      ],                                                                  |
-    |                     |      "environment_group_number": 1,                                      |
-    |                     |      "bridge_mappings": {                                                |
-    |                     |           "default": "1.1"                                               |
-    |                     |      },                                                                  |
-    |                     |      "global_routed_mode": false                                         |
-    |                     | }                                                                        |
-    | created_at          | 2016-02-12 23:13:40                                                      |
-    | description         |                                                                          |
-    | heartbeat_timestamp | 2016-02-16 17:35:11                                                      |
-    | host                | host-29:3eb793cb-fa51-549d-a15b-253ce5405fcf                             |
-    | id                  | e4921123-000c-4172-8a79-72e8f0d357e2                                     |
-    | started_at          | 2016-02-12 23:13:40                                                      |
-    | topic               | f5-lbaas-process-on-agent                                                |
-    +---------------------+--------------------------------------------------------------------------+
+       # neutron agent-show e4921123-000c-4172-8a79-72e8f0d357e2
+        +---------------------+--------------------------------------------------------------------------+
+        | Field               | Value                                                                    |
+        +---------------------+--------------------------------------------------------------------------+
+        | admin_state_up      | True                                                                     |
+        | agent_type          | Loadbalancer agent                                                       |
+        | alive               | True                                                                     |
+        | binary              | f5-oslbaasv1-agent                                                       |
+        | configurations      | {                                                                        |
+        |                     |      "icontrol_endpoints": {                                             |
+        |                     |           "10.190.6.253": {                                              |
+        |                     |                "device_name": "host-10-20-0-4.int.lineratesystems.com",  |
+        |                     |                "platform": "Virtual Edition",                            |
+        |                     |                "version": "BIG-IP_v11.6.0",                              |
+        |                     |                "serial_number": "65d1af65-d236-407a-779a9e02c4d9"        |
+        |                     |           }                                                              |
+        |                     |      },                                                                  |
+        |                     |      "request_queue_depth": 0,                                           |
+        |                     |      "environment_prefix": "",                                           |
+        |                     |      "tunneling_ips": [],                                                |
+        |                     |      "common_networks": {},                                              |
+        |                     |      "services": 0,                                                      |
+        |                     |      "environment_capacity_score": 0,                                    |
+        |                     |      "tunnel_types": [                                                   |
+        |                     |           "gre",                                                         |
+        |                     |           "vlan",                                                        |
+        |                     |           "vxlan"                                                        |
+        |                     |      ],                                                                  |
+        |                     |      "environment_group_number": 1,                                      |
+        |                     |      "bridge_mappings": {                                                |
+        |                     |           "default": "1.1"                                               |
+        |                     |      },                                                                  |
+        |                     |      "global_routed_mode": false                                         |
+        |                     | }                                                                        |
+        | created_at          | 2016-02-12 23:13:40                                                      |
+        | description         |                                                                          |
+        | heartbeat_timestamp | 2016-02-16 17:35:11                                                      |
+        | host                | host-29:3eb793cb-fa51-549d-a15b-253ce5405fcf                             |
+        | id                  | e4921123-000c-4172-8a79-72e8f0d357e2                                     |
+        | started_at          | 2016-02-12 23:13:40                                                      |
+        | topic               | f5-lbaas-process-on-agent                                                |
+        +---------------------+--------------------------------------------------------------------------+
 
 If the ``f5-oslbaasv1-agent`` doesn't appear when you run ``neutron agent-list``, the agent is not running. The options below can be useful for troubleshooting:
 
  * Check the logs:
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # less /var/log/neutron/f5-oslbaasv1-agent.log
+        # less /var/log/neutron/f5-oslbaasv1-agent.log
 
  * Check the status of the f5-os-lbaasv1-agent service:
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # systemctl status f5-oslbaasv1-agent
+        # systemctl status f5-oslbaasv1-agent
 
 
 Multiple Controllers and Agent Redundancy
-=========================================
+-----------------------------------------
 
 The F5 LBaaSv1 plugin driver runs within the Neutron controller. When the Neutron community LBaaS plugin loads the
 driver, it creates a global messaging queue that will be used for all inbound
 callbacks and status update requests from F5 LBaaSv1 agents. (To run multiple queues, see the
-`differentiated service<#differentiated-services-and-scale-out>`_ section below.)
+`differentiated service <#differentiated-services-and-scale-out>`_ section below.)
 
 In an environment with multiple Neutron controllers the F5 drivers all listen to the same
 named message queue, providing controller redundancy and scale out. The drivers handle requests from the global queue in a round-robin fashion. All Neutron controllers must use the same Neutron database to avoid state problems with concurrently-running controller instances.
 
 .. figure:: ./media/basic_agent_scheduled_redudancy.png
-   :alt: Figure 4. Basic Agent Scheduled Redundancy
+   :alt: Basic Agent Scheduled Redundancy
 
-   Figure 4. Basic Agent Scheduled Redundancy
+Figure 4. Basic Agent Scheduled Redundancy
 
 **NOTE**: The agent service will expect to find an */etc/neutron/neutron.conf* file on its host which contains the configurations for Neutron messaging. To make sure the messaging settings match those of the controller, we recommend copying the /etc/neutron/neutron.conf from the controller to all additional hosts.
 
@@ -422,7 +422,7 @@ When a Neutron controller receives a request for a new pool, the F5 driver invok
 queries all active F5 agents and determines what, if any, existing pools are bound to each agent. If the driver locates an active agent that already has a bound pool for the same ``tenant_id`` as the newly-requested pool, the driver selects that agent. Otherwise, the driver selects an active agent at random. The request to create the pool service is sent to the selected agent's task queue. When the provisioning task is complete, the agent reports the outcome to the LBaaSv1 callback queue. The driver processes the agent's report and updates the Neutron database. The agent which handled the provisioning task is bound to the pool for the pool's lifetime (in other words, that agent will handle all tasks for that pool as long as the agent and/or pool are active). If a bound agent is inactive, the Tenant scheduler looks for other agents with the same ``environment_prefix`` as the bound agent. The scheduler assigns the task to the first active agent with a matching ``environment_prefix`` that it finds. The pool remains bound to the original (currently inactive) agent, with the expectation that the agent will eventually be brought back online.
 
 Differentiated Services and Scale Out
--------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The F5 LBaaSv1 plugin supports deployments where multiple BIG-IP environments are required. In a differentiated service environment, each F5 driver will work as described above **with the exception** that each environment has its own messaging queue. The Tenant scheduler for each environment only considers agents within that environment. Configuring multiple environments with corresponding distinct ``neutron_lbaas`` service provider entries is the only way to allow a tenant to select its environment through the LBaaS API. The first section of */etc/neutron/f5-bigip-lbaas-agent.ini* provides information regarding configuration of multiple environments.
 
@@ -430,96 +430,96 @@ The F5 LBaaSv1 plugin supports deployments where multiple BIG-IP environments ar
 vCMP guests share global VLAN IDs.
 
 .. figure:: ./media/driver_multiple_environments.png
-   :alt: Figure 5. Installing the LBaaSv1 Driver in Multiple Environments
+   :alt: Installing the LBaaSv1 Driver in Multiple Environments
 
-   Figure 5. Installing the LBaaSv1 Driver in Multiple Environments
+Figure 5. Installing the LBaaSv1 Driver in Multiple Environments
 
 .. figure:: ./media/agent_multiple_environments.png
-   :alt: Figure 6. F5 LBaaSv1 Agents in Multiple Environments
+   :alt: F5 LBaaSv1 Agents in Multiple Environments
 
-   Figure 6. F5 LBaaSv1 Agents in Multiple Environments
+Figure 6. F5 LBaaSv1 Agents in Multiple Environments
 
 To configure differentiated LBaaSv1 provisioning:
 
- 1. Install the agent and driver on each host that requires LBaaSv1 provisioning.
- 2. Assign the agent an environment-specific name in */etc/neutron/f5-bigip-lbaas-agent.ini*.
- 3. Create a service provider entry for each agent in */etc/neutron/neutron_lbaas* that corresponds to the unique agent name you assigned.
+1. Install the agent and driver on each host that requires LBaaSv1 provisioning.
+
+2. Assign the agent an environment-specific name in */etc/neutron/f5-bigip-lbaas-agent.ini*.
+
+3. Create a service provider entry for each agent in */etc/neutron/neutron_lbaas* that corresponds to the unique agent name you assigned.
 
 Default Environment Options
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```````````````````````````
 
 The F5 OpenStack LBaaSv1 plugin allows for the use of three default environment names - test, dev, and prod. As shown in the excerpt from */etc/neutron/f5-oslbaasv1-agent.ini* below, the service provider entries in */etc/neutron/neutron_lbaas* correspond to each agent's unique ``environment_prefix``.
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # For a test environment:
-    #
-    # Set your agent's environment_prefix to 'test'
-    #
-    # and add the following line to your LBaaS service_provider config
-    # on the neutron server:
-    #
-    # service_provider=LOADBALANCER:TEST:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriverTest
-    #
-    # For a dev environment:
-    #
-    # Set your agent's environment_prefix to 'dev'
-    #
-    # and add the following line to your LBaaS service_provider config
-    # on the neutron server:
-    #
-    # service_provider=LOADBALANCER:DEV:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriverDev
-    #
-    # For a prod environment:
-    #
-    # Set your agent's environment_prefix to 'prod'
-    #
-    # and add the following line to your LBaaS service_provider config
-    # on the neutron server:
-    #
-    # service_provider=LOADBALANCER:PROD:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriverProd
+        # For a test environment:
+        #
+        # Set your agent's environment_prefix to 'test'
+        #
+        # and add the following line to your LBaaS service_provider config
+        # on the neutron server:
+        #
+        # service_provider=LOADBALANCER:TEST:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriverTest
+        #
+        # For a dev environment:
+        #
+        # Set your agent's environment_prefix to 'dev'
+        #
+        # and add the following line to your LBaaS service_provider config
+        # on the neutron server:
+        #
+        # service_provider=LOADBALANCER:DEV:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriverDev
+        #
+        # For a prod environment:
+        #
+        # Set your agent's environment_prefix to 'prod'
+        #
+        # and add the following line to your LBaaS service_provider config
+        # on the neutron server:
+        #
+        # service_provider=LOADBALANCER:PROD:f5.oslbaasv1driver.drivers.plugin_driver.F5PluginDriverProd
 
 
 After making changes to  */etc/neutron/f5-oslbaasv1-agent.ini* and */etc/neutron/neutron_lbaas*, restart the ``neutron-server`` process.
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # service neutron-server restart
+        # service neutron-server restart
 
 Run `neutron agent-list` to view the list of active agents on your host to verify that the agent is up and running. If you do not see the ``f5-oslbaasv1-agent`` listed, you may need to restart the service.
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # service f5-oslbaasv1-agent restart
+        # service f5-oslbaasv1-agent restart
 
 
 Custom Environments
-~~~~~~~~~~~~~~~~~~~
+```````````````````
 
-You can use a driver-generating module to create custom environments. On each Neutron controller which will host your custom
-environment, run the following command:
+You can use a driver-generating module to create custom environments. On each Neutron controller which will host your custom environment, run the following command:
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # python -m f5.oslbaasv1driver.utils.generate_env.py provider_name environment_prefix
+        # python -m f5.oslbaasv1driver.utils.generate_env.py provider_name environment_prefix
 
-Example: Add the environment 'DFW1' using the following
-command:
+Example: Add the environment 'DFW1' using the following command:
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # python -m f5.oslbaasv1driver.utils.generate_env.py DFW1 DFW1
+        # python -m f5.oslbaasv1driver.utils.generate_env.py DFW1 DFW1
 
 The command creates a driver class and a corresponding ``service_provider`` entry in */etc/neutron/neutron_lbaas*.
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # service_provider=LOADBALANCER:DFW1:f5.oslbaasv1driver.drivers.plugin_driver_Dfw1.F5PluginDriverDfw1
+        # service_provider=LOADBALANCER:DFW1:f5.oslbaasv1driver.drivers.plugin_driver_Dfw1.F5PluginDriverDfw1
 
 To activate your custom environment, remove the comment ('#') from the beginning of the new ``service_provider`` line. Then, restart ``neutron-server``.
 
 Capacity-Based Scale Out Per Environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+````````````````````````````````````````
 
 In a differentiated service environment you can configure multiple agents, each of which is associated with a distinct iControl endpoint (in other words, different BIG-IP devices). When grouping is specified within an environment, the service provider scheduler will consider the grouping
 along with a reported ``environment_capacity_score``. Together, the
@@ -527,82 +527,76 @@ agent grouping and the capacity score allow the scheduler to scale out
 a single environment across multiple BIG-IP device service groups.
 
 .. figure:: ./media/env_group_scale_out.png
-   :alt: Figure 7. Environment Group Scale Out
+   :alt: Environment Group Scale Out
 
    Figure 7. Environment Group Scale Out
 
 To enable environment grouping, edit the ``environment_group_number`` setting in */etc/neutron/f5-oslbaasv1-agent.ini* (excerpt shown below).
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-# When using service differentiated environments, the environment can be
-# scaled out to multiple device service groups by providing a group number.
-# Each agent associated with a specific device service group should have
-# the same environment_group_number.
-#
-# environment_group_number = 1
+        # When using service differentiated environments, the environment can be
+        # scaled out to multiple device service groups by providing a group number.
+        # Each agent associated with a specific device service group should have
+        # the same environment_group_number.
+        #
+        # environment_group_number = 1
 
 All agents in the same group should have the same ``environment_group_number`` setting.
 
 Each agent measures its BIG-IP devices' capacity. The agent will report a single ``environment_capacity_score`` for its
 group every time it reports its agent status to the Neutron controller.
 
-The ``environment_capacity_score`` value is the highest capacity recorded on several collected statistics specified in the
-``capacity_policy`` setting in the agent configuration. The
+The ``environment_capacity_score`` value is the highest capacity recorded on several collected statistics specified in the ``capacity_policy`` setting in the agent configuration. The
 ``capacity_policy`` setting is a dictionary, where the key is the
 metric name and the value is the max allowed value for that metric. The
 score is determined by dividing the metric collected by the max specified
 for that metric in the ``capacity_policy`` setting. An acceptable reported ``environment_capacity_score`` is between zero (0) and
 one (1). **If an agent in the group reports an ``environment_capacity_score`` of one (1) or greater, the device is considered to be at capacity.**
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-   # capacity_policy = throughput:1000000000, active_connections: 250000, route_domain_count: 512, tunnel_count: 2048
+       # capacity_policy = throughput:1000000000, active_connections: 250000, route_domain_count: 512, tunnel_count: 2048
 
-**WARNING:** If you set the ``capacity_policy`` and all agents in all groups for an environment are at capacity, services will no longer be
-scheduled. When pools are created for an environment which has no capacity left, the pools will be placed in the error state.
+**WARNING:** If you set the ``capacity_policy`` and all agents in all groups for an environment are at capacity, services will no longer be scheduled. When pools are created for an environment which has no capacity left, the pools will be placed in the error state.
 
 The following metrics implemented by the iControl driver can also be configured in */etc/neutron/f5-oslbaasv1-agent.ini*:
 
-.. code-block:: shell::
+    .. code-block:: shell
 
-    # throughput - total throughput in bps of the TMOS devices
-    # inbound_throughput - throughput in bps inbound to TMOS devices
-    # outbound_throughput - throughput in bps outbound from TMOS devices
-    # active_connections - number of concurrent active actions on a TMOS device
-    # tenant_count - number of tenants associated with a TMOS device
-    # node_count - number of nodes provisioned on a TMOS device
-    # route_domain_count - number of route domains on a TMOS device
-    # vlan_count - number of VLANs on a TMOS device
-    # tunnel_count - number of GRE and VxLAN overlay tunnels on a TMOS device
-    # ssltps - the current measured SSL TPS count on a TMOS device
-    # clientssl_profile_count - the number of clientside SSL profiles defined
-    #
-    # You can specify one or multiple metrics.
-
-::
+        # throughput - total throughput in bps of the TMOS devices
+        # inbound_throughput - throughput in bps inbound to TMOS devices
+        # outbound_throughput - throughput in bps outbound from TMOS devices
+        # active_connections - number of concurrent active actions on a TMOS device
+        # tenant_count - number of tenants associated with a TMOS device
+        # node_count - number of nodes provisioned on a TMOS device
+        # route_domain_count - number of route domains on a TMOS device
+        # vlan_count - number of VLANs on a TMOS device
+        # tunnel_count - number of GRE and VxLAN overlay tunnels on a TMOS device
+        # ssltps - the current measured SSL TPS count on a TMOS device
+        # clientssl_profile_count - the number of clientside SSL profiles defined
+        #
+        # You can specify one or multiple metrics.
 
 
 When you create a new pool in an environment where multiple agent groups are configured, and the pool's ``tenant_id`` is not already associated with an agent group, the scheduler will attempt to assign the pool to the agent group which last reported the lowest ``environment_capacity_score``. If the pool's ``tenant_id`` is already associated with an agent group that is at capacity, the scheduler binds the pool to an agent in another group in the environment that is not at capacity.
 
 Running Multiple Agents on the Same Host
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+````````````````````````````````````````
 
 **WARNING:** You should never run two agents *for the same environment*
 on the same host, as the hostname is used to help Neutron distinguish
-between agents. Multiple agent processes for *different environments* -- meaning each agent is associated with a different iControl
-endpoint -- can run on the same host.
+between agents. Multiple agent processes for *different environments* -- meaning each agent is associated with a different iControl endpoint -- can run on the same host.
 
 To configure multiple agent processes on the same host:
 
 1. Create a unique configuration file for each agent, using */etc/neutron/f5-oslbaasv1-agent.ini* as a template. Each
    configuration file must have a unique iControl endpoint.
-2. Create additional upstart, init.d, or systemd service definitions for additional agents, using the default service definitions as a guide.
-   Each service should point to the appropriate configuration file (created in the previous step). The agent process uses Oslo
-   configuration. This means that typically the only thing that would change from the template service definitions would be the
-   ``--config-file`` and ``--log-file`` comand line arguments used to start the ``/usr/bin/f5-oslbaasv1-agent`` executable.
-3. Start each agent using the name of its unique upstart, init.d, or systemd service name.
 
+2. Create additional upstart, init.d, or systemd service definitions for additional agents, using the default service definitions as a guide.
+   Each service should point to the appropriate configuration file (created in the previous step). The agent process uses Oslo configuration. This means that typically the only thing that would change from the template service definitions would be the ``--config-file`` and ``--log-file`` comand line arguments used to start the ``/usr/bin/f5-oslbaasv1-agent`` executable.
+
+3. Start each agent using the name of its unique upstart, init.d, or systemd service name.
 
 Supported Network Topologies
 ----------------------------
@@ -612,22 +606,23 @@ The F5 iControl agent driver supports the following network topologies with eith
 Global routed mode
 ~~~~~~~~~~~~~~~~~~
 
-
 In global routed mode, all VIPs are assumed routable from clients and
 all Members are assumed routable from the BIG-IP devices themselves. All
 L2 and L3 objects, including routes, must be pre-provisioned on the BIG-IP
 Device Service Group prior to LBaaSv1 provisioning.
 
 .. figure:: ./media/global_routed_mode.png
-   :alt: Figure 8. Global Routed Mode
+   :alt: Global Routed Mode
 
-   Figure 8. Global Routed Mode
+Figure 8. Global Routed Mode
 
-    +--------------------------------------+--------------------------------------+
-    | Topology                             | f5-oslbaasv1-agent.ini setting       |
-    +======================================+======================================+
-    | Global Routed mode                   | f5_global_routed_mode = True         |
-    +--------------------------------------+--------------------------------------+
+    .. code-block:: shell
+
+        +--------------------------------------+--------------------------------------+
+        | Topology                             | f5-oslbaasv1-agent.ini setting       |
+        +======================================+======================================+
+        | Global Routed mode                   | f5_global_routed_mode = True         |
+        +--------------------------------------+--------------------------------------+
 
 Global routed mode uses BIG-IP AutoMap SNAT for all VIPs. Because no
 explicit SNAT pools are being defined, sufficient Self IP addresses
@@ -645,26 +640,27 @@ In one-arm mode, VIP and Members can be provisioned from the same
 Neutron subnet.
 
 .. figure:: ./media/one_arm.png
-   :alt: Figure 9. One-arm Mode
+   :alt: One-arm Mode
 
-   Figure 9. One-arm Mode
+Figure 9. One-arm Mode
 
+    .. code-block:: shell
 
-    +--------------------------------------+--------------------------------------+
-    | Topology                             | f5-oslbaasv1-agent.ini settings       |
-    +======================================+======================================+
-    | One-arm                              | f5_global_routed_mode = False        |
-    |                                      | f5_snat_mode = True                  |
-    |                                      |                                      |
-    |                                      | optional settings:                   |
-    |                                      | f5_snat_addresses_per_subnet = n     |
-    |                                      |                                      |
-    |                                      | where if n is 0, the virtual server  |
-    |                                      | will use AutoMap SNAT. If n is > 0,  |
-    |                                      | n number of SNAT addresses will be   |
-    |                                      | allocated from the Member subnet per |
-    |                                      | active traffic group.                |
-    +--------------------------------------+--------------------------------------+
+        +--------------------------------------+--------------------------------------+
+        | Topology                             | f5-oslbaasv1-agent.ini settings       |
+        +======================================+======================================+
+        | One-arm                              | f5_global_routed_mode = False        |
+        |                                      | f5_snat_mode = True                  |
+        |                                      |                                      |
+        |                                      | optional settings:                   |
+        |                                      | f5_snat_addresses_per_subnet = n     |
+        |                                      |                                      |
+        |                                      | where if n is 0, the virtual server  |
+        |                                      | will use AutoMap SNAT. If n is > 0,  |
+        |                                      | n number of SNAT addresses will be   |
+        |                                      | allocated from the Member subnet per |
+        |                                      | active traffic group.                |
+        +--------------------------------------+--------------------------------------+
 
 Multiple-Arm mode
 ~~~~~~~~~~~~~~~~~
@@ -673,25 +669,27 @@ In multiple-arm mode, VIP and Members are provisioned from different
 Neutron subnets.
 
 .. figure:: ./media/multiarm_snat.png
-   :alt: Figure 10. Multiple-arm Mode
+   :alt: Multiple-arm Mode
 
-   Figure 10. Multiple-arm Mode
+Figure 10. Multiple-arm Mode
 
-    +--------------------------------------+--------------------------------------+
-    | Topology                             | f5-oslbaasv1-agent.ini setting       |
-    +======================================+======================================+
-    | Multiple-arm                         | f5_global_routed_mode = False        |
-    |                                      | f5_snat_mode = True                  |
-    |                                      |                                      |
-    |                                      | optional settings:                   |
-    |                                      | f5_snat_addresses_per_subnet = n     |
-    |                                      |                                      |
-    |                                      | where if n is 0, the virtual server  |
-    |                                      | will use AutoMap SNAT. If n is > 0,  |
-    |                                      | n number of SNAT addresses will be   |
-    |                                      | allocated from the Member subnet per |
-    |                                      | active traffic group.                |
-    +--------------------------------------+--------------------------------------+
+    .. code-block:: shell
+
+        +--------------------------------------+--------------------------------------+
+        | Topology                             | f5-oslbaasv1-agent.ini setting       |
+        +======================================+======================================+
+        | Multiple-arm                         | f5_global_routed_mode = False        |
+        |                                      | f5_snat_mode = True                  |
+        |                                      |                                      |
+        |                                      | optional settings:                   |
+        |                                      | f5_snat_addresses_per_subnet = n     |
+        |                                      |                                      |
+        |                                      | where if n is 0, the virtual server  |
+        |                                      | will use AutoMap SNAT. If n is > 0,  |
+        |                                      | n number of SNAT addresses will be   |
+        |                                      | allocated from the Member subnet per |
+        |                                      | active traffic group.                |
+        +--------------------------------------+--------------------------------------+
 
 Gateway Routed Mode
 ~~~~~~~~~~~~~~~~~~~
@@ -701,17 +699,19 @@ forwarding service on the BIG-IP Device Service Group for Member Neutron
 subnets.
 
 .. figure:: ./media/routed_mode.png
-   :alt: Figure 11. Gateway Routed Mode
+   :alt: Gateway Routed Mode
 
-   Figure 11. Gateway Routed Mode
+Figure 11. Gateway Routed Mode
 
-    +--------------------------------------+--------------------------------------+
-    | Topology                             | f5-oslbaasv1-agent.ini setting       |
-    +======================================+======================================+
-    | Gateway routed mode                  | f5_global_routed_mode = False        |
-    |                                      | f5_snat_mode = False                 |
-    |                                      |                                      |
-    +--------------------------------------+--------------------------------------+
+    .. code-block:: shell
+
+        +--------------------------------------+--------------------------------------+
+        | Topology                             | f5-oslbaasv1-agent.ini setting       |
+        +======================================+======================================+
+        | Gateway routed mode                  | f5_global_routed_mode = False        |
+        |                                      | f5_snat_mode = False                 |
+        |                                      |                                      |
+        +--------------------------------------+--------------------------------------+
 
 For the Neutron network topologies requiring dynamic L2 and L3
 provisioning of the BIG-IP devices -- **which includes all network topologies
@@ -731,16 +731,14 @@ Neutron ``network provider:physical_network`` attribute and TMM
 interface names. This is analogous to the Open vSwitch agents mapping
 between the Neutron ``network provider:physical_network`` and the
 interface bridge name. The mapping is created in */etc/neutron/f5-oslbaasv1-agent.ini*, using the
-``f5_external_physical_mappings`` setting. The name of the ``provider:physical_network`` entries can be added to a comma separated
-list with mappings to the TMM interface or LAG trunk name, and a boolean
-attribute to specify if 802.1q tagging will be applied.
+``f5_external_physical_mappings`` setting. The name of the ``provider:physical_network`` entries can be added to a comma separated list with mappings to the TMM interface or LAG trunk name, and a boolean attribute to specify if 802.1q tagging will be applied.
 
 Example: This configuration maps the ``provider:physical_network`` containing 'ph-eth3' to TMM
 interface 1.1 with 802.1q tagging.
 
-::
+    .. code-block:: shell
 
-    f5_external_physical_mappings = ph-eth3:1.1:True
+        f5_external_physical_mappings = ph-eth3:1.1:True
 
 A default mapping should be included for cases where the ``provider:physical_network`` does not match any configuration settings.
 A default mapping simply uses the word default instead of a known
@@ -749,9 +747,9 @@ A default mapping simply uses the word default instead of a known
 Example: The configuration below includes the previously illustrated ``ph-eth3`` map, a default map, and LAG trunk
 mapping.
 
-::
+    .. code-block:: shell
 
-    f5_external_physical_mappings = default:1.1:True, ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True
+        f5_external_physical_mappings = default:1.1:True, ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True
 
 **WARNING:** The default Open vSwitch Neutron networking does not
 support VLAN tagging by guest instances. Each guest interface is treated
@@ -759,14 +757,12 @@ as an access port and all VLAN tags will be stripped before frames reach
 the physical network infrastructure. To allow a BIG-IP VE guest to
 function in L2 Adjacent mode using VLANs as your tenant network type, the
 software networking infrastructure which strips VLAN tags from frames
-must be bypassed. You can bypass the software bridge using the ``ip``, ``brctl``, and ``ovs-vsctl`` commands on the compute node
-after the BIG-IP VE guest instances have been created. This process is **not** automated by any Neutron agent. This requirement only applies
-to BIG-IP VE when running as a Nova guest instance.
+must be bypassed. You can bypass the software bridge using the ``ip``, ``brctl``, and ``ovs-vsctl`` commands on the compute node after the BIG-IP VE guest instances have been created. This process is **not** automated by any Neutron agent. This requirement only applies to BIG-IP VE when running as a Nova guest instance.
 
 .. figure:: ./media/VE_Multitenant_VLAN_bypass.png
-   :alt: Figure 12. VE Multi-tenant VLAN Bypass
+   :alt: VE Multi-tenant VLAN Bypass
 
-   Figure 12. VE Multi-tenant VLAN Bypass
+Figure 12. VE Multi-tenant VLAN Bypass
 
 Tunnels
 ~~~~~~~
@@ -777,127 +773,126 @@ learned from their registered Neutron agent configuration's ``tunneling_ip`` att
 
 For example:
 
-::
+    .. code-block:: shell
 
-    # neutron agent-show 034bddd0-0ac3-457a-9e2c-ed456dc2ad53
-    +---------------------+--------------------------------------+
-    | Field               | Value                                |
-    +---------------------+--------------------------------------+
-    | admin_state_up      | True                                 |
-    | agent_type          | Open vSwitch agent                   |
-    | alive               | True                                 |
-    | binary              | neutron-openvswitch-agent            |
-    | configurations      | {                                    |
-    |                     |      "tunnel_types": [               |
-    |                     |           "gre"                      |
-    |                     |      ],                              |
-    |                     |      "tunneling_ip": "10.1.0.35",    |
-    |                     |      "bridge_mappings": {            |
-    |                     |           "ph-eth3": "br-eth3"       |
-    |                     |      },                              |
-    |                     |      "l2_population": true,          |
-    |                     |      "devices": 4                    |
-    |                     | }                                    |
-    | created_at          | 2013-11-15 05:00:23                  |
-    | description         |                                      |
-    | heartbeat_timestamp | 2014-04-22 16:58:21                  |
-    | host                | sea-osp-cmp-001                      |
-    | id                  | 034bddd0-0ac3-457a-9e2c-ed456dc2ad53 |
-    | started_at          | 2014-04-17 22:39:30                  |
-    | topic               | N/A                                  |
-    +---------------------+--------------------------------------+
+        # neutron agent-show 034bddd0-0ac3-457a-9e2c-ed456dc2ad53
+        +---------------------+--------------------------------------+
+        | Field               | Value                                |
+        +---------------------+--------------------------------------+
+        | admin_state_up      | True                                 |
+        | agent_type          | Open vSwitch agent                   |
+        | alive               | True                                 |
+        | binary              | neutron-openvswitch-agent            |
+        | configurations      | {                                    |
+        |                     |      "tunnel_types": [               |
+        |                     |           "gre"                      |
+        |                     |      ],                              |
+        |                     |      "tunneling_ip": "10.1.0.35",    |
+        |                     |      "bridge_mappings": {            |
+        |                     |           "ph-eth3": "br-eth3"       |
+        |                     |      },                              |
+        |                     |      "l2_population": true,          |
+        |                     |      "devices": 4                    |
+        |                     | }                                    |
+        | created_at          | 2013-11-15 05:00:23                  |
+        | description         |                                      |
+        | heartbeat_timestamp | 2014-04-22 16:58:21                  |
+        | host                | sea-osp-cmp-001                      |
+        | id                  | 034bddd0-0ac3-457a-9e2c-ed456dc2ad53 |
+        | started_at          | 2014-04-17 22:39:30                  |
+        | topic               | N/A                                  |
+        +---------------------+--------------------------------------+
 
 The F5 LBaaSv1 agent supports the ML2 L2 population service in that overlay tunnels for Member IP access are only built to Open vSwitch agents hosting Members. When using the ML2 population service, you can also elect to use static ARP entries for BIG-IP devices to avoid flooding. This setting is found in */etc/neutron/f5-oslbaasv1-agent.ini*.
 
-::
+    .. code-block:: shell
 
-    # Static ARP population for members on tunnel networks
-    #
-    # This is a boolean True or False value which specifies
-    # that if a Pool Member IP address is associated with a gre
-    # or vxlan tunnel network, in addition to a tunnel fdb
-    # record being added, that a static arp entry will be created to
-    # avoid the need to learn the member's MAC address via flooding.
-    #
-    f5_populate_static_arp = True
+        # Static ARP population for members on tunnel networks
+        #
+        # This is a boolean True or False value which specifies
+        # that if a Pool Member IP address is associated with a gre
+        # or vxlan tunnel network, in addition to a tunnel fdb
+        # record being added, that a static arp entry will be created to
+        # avoid the need to learn the member's MAC address via flooding.
+        #
+        f5_populate_static_arp = True
 
 
 The necessary ML2 port binding extensions and segmentation model are defined by default with the community ML2 core
 plugin and Open vSwitch agents on the compute nodes.
 
 When VIPs are placed on tenant overlay networks, the F5 LBaaSv1 agent
-sends tunnel update RPC messages to the Open vSwitch agents to inform them of BIG-IP device VTEPs. This allows tenant guest virtual
-machines or network node services to interact with the BIG-IP-provisioned VIPs across overlay networks.
+sends tunnel update RPC messages to the Open vSwitch agents to inform them of BIG-IP device VTEPs. This allows tenant guest virtual machines or network node services to interact with the BIG-IP-provisioned VIPs across overlay networks.
 
 BIG-IP VTEP addresses should be added to the associated agent's config file (*/etc/neutron/f5-oslbaasv1-agent.ini*).
 
-::
+    .. code-block:: shell
 
-    # Device Tunneling (VTEP) selfips
-    #
-    # This is a single entry or comma separated list of cidr (h/m) format
-    # selfip addresses, one per BIG-IP device, to use for VTEP addresses.
-    #
-    # If no gre or vxlan tunneling is required, these settings should be
-    # commented out or set to None.
-    #
-    #f5_vtep_folder = 'Common'
-    #f5_vtep_selfip_name = 'vtep'
+        # Device Tunneling (VTEP) selfips
+        #
+        # This is a single entry or comma separated list of cidr (h/m) format
+        # selfip addresses, one per BIG-IP device, to use for VTEP addresses.
+        #
+        # If no gre or vxlan tunneling is required, these settings should be
+        # commented out or set to None.
+        #
+        #f5_vtep_folder = 'Common'
+        #f5_vtep_selfip_name = 'vtep'
 
 
 Run ``neutron agent-show [agent-id]`` to view/verify the VTEP configurations. The VTEP addresses are listed as ``tunneling_ips``.
 
-::
+    .. code-block:: shell
 
-    # neutron agent-show 014ada1a-91ab-4408-8a81-7be6c4ea8113
-    +---------------------+-----------------------------------------------------------------------+
-    | Field               | Value                                                                 |
-    +---------------------+-----------------------------------------------------------------------+
-    | admin_state_up      | True                                                                  |
-    | agent_type          | Loadbalancer agent                                                    |
-    | alive               | True                                                                  |
-    | binary              | f5-bigip-lbaas-agent                                                  |
-    | configurations      | {                                                                     |
-    |                     |      "icontrol_endpoints": {                                          |
-    |                     |           "10.0.64.165": {                                            |
-    |                     |                "device_name": "host-10-0-64-165.openstack.f5se.com",  |
-    |                     |                "platform": "Virtual Edition",                         |
-    |                     |                "version": "BIG-IP_v11.6.0",                           |
-    |                     |                "serial_number": "b720f143-a632-464c-4db92773f2a0"     |
-    |                     |           },                                                          |
-    |                     |           "10.0.64.164": {                                            |
-    |                     |                "device_name": "host-10-0-64-164.openstack.f5se.com",  |
-    |                     |                "platform": "Virtual Edition",                         |
-    |                     |                "version": "BIG-IP_v11.6.0",                           |
-    |                     |                "serial_number": "e1b1f439-72c3-5240-4358bbc45dff"     |
-    |                     |           }                                                           |
-    |                     |      },                                                               |
-    |                     |      "request_queue_depth": 0,                                        |
-    |                     |      "environment_prefix": "dev",                                     |
-    |                     |      "tunneling_ips":                                                 |
-    |                     |           "10.0.63.126",                                              |
-    |                     |           "10.0.63.125"                                               |
-    |                     |      ],                                                               |
-    |                     |      "common_networks": {},                                           |
-    |                     |      "services": 0,                                                   |
-    |                     |      "environment_capacity_score": 0,                                 |
-    |                     |      "tunnel_types": [                                                |
-    |                     |           "gre"                                                       |
-    |                     |      ],                                                               |
-    |                     |      "environment_group_number": 1,                                   |
-    |                     |      "bridge_mappings": {                                             |
-    |                     |           "default": "1.3"                                            |
-    |                     |      },                                                               |
-    |                     |      "global_routed_mode": false                                      |
-    |                     | }                                                                     |
-    | created_at          | 2015-08-19 13:08:15                                                   |
-    | description         |                                                                       |
-    | heartbeat_timestamp | 2015-08-20 15:19:15                                                   |
-    | host                | sea-osp-ctl-001:f5acc0d3-24d6-5c64-bc75-866dd26310a4                  |
-    | id                  | 014ada1a-91ab-4408-8a81-7be6c4ea8113                                  |
-    | started_at          | 2015-08-19 17:30:44                                                   |
-    | topic               | f5-lbaas-process-on-agent                                             |
-    +---------------------+-----------------------------------------------------------------------+
+        # neutron agent-show 014ada1a-91ab-4408-8a81-7be6c4ea8113
+        +---------------------+-----------------------------------------------------------------------+
+        | Field               | Value                                                                 |
+        +---------------------+-----------------------------------------------------------------------+
+        | admin_state_up      | True                                                                  |
+        | agent_type          | Loadbalancer agent                                                    |
+        | alive               | True                                                                  |
+        | binary              | f5-bigip-lbaas-agent                                                  |
+        | configurations      | {                                                                     |
+        |                     |      "icontrol_endpoints": {                                          |
+        |                     |           "10.0.64.165": {                                            |
+        |                     |                "device_name": "host-10-0-64-165.openstack.f5se.com",  |
+        |                     |                "platform": "Virtual Edition",                         |
+        |                     |                "version": "BIG-IP_v11.6.0",                           |
+        |                     |                "serial_number": "b720f143-a632-464c-4db92773f2a0"     |
+        |                     |           },                                                          |
+        |                     |           "10.0.64.164": {                                            |
+        |                     |                "device_name": "host-10-0-64-164.openstack.f5se.com",  |
+        |                     |                "platform": "Virtual Edition",                         |
+        |                     |                "version": "BIG-IP_v11.6.0",                           |
+        |                     |                "serial_number": "e1b1f439-72c3-5240-4358bbc45dff"     |
+        |                     |           }                                                           |
+        |                     |      },                                                               |
+        |                     |      "request_queue_depth": 0,                                        |
+        |                     |      "environment_prefix": "dev",                                     |
+        |                     |      "tunneling_ips":                                                 |
+        |                     |           "10.0.63.126",                                              |
+        |                     |           "10.0.63.125"                                               |
+        |                     |      ],                                                               |
+        |                     |      "common_networks": {},                                           |
+        |                     |      "services": 0,                                                   |
+        |                     |      "environment_capacity_score": 0,                                 |
+        |                     |      "tunnel_types": [                                                |
+        |                     |           "gre"                                                       |
+        |                     |      ],                                                               |
+        |                     |      "environment_group_number": 1,                                   |
+        |                     |      "bridge_mappings": {                                             |
+        |                     |           "default": "1.3"                                            |
+        |                     |      },                                                               |
+        |                     |      "global_routed_mode": false                                      |
+        |                     | }                                                                     |
+        | created_at          | 2015-08-19 13:08:15                                                   |
+        | description         |                                                                       |
+        | heartbeat_timestamp | 2015-08-20 15:19:15                                                   |
+        | host                | sea-osp-ctl-001:f5acc0d3-24d6-5c64-bc75-866dd26310a4                  |
+        | id                  | 014ada1a-91ab-4408-8a81-7be6c4ea8113                                  |
+        | started_at          | 2015-08-19 17:30:44                                                   |
+        | topic               | f5-lbaas-process-on-agent                                             |
+        +---------------------+-----------------------------------------------------------------------+
 
 OpenStack and BIG-IP Multinenancy
 ---------------------------------
@@ -908,9 +903,9 @@ is set to ``True``, and it is not configured for global routed mode, a BIG-IP ro
 segmentation for IP address spaces between tenants. If an associated Neutron network for a VIP or Member is shown as ``shared=True``, and the F5 LBaaSv1 agent is not in global routed mode, all associated L2 and L3 objects are created in the /Common administrative partition and associated with route domain 0 (zero) on all BIG-IP devices.
 
 .. figure:: ./media/tenancy_mapping.png
-   :alt: Figure 13. BIG-IP Multi-tenancy
+   :alt: BIG-IP Multi-tenancy
 
-   Figure 13. BIG-IP Multi-tenancy
+Figure 13. BIG-IP Multi-tenancy
 
 BIG-IP High Availability Modes
 ------------------------------
@@ -925,10 +920,8 @@ These options can be configured in the ``Device Settings`` section of */etc/neut
 
 
 Troubleshooting
-===============
+---------------
 
-To troubleshoot problems with the F5 LBaaSv1 driver or an agent process, set the global Neutron setting and agent process ``debug``
-setting to ``True``. Extensive logging will then appear in the neutron-server and f5-oslbaasv1-agent log files on their respective
-hosts.
+To troubleshoot problems with the F5 LBaaSv1 driver or an agent process, set the global Neutron setting and agent process ``debug`` setting to ``True``. Extensive logging will then appear in the neutron-server and f5-oslbaasv1-agent log files on their respective hosts.
 
 
