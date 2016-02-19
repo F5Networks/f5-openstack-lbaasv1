@@ -1,12 +1,19 @@
-Neutron LBaaSv1 - Version 2.0.1 Release
-=======================================
+User Guide
+==========
+
+**UNDER DEVELOPMENT**
+
+Plugin Version
+--------------
+
+|release|
 
 Supported Neutron Release(s)
 ----------------------------
 
 This release of the F5 OpenStack LBaaSv1 plugin supports the following OpenStack release(s):
 
--  Liberty
+-  |openstack|
 
 The F5 OpenStack LBaaSv1 plugin does not encompass any alterations to the
 OpenStack community LBaaSv1 database schema; no additional database
@@ -22,88 +29,55 @@ Supported BIG-IP Releases
 
 The F5 OpenStack LBaaSv1 plugin is compatible with BIG-IP 11.5 and greater.
 
+Overview
+--------
+
+The F5 OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP load
+balancing services -- including virtual IPs, pools, device service
+groups, and health monitoring -- in an OpenStack environment.
+
+The F5 LBaaSv1 agent translates 'OpenStack' to 'BIG-IP', so to speak,
+allowing you to provision BIG-IP LTM services in an OpenStack
+environment.
+
+The diagram below shows a sample OpenStack environment using
+the F5 plugin for OpenStack LBaaSv1. The LBaaSv1 agent communicates with
+a BIG-IP platform or Virtual Edition via iControl. The load balancing
+service request is handled by the BIG-IP according to its
+configurations; it can then connect, discover, and/or deploy to the
+cloud-based apps or vms in the OpenStack project network.
+
+    .. image:: media/openstack_lbaas_env_example.png
+        :width: 500
+        :alt: Sample OpenStack Environment with F5 LBaaSv1 Plugin
+
+Figure 1. Sample OpenStack Environment with F5 LBaaSv1 Plugin
+
 Neutron Networking Requirements
 -------------------------------
+
+Network Operation Mode
+``````````````````````
 
 The F5 OpenStack LBaaSv1 plugin supports two modes of
 network operation: `global routed mode <#global-routed-mode>`__ and
 `L2 adjacent mode <#l2-adjacent-mode>`__ (the default). The Neutron
-core provider requirements are different for each mode. You can configure this in the ``L3 Segmentation Mode Settings`` section of the agent configuration file, as described `below<#configure-the-f5-lbaasv1-plugin>`__.
+core provider requirements are different for each mode; each mode is described in detail in the `Network Topologies <#network-topologies>`_ section of this document.
 
-Global Routed Mode
-~~~~~~~~~~~~~~~~~~
+ML2 Core Plugin
+```````````````
 
-In global routed mode, the agent does not attempt to manage any L2
-networking on BIG-IP devices. All traffic to and from the BIG-IP devices
-therefore needs to be routed by external networking devices. All required L2
-networks and associated L3 addressing and routes to cloud resources must
-be provisioned on the BIG-IP devices **before** LBaaSv1 objects are
-created. All VIPs created by the agents listen for traffic globally on
-all provisioned L2 networks.
+Neutron uses the ML2 core plugin by default. This configuration should appear in */etc/neutron/neutron.conf* as shown below.
 
-Global routed mode provides a simplified mode of operation for BIG-IP devices deployed only as edge-routed devices  -- meaning they are directly connected to provider networks only.
+    .. code-block:: shell
 
-.. figure:: ./media/global_routed_mode_topology.png
-   :alt: Figure 1. Global Routed Mode Topology
+        # vi /etc/neutron/neutron.conf
+        core_plugin = neutron.plugins.ml2.plugin.Ml2Plugin
 
-   Figure 1. Global Routed Mode Topology
+Providernet extension
+`````````````````````
 
-Because all routing is pre-provisioned on networking devices, global
-routed mode's requirements for networking orchestration in Neutron are
-minimal. Global routed mode should typically function on any Neutron
-network with functional IP packet forwarding to the BIG-IP devices.
-
-L2 Adjacent Mode
-~~~~~~~~~~~~~~~~
-
-**L2 adjacent mode is the default mode.** In L2 adjacent mode, the F5 OpenStack
-LBaaSv1 agent attempts to provision L2 networks -- including VLANs and
-overlay tunnels -- by associating a specific BIG-IP device with each
-tenant network that has a VIP or pool member. VIP listeners are restricted to
-their designated Neutron tenant network. L3 addresses associated with
-pool members are automatically allocated from Neutron subnets.
-
-L2 adjacent mode follows the `micro-segmentation<https://devcentral.f5.com/articles/microservices-versus-microsegmentation>`__ security model for gateways. Since each BIG-IP device is L2-adjacent to all tenant networks for which LBaaSv1 objects are provisioned, the traffic flows do not
-logically pass through another L3 forwarding device. Instead, traffic flows are
-restricted to direct L2 communication between the cloud network element
-and the BIG-IP devices.
-
-.. figure:: ./media/l2_adjacent_mode_topology.png
-   :alt: Figure 2. L2 Adjacent Mode Topology
-
-   Figure 2. L2 Adjacent Mode Topology
-
-Because the agents manage the BIG-IP device associations for many tenant
-networks, L2 adjacent mode is a much more complex orchestration. It
-dynamically allocates L3 addresses from Neutron tenant subnets for BIG-IP
-SelfIPs and SNAT translation addresses. These additional L3 addresses
-are allocated from the Neutron subnets associated with LBaaSv1 VIPs or
-Members.
-
-Requirements
-------------
-
-Neutron ML2 core plugin
-~~~~~~~~~~~~~~~~~~~~~~~
-
-**Neutron server configuration:**
-
-::
-
-    # vi /etc/neutron/neutron.conf
-    core_plugin = neutron.plugins.ml2.plugin.Ml2Plugin
-
-The ML2 core plugin uses standard GRE and VxLAN tunnel overlay networks.
-When you use BIG-IP as a VTEP with the ML2 core plugin, the ML2 L2
-population services update the the VTEPs' forwarding databases whenever
-changes occur.
-
-Neutron providernet extension
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The Neutron providernet extension adds attributes to Neutron networks,
-defining the L2 network settings required for device connectivity. The
-F5 LBaaSv1 agent uses providernet attributes to provision L2
+The Neutron providernet extension adds attributes to Neutron networks that define the L2 network settings required for device connectivity. The F5 LBaaSv1 agent uses providernet attributes to provision L2
 connectivity on BIG-IP devices. If your Neutron network doesn't use the
 providernet extension, the agent will not be able to correctly provision
 L2 isolation and tenancy on your BIG-IP devices.
@@ -111,24 +85,24 @@ L2 isolation and tenancy on your BIG-IP devices.
 **To see if your Neutron networks support the providernet extension:**
 **IMPORTANT:** The \*starred\* attributes must be present for the agent to function properly.
 
-::
+    .. code-block:: shell
 
-    # neutron net-show [network_name]
-    +-----------------------------+--------------------------------------+
-    | Field                       | Value                                |
-    +-----------------------------+--------------------------------------+
-    | admin_state_up              | True                                 |
-    | id                          | 07f92400-4bb6-4ebc-9b5e-eb8ffcd5b34c |
-    | name                        | Provider-VLAN-62                     |
-    | *provider:network_type*     | vlan                                 |
-    | *provider:physical_network* | ph-eth3                              |
-    | *provider:segmentation_id*  | 62                                   |
-    | router:external             | False                                |
-    | shared                      | True                                 |
-    | status                      | ACTIVE                               |
-    | subnets                     | a89aa39e-3a8e-4f2f-9b57-45aa052b87bf |
-    | tenant_id                   | 3aef8f59a43943359932300f634513b3     |
-    +-----------------------------+--------------------------------------+
+        # neutron net-show [network_name]
+        +-----------------------------+--------------------------------------+
+        | Field                       | Value                                |
+        +-----------------------------+--------------------------------------+
+        | admin_state_up              | True                                 |
+        | id                          | 07f92400-4bb6-4ebc-9b5e-eb8ffcd5b34c |
+        | name                        | Provider-VLAN-62                     |
+        | *provider:network_type*     | vlan                                 |
+        | *provider:physical_network* | ph-eth3                              |
+        | *provider:segmentation_id*  | 62                                   |
+        | router:external             | False                                |
+        | shared                      | True                                 |
+        | status                      | ACTIVE                               |
+        | subnets                     | a89aa39e-3a8e-4f2f-9b57-45aa052b87bf |
+        | tenant_id                   | 3aef8f59a43943359932300f634513b3     |
+        +-----------------------------+--------------------------------------+
 
 
 F5 OpenStack LBaaSv1 Plugin Components
@@ -140,7 +114,7 @@ The F5 OpenStack LBaaSv1 plugin is comprised of three packages:
 - f5-oslbaasv1-agent
 - f5-oslbaasv1-driver.
 
-All are open source and accessible on GitHub at `F5Networks/f5-openstack-lbaasv1<https://github.com/F5Networks/f5-openstack-lbaasv1>`__.
+All are open source and accessible on GitHub at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__.
 
 F5 BIG-IP Common
 ~~~~~~~~~~~~~~~~
@@ -152,12 +126,12 @@ LBaaSv1 Plugin Agent and Driver
 
 The LBaaSv1 plugin is comprised of an agent package and a service provider driver (hereafter referred to as 'driver') package. The driver should be installed on every host for which you want to provision BIG-IP services. The agent must be installed on at least one host; it can be installed on multiple hosts, as described in further detail below.
 
-Neutron LBaaSv1 Process Architecture
+General LBaaSv1 Process Architecture
 ------------------------------------
 
 When Neutron LBaaSv1 API calls are issued to your Neutron controller,
 the community LBaaSv1 plugin will attempt to use either a designated
-service provider driver or the default service provider driver to
+driver or the default service provider driver to
 provision LBaaSv1 resources.
 
 The F5 LBaaSv1 service provider drivers, running within the Neutron
@@ -168,9 +142,9 @@ each agent process registers its own specific named queue to receive
 tasks from one or multiple Neutron controllers.
 
 .. figure:: ./media/plugin_agent_architecture.png
-   :alt: Figure 3. Plugin Agent Architecture
+   :alt: Plugin Agent Architecture
 
-   Figure 3. Plugin Agent Architecture
+Figure 2. Plugin Agent Architecture
 
 The F5 LBaaSv1 agents make callbacks to the F5 LBaaSv1 service provider
 drivers to query additional Neutron network, port, and subnet
@@ -202,17 +176,17 @@ API agent interfaces. Using the CLI client, use the ``neutron agent-list`` and `
 
 
 Deploying the F5 OpenStack LBaaSv1 Plugin
-=========================================
+-----------------------------------------
+
+Install LBaaSv1 Components
+``````````````````````````
 
 The most basic deployment consists of one F5 OpenStack LBaaSv1 driver and
 one LBaaSv1 agent installed on the same Neutron controller. This is the recommended configuration for testing / POCs. Scale out and redundant installations can be added at any time. Alterations to the default installed services to add redundancy and scale out are referenced later in this document.
 
-Installation
-~~~~~~~~~~~~
-
 The F5 OpenStack LBaaSv1 plugin is distributed as a Debian
 or Red Hat installation package. To install the plugin,
-download the release package from GitHub (`F5Networks/f5-openstack-lbaasv1<https://github.com/F5Networks/f5-openstack-lbaasv1/releases/tag/2.0.1final>`__) to your Neutron controller host(s), then install the components using the instructions appropriate for your OS.
+download the release package from GitHub (`F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1/>`__) to your Neutron controller host(s), then install the components using the instructions appropriate for your OS.
 
 Debian / Ubuntu:
 ----------------
@@ -221,19 +195,19 @@ Debian / Ubuntu:
 
    .. code-block:: shell::
 
-      # dpkg -i f5-bigip-common_2.0.1_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-common_3.0.1_all.deb
 
 2. Install the plugin driver.
 
    .. code-block:: shell::
 
-      # dpkg -i f5-lbaas-driver_2.0.1_all.deb
+      # dpkg -i build/deb_dist/f5-lbaas-driver_3.0.1_all.deb
 
 3. Install the plugin agent.
 
    .. code-block:: shell::
 
-      # dpkg -i f5-bigip-lbaas-agent_2.0.1_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_3.0.1_all.deb
 
 
 Red Hat / CentOS:
@@ -243,23 +217,23 @@ Red Hat / CentOS:
 
    .. code-block:: shell::
 
-      # rpm -ivh f5-bigip-common_1.0.12.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-common_3.0.1.noarch.el7.rpm
 
 2. Install the plugin driver.
 
    .. code-block:: shell::
 
-      # rpm -i f5-lbaas-driver-1.0.12.noarch.el7.rpm
+      # rpm -i build/el7/f5-lbaas-driver-3.0.1.noarch.el7.rpm
 
 3. Install the agent.
 
    .. code-block:: shell::
 
-      # rpm -i f5-bigip-lbaas-agent-1.0.12.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-lbaas-agent-3.0.1.noarch.el7.rpm
 
 
-Configuration
-~~~~~~~~~~~~~
+Configure the F5 LBaaSv1 Plugin
+```````````````````````````````
 
 Before you begin
 ----------------
@@ -267,14 +241,17 @@ Before you begin
 In order to use the Neutron command sets, you need source a user file
 that has admin permissions. (for example, ``source keystonerc_admin``).
 
-Configure the F5 LBaaSv1 Plugin
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Configure the F5 LBaaSv1 Agent
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. Configure the agent settings in */etc/neutron/f5-bigip-lbaas-agent.ini*. The file contains detailed explanations of each option.
+Configure the agent settings in */etc/neutron/f5-bigip-lbaas-agent.ini*. The file contains detailed explanations of each option.
 
     **NOTE:** At minimum, you will need to edit the ``Device Settings``, ``Device Driver``, and ``L3 Segmentation Mode Settings`` sections of this file. Additional options are explained later in this document. The installation process automatically starts an agent process; after you configure the ``/etc/neutron/f5-oslbaasv1-agent.init`` file, restart the agent process as shown in step 5.
 
-2. Configure the Neutron service to use the F5 LBaaSv1 plugin.
+Configure the Neutron Service
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Neutron LBaaS service settings are found in */etc/neutron/neutron_lbaas.conf*.
 
     **NOTE:** In the service providers section, the f5.os.lbaasv1driver entry will be present, but commented out. *Uncomment this line to identify the F5 plugin as the LBaaSv1 service provider.*  Add ':default' to the end of the line as shown below to set it as the default LBaaS service provider.
 
@@ -637,6 +614,59 @@ should be created to handle connection loads.
 BIG-IP devices is assumed globally routed, there is no network segregation
 between tenant services on the BIG-IP devices themselves. Overlapping IP
 address spaces for tenant objects is likewise not available.
+
+Global Routed Mode
+~~~~~~~~~~~~~~~~~~
+
+In global routed mode, the agent does not attempt to manage any L2
+networking on BIG-IP devices. All traffic to and from the BIG-IP devices
+therefore needs to be routed by external networking devices. All required L2
+networks and associated L3 addressing and routes to cloud resources must
+be provisioned on the BIG-IP devices **before** LBaaSv1 objects are
+created. All VIPs created by the agents listen for traffic globally on
+all provisioned L2 networks.
+
+Global routed mode provides a simplified mode of operation for BIG-IP devices deployed only as edge-routed devices  -- meaning they are directly connected to provider networks only.
+
+.. figure:: ./media/global_routed_mode_topology.png
+   :alt: Figure 1. Global Routed Mode Topology
+
+   Figure 1. Global Routed Mode Topology
+
+Because all routing is pre-provisioned on networking devices, global
+routed mode's requirements for networking orchestration in Neutron are
+minimal. Global routed mode should typically function on any Neutron
+network with functional IP packet forwarding to the BIG-IP devices.
+
+L2 Adjacent Mode
+~~~~~~~~~~~~~~~~
+
+**L2 adjacent mode is the default mode.** In L2 adjacent mode, the F5 OpenStack
+LBaaSv1 agent attempts to provision L2 networks -- including VLANs and
+overlay tunnels -- by associating a specific BIG-IP device with each
+tenant network that has a VIP or pool member. VIP listeners are restricted to
+their designated Neutron tenant network. L3 addresses associated with
+pool members are automatically allocated from Neutron subnets.
+
+L2 adjacent mode follows the `micro-segmentation<https://devcentral.f5.com/articles/microservices-versus-microsegmentation>`__ security model for gateways. Since each BIG-IP device is L2-adjacent to all tenant networks for which LBaaSv1 objects are provisioned, the traffic flows do not
+logically pass through another L3 forwarding device. Instead, traffic flows are
+restricted to direct L2 communication between the cloud network element
+and the BIG-IP devices.
+
+.. figure:: ./media/l2_adjacent_mode_topology.png
+   :alt: Figure 2. L2 Adjacent Mode Topology
+
+   Figure 2. L2 Adjacent Mode Topology
+
+Because the agents manage the BIG-IP device associations for many tenant
+networks, L2 adjacent mode is a much more complex orchestration. It
+dynamically allocates L3 addresses from Neutron tenant subnets for BIG-IP
+SelfIPs and SNAT translation addresses. These additional L3 addresses
+are allocated from the Neutron subnets associated with LBaaSv1 VIPs or
+Members.
+
+
+
 
 One-Arm Mode
 ~~~~~~~~~~~~
