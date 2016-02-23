@@ -32,20 +32,46 @@ Package Contents
    -  el6 : Red Hat / CentOS 6 installation files
    -  el7 : Red Hat / CentOS 7 installation files
 
+Overview
+--------
+
+The F5 OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP load balancing services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
+
 Installation
 ------------
 
-Prerequisites:
-~~~~~~~~~~~~~~
+Prerequisites
+~~~~~~~~~~~~~
 
 -  OpenStack |openstack| Neutron network deployment
 -  Licensed BIG-IP (hardware or virtual edition)
+
+Debian / Ubuntu
+~~~~~~~~~~~~~~~
+
+1. Install the F5 BIG-IP common libraries.
+
+   .. code-block:: shell
+
+      # dpkg -i build/deb_dist/f5-bigip-common_2.0.1_all.deb
+
+2. Install the plugin driver.
+
+   .. code-block:: shell
+
+      # dpkg -i build/deb_dist/f5-lbaas-driver_2.0.1_all.deb
+
+3. Install the plugin agent.
+
+   .. code-block:: shell
+
+      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_2.0.1_all.deb
 
 Red Hat / CentOS
 ~~~~~~~~~~~~~~~~
 
 1. Install the F5 BIG-IP common libraries.
-   
+
    .. code-block:: shell
 
       # rpm -i build/el7/f5-bigip-common_2.0.1.noarch.el7.rpm
@@ -62,26 +88,6 @@ Red Hat / CentOS
 
       # rpm -i build/el7/f5-bigip-lbaas-agent-2.0.1.noarch.el7.rpm
 
-Ubuntu
-~~~~~~
-
-1. Install the F5 BIG-IP common libraries.
-  
-   .. code-block:: shell
-
-      # dpkg -i build/deb_dist/f5-bigip-common_2.0.1_all.deb
-
-2. Install the plugin driver.
-  
-   .. code-block:: shell
-
-      # dpkg -i build/deb_dist/f5-lbaas-driver_2.0.1_all.deb
-
-3. Install the plugin agent.
-   
-   .. code-block:: shell
-
-      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_2.0.1_all.deb
 
 Upgrading
 ---------
@@ -89,7 +95,7 @@ Upgrading
 If you are upgrading from an earlier version, F5 recommends that the
 current version be uninstalled prior to installing the new version.
 
-**NOTE:** Perform the following steps on every server running the F5 agent.
+**NOTE**: Perform the following steps on every server running the F5 agent.
 
 1. Make a copy of the F5 agent configuration file.
    An existing configuration file in /etc/neutron will be overwritten during
@@ -97,35 +103,36 @@ current version be uninstalled prior to installing the new version.
 
    .. code-block:: shell
 
-      # cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
+        # cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
 
 2. Stop and remove the old version of the libraries, plugin driver and agent.
+
+Debian / Ubuntu
+~~~~~~~~~~~~~~~
+
+   .. code-block:: shell
+
+        # service f5-oslbaasv1-agent stop
+        # dpkg -r f5-bigip-common f5-lbaas-driver f5-bigip-lbaas-agent
+
+3. Follow the installation instructions in the `previous section <#installation>`_.
+
+4. Restore the F5 agent configuration file.
+   Compare the backup file with the new one created during installation
+   to make sure only the necessary settings for your deployment are modified.
+
+   .. code-block:: shell
+
+        # sudo cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
 
 Red Hat / CentOS
 ~~~~~~~~~~~~~~~~
 
    .. code-block:: shell
 
-      # service f5-oslbaasv1-agent stop
-      # yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
+        # service f5-oslbaasv1-agent stop
+        # yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
 
-Ubuntu
-~~~~~~
-
-   .. code-block:: shell
-
-      # service f5-oslbaasv1-agent stop
-      # dpkg -r f5-bigip-common f5-lbaas-driver f5-bigip-lbaas-agent
-
-3. Follow the installation instructions in the previous section.
-
-4. Restore the F5 agent configuration file.
-   Compare the backup file with the new one created during installation
-   to make sure only the necessary settings are modified for your deployment.
-
-   .. code-block:: shell
-
-      # sudo cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
 
 Contact
 -------
