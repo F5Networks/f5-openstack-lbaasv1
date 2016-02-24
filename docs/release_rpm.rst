@@ -6,7 +6,6 @@ Version
 
 F5 OpenStack LBaaSv1 plugin v |release| for OpenStack |openstack|.
 
-
 Before you begin
 ----------------
 
@@ -40,7 +39,7 @@ Configure the F5 LBaaSv1 Plugin
       # systemctl restart neutron-server
 
 #. Restart the http service.
-  
+
    .. code-block:: shell
 
       # service httpd restart
