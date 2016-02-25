@@ -4,7 +4,7 @@ Release Information
 Release Version
 ---------------
 
-**1.0.12**
+|version|
 
 Compatibility
 -------------
@@ -12,7 +12,7 @@ Compatibility
 +-------------------------------------+--------------------------+
 | Product                             | Version(s)               |
 +=====================================+==========================+
-| OpenStack LBaaSv1                   | Icehouse - Kilo          |
+| OpenStack LBaaSv1                   | |openstack|              |
 +-------------------------------------+--------------------------+
 | BIG-IP                              | 11.5.x, 11.6.x, 12.0.x   |
 +-------------------------------------+--------------------------+
@@ -27,7 +27,6 @@ Package Contents
 -  Release Readme (this document)
 -  Support.md
 -  build
-
    -  deb_dist : Ubuntu installation files
    -  el6 : Red Hat / CentOS 6 installation files
    -  el7 : Red Hat / CentOS 7 installation files
@@ -43,7 +42,7 @@ Installation
 Prerequisites
 ~~~~~~~~~~~~~
 
--  OpenStack Neutron network deployment
+-  OpenStack |openstack| Neutron network deployment
 -  Licensed BIG-IP (hardware or virtual edition)
 
 Debian / Ubuntu
