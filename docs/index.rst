@@ -9,13 +9,13 @@ F5 OpenStack LBaaSv1
 Introduction
 ------------
 
-This site hosts the documentation for the F5 OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5 BIG-IP devices in OpenStack. You can access the code and download release packages at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__ . See `F5 OpenStack Releases and Support Matrix <http://f5networks.github.io/f5-openstack-docs/releases_and_versioning/>`_ for information about LBaaSv1 plugin, BIG-IP, and OpenStack release compatibility.
+This site hosts the documentation for the F5 OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5 BIG-IP devices in OpenStack. You can access the code and download release packages at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__ . See `F5 OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about LBaaSv1 plugin, BIG-IP, and OpenStack release compatibility.
 
 Releases and Versions
 ---------------------
 The F5 OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| releases. For more information
 about F5 Networks's OpenStack versioning and a support matrix please see
-`F5 Networks OpenStack Releases and Support Matrix <http://f5networks.github.io/f5-openstack-docs/releases_and_versioning/>`__.
+`F5 Networks OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`__.
 
 .. toctree::
    :hidden:
@@ -44,7 +44,7 @@ License
 -------
 
 Apache V2.0
-~~~~~~~~~~~~
+~~~~~~~~~~~
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
