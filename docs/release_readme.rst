@@ -4,7 +4,7 @@ Release Information
 Release Version
 ---------------
 
-|release|
+|version|
 
 Compatibility
 -------------
@@ -27,7 +27,6 @@ Package Contents
 -  Release Readme (this document)
 -  Support.md
 -  build
-
    -  deb_dist : Ubuntu installation files
    -  el6 : Red Hat / CentOS 6 installation files
    -  el7 : Red Hat / CentOS 7 installation files
