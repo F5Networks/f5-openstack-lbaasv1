@@ -20,13 +20,19 @@ Releases and Versions
 ---------------------
 The F5® OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| releases. See `F5® OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about the LBaaSv1 plugin, BIG-IP®, and OpenStack release compatibility.
 
-.. toctree::
-   :hidden:
+Site Contents
+-------------
 
-   release_readme.rst
-   release_deb.rst
-   release_rpm.rst
-   f5-oslbaasv1-readme.rst
+.. toctree::
+    :includehidden:
+
+    Release Notes <release_readme.rst>
+    release_deb
+    release_rpm
+    User Guide <f5-oslbaasv1-readme.rst>
+
+
+
 
 
 Copyright
@@ -56,6 +62,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
 
 .. |Build status| image:: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1.svg?branch=1.0
     :target: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1

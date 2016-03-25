@@ -9,8 +9,9 @@ F5® OpenStack LBaaSv1 plugin v |release| for OpenStack |openstack|.
 Before you begin
 ----------------
 
-In order to use the Neutron command set, you need source a user file
-that has admin permissions. (for example, ``source keystonerc_admin``).
+.. include:: release_readme.rst
+    :start-line: 32
+    :end-line: 46
 
 Configure the F5® LBaaSv1 Plugin
 --------------------------------
@@ -25,7 +26,7 @@ Configure the F5® LBaaSv1 Plugin
    service provider.*  Add ':default' to the end of the line as shown
    below to set it as the default LBaaS service.
 
-   .. code-block:: shell
+   .. code-block:: text
 
         # vi /etc/neutron/neutron_lbaas.conf
         [DEFAULT]
@@ -36,33 +37,32 @@ Configure the F5® LBaaSv1 Plugin
 
 3. Restart the neutron service:
    
-   .. code-block:: shell
+   .. code-block:: text
 
         # service neutron-server restart
 
-4. Enable LBaaS on the Controller Node (**NOTE:** This step is not
-   necessary from Kilo forward.)
+4. Enable LBaaS on the Controller Node (**NOTE:** This step is not necessary from Kilo forward.)
    
-   .. code-block:: shell
+   .. code-block:: text
 
-        # vi 'local_settings'
+        # vi local_settings.py
         OPENSTACK_NEUTRON_NETWORK = { 'enable_lb': True, ...}"
 
 5. Restart the http service:
    
-   .. code-block:: shell
+   .. code-block:: text
 
         # service apache2 restart
 
 6. Start the agent:
    
-   .. code-block:: shell
+   .. code-block:: text
 
         # service f5-oslbaasv1-agent start
 
 To check the status of the agent:
    
-   .. code-block:: shell
+   .. code-block:: text
 
         # neutron agent-list
         # neutron agent-show <agent_id>
