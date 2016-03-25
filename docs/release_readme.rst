@@ -14,7 +14,7 @@ Compatibility
 +=====================================+==========================+
 | OpenStack LBaaSv1                   | |openstack|              |
 +-------------------------------------+--------------------------+
-| BIG-IP                              | 11.5.x, 11.6.x, 12.0.x   |
+| BIG-IP®                             | 11.5.x, 11.6.x, 12.0.x   |
 +-------------------------------------+--------------------------+
 | Red Hat Enterprise Linux / CentOS   | 6, 7                     |
 +-------------------------------------+--------------------------+
@@ -34,7 +34,7 @@ Package Contents
 Overview
 --------
 
-The F5 OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP load balancing services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
+The F5® OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP® load balancing services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
 
 Installation
 ------------
@@ -43,12 +43,12 @@ Prerequisites
 ~~~~~~~~~~~~~
 
 -  OpenStack |openstack| Neutron network deployment
--  Licensed BIG-IP (hardware or virtual edition)
+-  Licensed BIG-IP® (hardware or virtual edition)
 
 Debian / Ubuntu
 ~~~~~~~~~~~~~~~
 
-1. Install the F5 BIG-IP common libraries.
+1. Install the F5® BIG-IP® common libraries.
 
    .. code-block:: shell
 
@@ -69,7 +69,7 @@ Debian / Ubuntu
 Red Hat / CentOS
 ~~~~~~~~~~~~~~~~
 
-1. Install the F5 BIG-IP common libraries.
+1. Install the F5® BIG-IP® common libraries.
    
    .. code-block:: shell
 
@@ -91,12 +91,12 @@ Red Hat / CentOS
 Upgrading
 ---------
 
-If you are upgrading from an earlier version, F5 recommends that the
+If you are upgrading from an earlier version, F5® recommends that the
 current version be uninstalled prior to installing the new version.
 
-**NOTE**: Perform the following steps on every server running the F5 agent.
+**NOTE**: Perform the following steps on every server running the F5® agent.
 
-1. Make a copy of the F5 agent configuration file.
+1. Make a copy of the F5® agent configuration file.
    An existing configuration file in /etc/neutron will be overwritten during
    installation.
 
@@ -116,7 +116,7 @@ Debian / Ubuntu
 
 3. Follow the installation instructions in the `previous section <#installation>`_.
 
-4. Restore the F5 agent configuration file.
+4. Restore the F5® agent configuration file.
    Compare the backup file with the new one created during installation
    to make sure only the necessary settings for your deployment are modified.
 
@@ -141,7 +141,7 @@ f5_openstack_lbaasv1@f5.com
 Copyright
 ---------
 
-Copyright 2016 F5 Networks Inc.
+Copyright 2016 F5® Networks Inc.
 
 Support
 -------

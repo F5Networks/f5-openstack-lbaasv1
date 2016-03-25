@@ -1,19 +1,19 @@
-.. F5 OpenStack LBaaSv1 documentation master file, created by
+.. F5® OpenStack LBaaSv1 documentation master file, created by
    sphinx-quickstart on Mon Feb  8 14:03:09 2016.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-F5 OpenStack LBaaSv1 
-====================
+F5® OpenStack LBaaSv1
+=====================
 
 Introduction
 ------------
 
-This site hosts the documentation for the F5 OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5 BIG-IP devices in OpenStack. You can access the code and download release packages at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__ .
+This site hosts the documentation for the F5® OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5® BIG-IP® devices in OpenStack. You can access the code and download release packages at `F5®Networks/f5-openstack-lbaasv1 <https://github.com/F5®Networks/f5-openstack-lbaasv1>`__ .
 
 Releases and Versions
 ---------------------
-The F5 OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| releases. See `F5 OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about LBaaSv1 plugin, BIG-IP, and OpenStack release compatibility.
+The F5® OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| releases. See `F5® OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about LBaaSv1 plugin, BIG-IP®, and OpenStack release compatibility.
 
 .. toctree::
    :hidden:
@@ -36,7 +36,7 @@ Copyright 2013-2016 F5 Networks Inc.
 Support
 -------
 
-See `Support.md <https://github.com/F5Networks/f5-openstack-lbaasv1/blob/master/SUPPORT.md>`_.
+See `Support.md <https://github.com/F5®Networks/f5-openstack-lbaasv1/blob/master/SUPPORT.md>`_.
 
 License
 -------
