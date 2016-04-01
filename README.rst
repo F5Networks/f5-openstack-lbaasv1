@@ -1,8 +1,7 @@
 f5-openstack-lbaasv1
 ====================
 
-    .. image:: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1.svg?branch=1.0
-        :target: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1
+|Build status| |docs build status| |slack badge|
 
 Introduction
 ------------
@@ -183,3 +182,15 @@ Contributor License Agreement
 `````````````````````````````
 
 Individuals or business entities who contribute to this project must have completed and submitted the `F5 Contributor License Agreement <http://f5-openstack-docs.readthedocs.org/en/latest/cla_landing.html>`_ to Openstack_CLA@f5.com prior to their code submission being included in this project.
+
+.. |Build status| image:: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1.svg?branch=1.0
+    :target: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1
+    :alt: Build Status
+
+.. |docs build status| image:: http://readthedocs.org/projects/f5-openstack-lbaasv1/badge/?version=1.0
+    :target: http://f5-openstack-lbaasv1.readthedocs.org/en/1.0/?badge=1.0
+    :alt: Documentation Status
+
+.. |slack badge| image:: https://f5-openstack-slack.herokuapp.com/badge.svg
+    :target: https://f5-openstack-slack.herokuapp.com/
+    :alt: Slack
