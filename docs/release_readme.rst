@@ -133,15 +133,10 @@ Red Hat / CentOS
         # yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
 
 
-Contact
--------
-
-f5_openstack_lbaasv1@f5.com
-
 Copyright
 ---------
 
-Copyright 2016 F5® Networks Inc.
+Copyright 2016 F5 Networks, Inc.
 
 Support
 -------

@@ -144,15 +144,10 @@ step 1 in the Unit Test section).
         $ flake8 ./
 
 
-Contact
--------
-
-f5_openstack_lbaasv1@f5.com
-
 Copyright
 ---------
 
-Copyright 2013-2016 F5 Networks Inc.
+Copyright 2013-2016 F5 Networks, Inc.
 
 Support
 -------
