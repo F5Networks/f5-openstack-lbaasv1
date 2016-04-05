@@ -1,19 +1,24 @@
-.. F5 OpenStack LBaaSv1 documentation master file, created by
+.. F5® OpenStack LBaaSv1 documentation master file, created by
    sphinx-quickstart on Mon Feb  8 14:03:09 2016.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-F5 OpenStack LBaaSv1 
-====================
+F5® OpenStack LBaaSv1
+=====================
+|Build status|
+
+.. raw:: html
+
+    <script async defer src="https://f5-openstack-slack.herokuapp.com/slackin.js"></script>
 
 Introduction
 ------------
 
-This site hosts the documentation for the F5 OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to control F5 BIG-IP devices in OpenStack. You can access the code and download release packages at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`__ .
+This site hosts the documentation for the F5® OpenStack OpenStack Neutron LBaaSv1 plugin and agent, used to deploy F5® BIG-IP® services in OpenStack. You can access the source code and download release packages at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`_.
 
 Releases and Versions
 ---------------------
-The F5 OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| releases. See `F5 OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about LBaaSv1 plugin, BIG-IP, and OpenStack release compatibility.
+The F5® OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| releases. See `F5® OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about the LBaaSv1 plugin, BIG-IP®, and OpenStack release compatibility.
 
 .. toctree::
    :hidden:
@@ -23,10 +28,6 @@ The F5 OpenStack LBaaSv1 v |version| plugin supports the OpenStack |openstack| r
    release_rpm.rst
    f5-oslbaasv1-readme.rst
 
-Contact
--------
-
-f5_openstack_lbaasv1@f5.com
 
 Copyright
 ---------
@@ -56,3 +57,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+.. |Build status| image:: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1.svg?branch=1.0
+    :target: https://travis-ci.org/F5Networks/f5-openstack-lbaasv1
+.. |docs build status| image:: http://readthedocs.org/projects/f5-openstack-lbaasv1/badge/?version=1.0
+    :target: http://f5-openstack-lbaasv1.readthedocs.org/en/1.0/?badge=1.0
+    :alt: Documentation Status
