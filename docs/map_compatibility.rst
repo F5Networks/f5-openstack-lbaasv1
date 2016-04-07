@@ -1,5 +1,7 @@
 Compatibility
 -------------
 
-.. include:: includes/ref_compatibility.rst
-    :start-line: 3
+.. include:: ../release_readme.rst
+    :start-line: 13
+    :end-line: 26
+

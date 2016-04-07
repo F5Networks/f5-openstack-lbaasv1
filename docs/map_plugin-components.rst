@@ -1,3 +1,5 @@
+.. _plugin-components:
+
 Plugin Components
 -----------------
 

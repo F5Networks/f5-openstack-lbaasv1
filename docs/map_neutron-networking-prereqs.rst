@@ -1,3 +1,5 @@
+.. _neutron-networking-prereqs:
+
 Neutron Networking Prerequisites
 --------------------------------
 

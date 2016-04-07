@@ -131,14 +131,13 @@ step 1 in the Unit Test section).
 
         $ flake8 ./
 
+Support
+-------
+See `Support <SUPPORT.md>`_.
 
 Copyright
 ---------
 Copyright 2013-2016 F5 Networks, Inc.
-
-Support
--------
-See `Support <SUPPORT.md>`__
 
 License
 -------

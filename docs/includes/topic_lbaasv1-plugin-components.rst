@@ -7,4 +7,4 @@ The F5® OpenStack LBaaSv1 plugin comprises three packages:
 - :mod:`f5-oslbaasv1-agent`
 - :mod:`f5-oslbaasv1-driver`
 
-All are open source and accessible on GitHub at `F5®Networks/f5-openstack-lbaasv1 <https://github.com/F5®Networks/f5-openstack-lbaasv1>`__.
+All are open source and accessible on GitHub at `F5Networks/f5-openstack-lbaasv1 <https://github.com/F5Networks/f5-openstack-lbaasv1>`_.

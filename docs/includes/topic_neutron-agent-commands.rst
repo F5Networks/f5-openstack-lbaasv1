@@ -1,9 +1,11 @@
+.. _neutron-agent-commands:
+
 Neutron Agent Commands
 ~~~~~~~~~~~~~~~~~~~~~~
 
 You can use Neutron ``agent`` commands to manage agent processes via the CLI.
 
-.. include:: ../release_readme.rst
+.. include:: ../../release_readme.rst
     :start-line: 37
     :end-line: 46
 

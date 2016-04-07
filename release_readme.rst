@@ -1,22 +1,35 @@
 Release Information
 ===================
 
+**TIP: Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.org/en/latest/.**
+
 Release Version
 ---------------
 
-|release|
+1.0.12-final
 
 Compatibility
 -------------
 
-.. include:: includes/ref_compatibility.rst
-    :start-line: 3
++-------------------------------------+--------------------------+
+| Product                             | Version(s)               |
++=====================================+==========================+
+| OpenStack LBaaSv1                   | Icehouse - Kilo          |
++-------------------------------------+--------------------------+
+| BIG-IP®                             | 11.5.x, 11.6.x, 12.0.x   |
++-------------------------------------+--------------------------+
+| Red Hat Enterprise Linux / CentOS   | 6, 7                     |
++-------------------------------------+--------------------------+
+| Ubuntu                              | 12.04, 14.04             |
++-------------------------------------+--------------------------+
+
 
 Package Contents
 ----------------
 -  Release Readme (this document)
--  Support.md
+-  SUPPORT.md
 -  build
+
    -  deb_dist : Ubuntu installation files
    -  el6 : Red Hat / CentOS 6 installation files
    -  el7 : Red Hat / CentOS 7 installation files
@@ -24,8 +37,7 @@ Package Contents
 Overview
 --------
 
-.. include:: includes/concept_overview-brief.rst
-    :start-line: 3
+The F5® OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP® load balancing services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
 
 Before You Begin
 ----------------
@@ -33,7 +45,7 @@ Before You Begin
 You will need the following to use the F5® OpenStack LBaaSv1 plugin.
 
 -  Licensed BIG-IP® (hardware or virtual edition)
--  OpenStack |openstack| Neutron network deployment
+-  OpenStack Icehouse - Kilo Neutron network deployment
 
 .. note::
 
@@ -43,6 +55,7 @@ You will need the following to use the F5® OpenStack LBaaSv1 plugin.
     .. code-block:: text
 
         $ source keystonerc_admin
+
 
 Installation
 ------------
@@ -68,6 +81,7 @@ Debian / Ubuntu
 
       # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_1.0.12-final_all.deb
 
+
 Red Hat / CentOS
 ````````````````
 
@@ -89,6 +103,7 @@ Red Hat / CentOS
 
       # rpm -i build/el7/f5-bigip-lbaas-agent-1.0.12-final.noarch.el7.rpm
 
+
 Upgrading
 ---------
 
@@ -101,22 +116,22 @@ If you are upgrading from an earlier version, F5® recommends that you uninstall
 
 1. Make a copy of the F5® agent configuration file. An existing configuration file in */etc/neutron* will be overwritten during installation.
 
-.. code-block:: text
+    .. code-block:: text
 
-    # cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
+        # cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
 
 2. Stop and remove the old version of the libraries, plugin driver and agent.
 
-.. topic:: Debian / Ubuntu
+    **Debian/Ubuntu**
 
     .. code-block:: text
 
         # service f5-oslbaasv1-agent stop
         # dpkg -r f5-bigip-common f5-lbaas-driver f5-bigip-lbaas-agent
 
-.. topic::  Red Hat / CentOS
+    **Red Hat/CentOS**
 
-   .. code-block:: text
+    .. code-block:: text
 
         # service f5-oslbaasv1-agent stop
         # yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
@@ -127,11 +142,35 @@ If you are upgrading from an earlier version, F5® recommends that you uninstall
 
    Compare the backup file with the new one created during installation to make sure only the necessary settings for your deployment are modified. Then, copy your configuration file back into */etc/neutron/*.
 
-.. code-block:: text
+    .. code-block:: text
 
-    # sudo cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
+        # sudo cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
 
 
-.. include:: ../README.rst
-    :start-line: 134
-    :end-line: 165
+Copyright
+---------
+Copyright 2013-2016 F5 Networks, Inc.
+
+Support
+-------
+See SUPPORT.md.
+
+License
+-------
+
+Apache V2.0
+```````````
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+ou may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+

@@ -1,5 +1,7 @@
-OpenStack and BIG-IP® Multinenancy
-----------------------------------
+.. _os-bigip-multitenancy:
+
+OpenStack and BIG-IP® Multi-tenancy
+-----------------------------------
 .. figure:: media/tenancy_mapping.png
     :alt: BIG-IP® Multi-tenancy
 

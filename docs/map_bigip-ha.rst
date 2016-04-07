@@ -1,3 +1,5 @@
+.. _bigip-ha-modes:
+
 BIG-IP® High Availability Modes
 -------------------------------
 

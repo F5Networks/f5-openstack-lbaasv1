@@ -7,8 +7,7 @@ callbacks and status update requests from F5® LBaaSv1 agents.
 
 .. tip::
 
-    To run multiple queues, see the
-    `differentiated services <#differentiated-services-and-scale-out>`_ section.
+    To run multiple queues, see the :ref:`differentiated services <differentiated-services-scaleout>` section.
 
 In an environment with multiple Neutron controllers, the F5® drivers all listen to the same
 named message queue, providing controller redundancy and scale out. The drivers handle requests from the global queue in a round-robin fashion. All Neutron controllers must use the same Neutron database to avoid state problems with concurrently-running controller instances.
