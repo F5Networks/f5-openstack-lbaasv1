@@ -1,3 +1,5 @@
+.. _custom-environments:
+
 Custom Environments
 ```````````````````
 

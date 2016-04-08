@@ -10,4 +10,4 @@ Overview
     :width: 500
     :alt: Sample OpenStack Environment with F5® LBaaSv1 Plugin
 
-    Figure 1. Sample OpenStack Environment with F5® LBaaSv1 Plugin
+    Figure. Sample OpenStack Environment with F5® LBaaSv1 Plugin

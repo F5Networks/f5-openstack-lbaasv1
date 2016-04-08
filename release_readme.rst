@@ -1,7 +1,7 @@
 Release Information
 ===================
 
-**TIP: Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.org/en/latest/.**
+**TIP:** Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.io.
 
 Release Version
 ---------------

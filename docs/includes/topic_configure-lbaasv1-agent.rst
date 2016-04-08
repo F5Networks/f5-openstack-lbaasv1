@@ -1,5 +1,7 @@
-Configuring the F5® LBaaSv1 Agent
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _configure-lbaasv1-agent:
+
+Configure the F5® LBaaSv1 Agent
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The agent settings are found in :file:`/etc/neutron/f5-oslbaasv1-agent.ini`. See the :ref:`Sample Agent Config file <agent-config-file>` for detailed explanations of all available settings.
 

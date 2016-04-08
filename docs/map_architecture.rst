@@ -6,10 +6,10 @@ Architecture
 .. _f5-lbaasv1-plugin-architecture-overview:
 .. include:: includes/concept_f5-lbaasv1-plugin-architecture-overview.rst
 
-.. figure:: media/plugin_agent_architecture.png
-    :alt: Plugin Agent Architecture
+.. figure:: media/f5-lbaas-architecture.png
+    :alt: F5 LBaaSv1 Plugin Architecture
 
-    Figure 2. F5® LBaaSv1 Plugin Agent Architecture
+    Figure. F5® LBaaSv1 Plugin Architecture
 
 .. _driver-agent-placement:
 .. include:: includes/topic_driver-agent-placement.rst

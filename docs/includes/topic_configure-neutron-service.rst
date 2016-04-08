@@ -1,5 +1,7 @@
-Configuring the Neutron Service
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _configure-neutron-service:
+
+Configure the Neutron Service
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Neutron service settings are found in :file:`/etc/neutron/neutron_lbaas.conf`. Edit the ``Default`` and ``Service Providers`` sections as shown below to tell Neutron to use the F5® LBaaSv1 service provider driver.
 
