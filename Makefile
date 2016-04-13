@@ -27,9 +27,7 @@ docker_all: docker_debs docker_el7_rpms docker_el6_rpms
 
 package: docker_all
 	sudo chmod 777 build
-	cp docs/release_readme.rst RELEASE_README.rst
-	tar czvf build/f5-lbaasv1_$(VERSION)$(RELEASE).tgz RELEASE_README.rst SUPPORT.md build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
-	rm RELEASE_README.rst
+	tar czvf build/f5-lbaasv1_$(VERSION)$(RELEASE).tgz release_readme.rst SUPPORT.md build/deb_dist/*.deb build/el7/*.noarch.el7.rpm build/el6/*.noarch.el6.rpm
 
 docker_debs:
 	(docker build -t deb-pkg-builder ./Docker/debian)
@@ -144,10 +142,6 @@ build/f5-oslbaasv1-agent-$(VERSION).noarch.rpm:
 	)
 	mkdir -p build
 	cp agent/dist/f5-oslbaasv1-agent-$(VERSION)-$(RELEASE).noarch.rpm build
-
-pdf:
-	html2pdf $(PROJECT_DIR)/docs/f5-oslbaasv1-readme.html \
-             $(PROJECT_DIR)/docs/f5-oslbaasv1-readme.pdf
 
 clean: clean-debs clean-rpms clean-source
 
