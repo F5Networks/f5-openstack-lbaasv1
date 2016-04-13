@@ -55,6 +55,7 @@ data_files = [('/usr/bin',
                [project_dir + '/agent/etc/neutron/f5-oslbaasv1-agent.ini']),
               ('/usr/share/doc/f5-oslbaasv1-agent',
                [project_dir + '/release_readme.rst',
+                project_dir + release_readme,
                 project_dir + '/SUPPORT.md'])]
 
 if 'ADD_INIT_STARTUP_SCRIPT' in os.environ:
