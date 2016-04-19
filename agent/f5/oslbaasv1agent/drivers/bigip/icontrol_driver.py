@@ -260,6 +260,7 @@ class iControlDriver(LBaaSBaseDriver):
         self.device_type = conf.f5_device_type
         self.plugin_rpc = None
         self.__last_connect_attempt = None
+        self.driver_name = 'f5-lbaas-icontrol'
 
         # BIG-IP containers
         self.__bigips = {}
@@ -295,6 +296,8 @@ class iControlDriver(LBaaSBaseDriver):
             LOG.debug(_('Setting static ARP population to %s'
                         % self.conf.f5_populate_static_arp))
             f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
+
+        self.agent_configurations['device_drivers'] = [ self.driver_name ]
 
         self._init_bigip_hostnames()
 
