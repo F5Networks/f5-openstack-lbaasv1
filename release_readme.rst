@@ -1,31 +1,21 @@
 Release Information
 ===================
 
-**TIP: Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.org/en/latest/.**
+**TIP:** Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.io.
 
 Release Version
 ---------------
 
-8.0.2-final
+|release|
 
 Compatibility
 -------------
 
-+-------------------------------------+--------------------------+
-| Product                             | Version(s)               |
-+=====================================+==========================+
-| OpenStack LBaaSv1                   | Liberty                  |
-+-------------------------------------+--------------------------+
-| BIG-IP®                             | 11.5.x, 11.6.x, 12.0.x   |
-+-------------------------------------+--------------------------+
-| Red Hat Enterprise Linux / CentOS   | 6, 7                     |
-+-------------------------------------+--------------------------+
-| Ubuntu                              | 12.04, 14.04             |
-+-------------------------------------+--------------------------+
-
+See the :ref:`F5® OpenStack Releases and Support Matrix <docs:releases-and-support>`.
 
 Package Contents
 ----------------
+
 -  Release Readme (this document)
 -  SUPPORT.md
 -  build
@@ -45,7 +35,7 @@ Before You Begin
 You will need the following to use the F5® OpenStack LBaaSv1 plugin.
 
 -  Licensed BIG-IP® (hardware or virtual edition)
--  OpenStack Liberty Neutron network deployment
+-  OpenStack |openstack| Neutron network deployment
 
 .. note::
 
@@ -67,19 +57,19 @@ Debian / Ubuntu
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-bigip-common_8.0.2-final_all.deb
+      $ dpkg -i build/deb_dist/f5-bigip-common_8.0.2-final_all.deb
 
 2. Install the plugin driver.
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-lbaas-driver_8.0.2-final_all.deb
+      $ dpkg -i build/deb_dist/f5-lbaas-driver_8.0.2-final_all.deb
 
 3. Install the plugin agent.
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_8.0.2-final_all.deb
+      $ dpkg -i build/deb_dist/f5-bigip-lbaas-agent_8.0.2-final_all.deb
 
 
 Red Hat / CentOS
@@ -89,19 +79,19 @@ Red Hat / CentOS
    
    .. code-block:: text
 
-      # rpm -i build/el7/f5-bigip-common_8.0.2-final.noarch.el7.rpm
+      $ rpm -i build/el7/f5-bigip-common_8.0.2-final.noarch.el7.rpm
 
 2. Install the plugin driver.
   
    .. code-block:: text
 
-      # rpm -i build/el7/f5-lbaas-driver-8.0.2-final.noarch.el7.rpm
+      $ rpm -i build/el7/f5-lbaas-driver-8.0.2-final.noarch.el7.rpm
 
 3. Install the agent.
   
    .. code-block:: text
 
-      # rpm -i build/el7/f5-bigip-lbaas-agent-8.0.2-final.noarch.el7.rpm
+      $ rpm -i build/el7/f5-bigip-lbaas-agent-8.0.2-final.noarch.el7.rpm
 
 
 Upgrading
@@ -118,7 +108,7 @@ If you are upgrading from an earlier version, F5® recommends that you uninstall
 
     .. code-block:: text
 
-        # cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
+        $ cp /etc/neutron/f5-oslbaasv1-agent.ini ~/
 
 2. Stop and remove the old version of the libraries, plugin driver and agent.
 
@@ -126,17 +116,17 @@ If you are upgrading from an earlier version, F5® recommends that you uninstall
 
     .. code-block:: text
 
-        # service f5-oslbaasv1-agent stop
-        # dpkg -r f5-bigip-common f5-lbaas-driver f5-bigip-lbaas-agent
+        $ sudo service f5-oslbaasv1-agent stop
+        $ dpkg -r f5-bigip-common f5-lbaas-driver f5-bigip-lbaas-agent
 
     **Red Hat/CentOS**
 
     .. code-block:: text
 
-        # service f5-oslbaasv1-agent stop
-        # yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
+        $ sudo service f5-oslbaasv1-agent stop
+        $ yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
 
-3. Follow the installation instructions in the `previous section <#installation>`_.
+3. Follow the installation instructions in the `previous section <$installation>`_.
 
 4. Restore the F5® agent configuration file.
 
@@ -144,7 +134,7 @@ If you are upgrading from an earlier version, F5® recommends that you uninstall
 
     .. code-block:: text
 
-        # sudo cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
+        $ cp ~/f5-oslbaasv1-agent.ini /etc/neutron/f5-oslbaasv1-agent.ini
 
 
 Copyright
