@@ -1,37 +1,57 @@
 VLANs
 `````
 
-For VLAN connectivity, the F5® BIG-IP® devices use a mapping between the
-Neutron ``network provider:physical_network`` attribute and TMM
-interface names. This is analogous to the Open vSwitch agents mapping
-between the Neutron ``network provider:physical_network`` and the
-interface bridge name. The mapping is created in :file:`/etc/neutron/f5-oslbaasv1-agent.ini`, using the ``f5_external_physical_mappings`` setting. The name of the ``provider:physical_network`` entries can be added to a comma separated
-list with mappings to the TMM interface or LAG trunk name, and a boolean
-attribute to specify if 802.1q tagging will be applied.
+In order to establish connectivity between a BIG-IP® and VLAN, you need to map an interface on the BIG-IP® to an interface on the physical network. In the example below, the BIG-IP interface 1.1 is mapping to the eth0 interface on the hypervisor on which it's running; in turn, eth0 maps to the bridges that provide connectivity from the compute node to the VLAN. The external bridge (br-ex) should have a corresponding ``provider:physical_network`` attribute.
 
-.. topic:: Example 1
+    .. seealso::
 
-    This configuration maps the ``provider:physical_network`` containing 'ph-eth3' to TMM
-    interface 1.1 with 802.1q tagging.
+        F5 OpenStack Configuration Guide: Configure the Neutron Network > :ref:`Configure the Bridge <docs:os-config-ovs-bridge>`.
 
-    .. code-block:: text
+.. topic:: To create the mapping, edit :file:`/etc/neutron/f5-oslbaasv1-agent.ini`.
 
-        f5_external_physical_mappings = ph-eth3:1.1:True
+    .. tip::
 
-A default mapping should be included for cases where the ``provider:physical_network`` does not match any configuration settings. A default mapping simply uses the word 'default' instead of a known ``provider:physical_network`` attribute.
+        The ``f5_external_physical_mappings`` setting supports multiple, comma-separated entries. It's good practice to include a default mapping, for cases where the ``provider:physical_network`` does not match any configuration settings. A default mapping simply uses the word 'default' instead of a known ``provider:physical_network`` attribute.
+
+.. code-block:: text
+    :emphasize-lines: 31
+
+    ###############################################################################
+    #  L2 Segmentation Mode Settings
+    ###############################################################################
+    #
+    # Device VLAN to interface and tag mapping
+    #
+    # For pools or VIPs created on networks with type VLAN we will map
+    # the VLAN to a particular interface and state if the VLAN tagging
+    # should be enforced by the external device or not. This setting
+    # is a comma separated list of the following format:
+    #
+    #    physical_network:interface_name:tagged, physical_network:interface_name:tagged
+    #
+    # where :
+    #   physical_network corresponds to provider:physical_network attributes
+    #   interface_name is the name of an interface or LAG trunk
+    #   tagged is a boolean (True or False)
+    #
+    # If a network does not have a provider:physical_network attribute,
+    # or the provider:physical_network attribute does not match in the
+    # configured list, the 'default' physical_network setting will be
+    # applied. At a minimum you must have a 'default' physical_network
+    # setting.
+    #
+    # standalone example:
+    #   f5_external_physical_mappings = default:1.1:True
+    #
+    # pair or scalen example (1.1 and 1.2 are used for HA purposes):
+    #   f5_external_physical_mappings = default:1.3:True
+    #
+    f5_external_physical_mappings = default:1.1:True
+    #
 
 
-.. topic:: Example 2.
-
-    The configuration below includes the previously illustrated ``ph-eth3`` map, a default map, and LAG trunk mapping.
-
-    .. code-block:: text
-
-        f5_external_physical_mappings = default:1.1:True, ph-eth3:1.1:True, ph-eth4:lag-trunk-1:True
 
 
-.. warning::
 
-    The default Open vSwitch Neutron networking does not support VLAN tagging by guest instances. Each guest interface is treated as an access port and all VLAN tags will be stripped before frames reach the physical network infrastructure. To allow a BIG-IP® VE guest to function in L2 Adjacent mode using VLANs as your tenant network type, the software networking infrastructure which strips VLAN tags from frames must be bypassed.
 
-    You can bypass the software bridge using the ``ip``, ``brctl``, and ``ovs-vsctl`` commands on the compute node after the BIG-IP® VE guest instances have been created. This process is **not** automated by any Neutron agent. This requirement only applies to BIG-IP® VE when running as a Nova guest instance.
+
