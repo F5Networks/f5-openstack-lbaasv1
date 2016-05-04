@@ -9,7 +9,7 @@ Architecture
 .. figure:: media/f5-lbaas-architecture.png
     :alt: F5 LBaaSv1 Plugin Architecture
 
-    Figure. F5® LBaaSv1 Plugin Architecture
+    F5® LBaaSv1 Plugin Architecture
 
 .. _driver-agent-placement:
 .. include:: includes/topic_driver-agent-placement.rst

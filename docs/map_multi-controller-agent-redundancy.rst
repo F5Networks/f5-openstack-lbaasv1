@@ -9,5 +9,5 @@ Multiple Controllers and Agent Redundancy
 .. figure:: media/f5-lbaas-horizontal-scaleout.png
     :alt: Horizontal Scale-out with the F5 LBaaSv1 plugin
 
-    Figure. Horizontal Scale-out with the F5® LBaaSv1 plugin
+    Horizontal Scale-out with the F5® LBaaSv1 plugin
 

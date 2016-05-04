@@ -5,7 +5,7 @@ Differentiated Services and Scale Out
 .. figure:: media/f5-lbaas-differentiated-service-environments.png
     :alt: F5 LBaaSv1 Plugin in Differentiated Service Environments
 
-    Figure. F5® LBaaSv1 Plugin in Differentiated Service Environments
+    F5® LBaaSv1 Plugin in Differentiated Service Environments
 
 .. include:: includes/topic_differentiated-services-scaleout.rst
     :start-line: 5

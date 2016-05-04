@@ -14,7 +14,7 @@ Global routed mode
 .. figure:: media/f5-lbaas-global-routed-mode.png
     :alt: Global Routed Mode
 
-    Figure. Global Routed Mode
+    Global Routed Mode
 
 .. include:: includes/topic_global-routed-mode.rst
     :start-line: 3
@@ -27,7 +27,7 @@ L2 Adjacent Mode
 .. figure:: media/f5-lbaas-l2-3-adjacent-mode.png
     :alt: L2/L3 Adjacent Mode
 
-    Figure. L2 Adjacent Mode
+    L2 Adjacent Mode
 
 .. include:: includes/topic_l2-adjacent-mode.rst
     :start-line: 3
@@ -40,7 +40,7 @@ One-Arm Mode
 .. figure:: media/f5-lbaas-one-arm-mode.png
     :alt: One-arm Mode
 
-    Figure. One-arm Mode
+    One-arm Mode
 
 .. include:: includes/topic_one-arm-mode.rst
     :start-line: 3
@@ -53,7 +53,7 @@ Multiple-Arm mode
 .. figure:: media/f5-lbaas-multiple-arm-mode.png
     :alt: Multiple-arm Mode
 
-    Figure. Multiple-arm Mode
+    Multiple-arm Mode
 
 .. include:: includes/topic_multiple-arm-mode.rst
     :start-line: 3
@@ -66,7 +66,7 @@ Gateway Routed Mode
 .. figure:: media/routed_mode.png
     :alt: Gateway Routed Mode
 
-    Figure. Gateway Routed Mode
+    Gateway Routed Mode
 
 .. include:: includes/topic_gateway-routed-mode.rst
     :start-line: 3
