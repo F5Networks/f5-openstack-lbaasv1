@@ -23,8 +23,8 @@ You can download a `release package <https://github.com/F5Networks/f5-openstack-
 
     .. code-block:: text
 
-        # curl -L -O https://github.com/F5Networks/f5-openstack-lbaasv1/releases/download/1.0.12final/f5-lbaasv1_1.0.12final.tgz
-        # tar -xf f5-lbaasv1_1.0.12final.tgz
+        # curl -L -O https://github.com/F5Networks/f5-openstack-lbaasv1/releases/download/8.0.2rc1/f5-lbaasv1_8.0.2rc1.tgz
+        # tar -xf f5-lbaasv1_8.0.2rc1.tgz
 
 .. _installation:
 
