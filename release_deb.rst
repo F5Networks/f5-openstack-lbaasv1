@@ -4,7 +4,7 @@ Configuration - Ubuntu
 Version
 -------
 
-F5® OpenStack LBaaSv1 plugin **v8.0.2-rc1** for OpenStack **Liberty**.
+F5® OpenStack LBaaSv1 plugin **v8.0.2-final** for OpenStack **Liberty**.
 
 Configure the F5® LBaaSv1 Plugin
 --------------------------------
