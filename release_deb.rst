@@ -4,7 +4,7 @@ Configuration - Ubuntu
 Version
 -------
 
-F5® OpenStack LBaaSv1 plugin **v1.0.12-final** for OpenStack **Icehouse - Kilo**.
+F5® OpenStack LBaaSv1 plugin **v1.0.14-rc2** for OpenStack **Icehouse - Kilo**.
 
 Configure the F5® LBaaSv1 Plugin
 --------------------------------
