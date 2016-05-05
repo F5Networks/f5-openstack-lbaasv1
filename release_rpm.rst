@@ -4,7 +4,7 @@ Configuration - RHEL
 Version
 -------
 
-F5® OpenStack LBaaSv1 plugin v 1.0.12-final for OpenStack Icehouse - Kilo.
+F5® OpenStack LBaaSv1 plugin v 8.0.2-rc1 for OpenStack Liberty.
 
 Configure the F5® LBaaSv1 Plugin
 --------------------------------
