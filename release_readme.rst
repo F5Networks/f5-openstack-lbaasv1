@@ -6,7 +6,7 @@ Release Information
 Release Version
 ---------------
 
-8.0.2-rc1
+8.0.2-final
 
 Compatibility
 -------------
@@ -67,19 +67,19 @@ Debian / Ubuntu
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-bigip-common_8.0.2-rc1_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-common_8.0.2-final_all.deb
 
 2. Install the plugin driver.
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-lbaas-driver_8.0.2-rc1_all.deb
+      # dpkg -i build/deb_dist/f5-lbaas-driver_8.0.2-final_all.deb
 
 3. Install the plugin agent.
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_8.0.2-rc1_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_8.0.2-final_all.deb
 
 
 Red Hat / CentOS
@@ -89,19 +89,19 @@ Red Hat / CentOS
    
    .. code-block:: text
 
-      # rpm -i build/el7/f5-bigip-common_8.0.2-rc1.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-common_8.0.2-final.noarch.el7.rpm
 
 2. Install the plugin driver.
   
    .. code-block:: text
 
-      # rpm -i build/el7/f5-lbaas-driver-8.0.2-rc1.noarch.el7.rpm
+      # rpm -i build/el7/f5-lbaas-driver-8.0.2-final.noarch.el7.rpm
 
 3. Install the agent.
   
    .. code-block:: text
 
-      # rpm -i build/el7/f5-bigip-lbaas-agent-8.0.2-rc1.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-lbaas-agent-8.0.2-final.noarch.el7.rpm
 
 
 Upgrading
