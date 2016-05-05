@@ -1,3 +1,5 @@
+.. _home:
+
 F5® OpenStack LBaaSv1 Plugin
 ============================
 
