@@ -14,4 +14,4 @@ In gateway routed mode, the F5® agent attempts to create a default gateway forw
     +--------------------------------------+--------------------------------------+
 
 
-.. todo:: requires clarification, reference(s) to BIG-IP manuals; updated diagram.
+.. todo: requires clarification, reference(s) to BIG-IP manuals; updated diagram.

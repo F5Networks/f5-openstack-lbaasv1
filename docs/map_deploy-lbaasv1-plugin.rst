@@ -11,7 +11,7 @@ Before you begin
 ````````````````
 .. include:: ../release_readme.rst
     :start-line: 33
-    :end-line: 48
+    :end-line: 47
 
 .. _downloads:
 
@@ -36,7 +36,7 @@ Debian/Ubuntu
 ~~~~~~~~~~~~~
 
 .. include:: ../release_readme.rst
-    :start-line: 54
+    :start-line: 53
     :end-line: 72
 
 .. _install-rpm:
@@ -44,16 +44,16 @@ Debian/Ubuntu
 RedHat/CentOS
 ~~~~~~~~~~~~~
 .. include:: ../release_readme.rst
-    :start-line: 76
-    :end-line: 95
+    :start-line: 75
+    :end-line: 94
 
 .. _upgrade-package:
 
 Upgrading
 `````````
 .. include:: ../release_readme.rst
-    :start-line: 98
-    :end-line: 138
+    :start-line: 97
+    :end-line: 137
 
 
 .. _configure-lbaasv1-plugin:

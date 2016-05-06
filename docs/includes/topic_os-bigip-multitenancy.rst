@@ -48,8 +48,8 @@ BIG-IP®'s multi-tenancy functionality allows you to create partitions for indiv
 
 ..    If the Neutron network associated with a VIP or member is set to be shared (``shared=True``) and the F5® LBaaSv1 agent is set to ``f5_global_routed_mode = False``, all L2 and L3 objects are created in the ``/Common`` administrative partition and associated with route domain 0 (zero) on all BIG-IP® devices.
 
-.. todo:: investigate whether neutron network has to be set to ``shared=True`` or ``shared=False`` when using multi-tenancy.
+.. todo: investigate whether neutron network has to be set to ``shared=True`` or ``shared=False`` when using multi-tenancy.
 
 .. seealso::
 
-    * BIG-IP® <https://support.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/tmos-routing-administration-12-0-0/9.html#conceptid>`_
+    * `BIG-IP® TMOS: Routing Administration > Route Domains <https://support.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/tmos-routing-administration-12-0-0/9.html#conceptid>`_
