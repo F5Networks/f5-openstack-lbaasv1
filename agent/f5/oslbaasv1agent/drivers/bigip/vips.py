@@ -72,7 +72,7 @@ class BigipVipManager(object):
            just_added_vip:
             self._update_bigip_vip(bigip, service)
             if self.l3_binding:
-                self.l3_binding.bind_address(subnet_id=vip['subnet']['id'],
+                self.l3_binding.bind_address(subnet_id=vip['subnet_id'],
                                              ip_address=ip_address)
 
     def assure_bigip_delete_vip(self, bigip, service):
@@ -98,7 +98,7 @@ class BigipVipManager(object):
                           vip['id'],
                           folder=vip['tenant_id'])
         if self.l3_binding:
-            self.l3_binding.unbind_address(subnet_id=vip['subnet']['id'],
+            self.l3_binding.unbind_address(subnet_id=vip['subnet_id'],
                                            ip_address=vip['address'])
 
     def _create_bigip_vip(self, bigip, service, vip_info):
