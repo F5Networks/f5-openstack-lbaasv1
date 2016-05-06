@@ -6,7 +6,7 @@ Release Information
 Release Version
 ---------------
 
-1.0.12-final
+8.0.2-final
 
 Compatibility
 -------------
@@ -14,7 +14,7 @@ Compatibility
 +-------------------------------------+--------------------------+
 | Product                             | Version(s)               |
 +=====================================+==========================+
-| OpenStack LBaaSv1                   | Icehouse - Kilo          |
+| OpenStack LBaaSv1                   | Liberty                  |
 +-------------------------------------+--------------------------+
 | BIG-IP®                             | 11.5.x, 11.6.x, 12.0.x   |
 +-------------------------------------+--------------------------+
@@ -45,7 +45,7 @@ Before You Begin
 You will need the following to use the F5® OpenStack LBaaSv1 plugin.
 
 -  Licensed BIG-IP® (hardware or virtual edition)
--  OpenStack Icehouse - Kilo Neutron network deployment
+-  OpenStack Liberty Neutron network deployment
 
 .. note::
 
@@ -67,19 +67,19 @@ Debian / Ubuntu
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-bigip-common_1.0.12-final_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-common_8.0.2-final_all.deb
 
 2. Install the plugin driver.
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-lbaas-driver_1.0.12-final_all.deb
+      # dpkg -i build/deb_dist/f5-lbaas-driver_8.0.2-final_all.deb
 
 3. Install the plugin agent.
 
    .. code-block:: text
 
-      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_1.0.12-final_all.deb
+      # dpkg -i build/deb_dist/f5-bigip-lbaas-agent_8.0.2-final_all.deb
 
 
 Red Hat / CentOS
@@ -89,19 +89,19 @@ Red Hat / CentOS
    
    .. code-block:: text
 
-      # rpm -i build/el7/f5-bigip-common_1.0.12-final.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-common_8.0.2-final.noarch.el7.rpm
 
 2. Install the plugin driver.
   
    .. code-block:: text
 
-      # rpm -i build/el7/f5-lbaas-driver-1.0.12-final.noarch.el7.rpm
+      # rpm -i build/el7/f5-lbaas-driver-8.0.2-final.noarch.el7.rpm
 
 3. Install the agent.
   
    .. code-block:: text
 
-      # rpm -i build/el7/f5-bigip-lbaas-agent-1.0.12-final.noarch.el7.rpm
+      # rpm -i build/el7/f5-bigip-lbaas-agent-8.0.2-final.noarch.el7.rpm
 
 
 Upgrading
