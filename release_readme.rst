@@ -5,15 +5,18 @@ Release Information
 
 Release Version
 ---------------
-1.0.14-final
+
+|release|
 
 
 Compatibility
 -------------
+
 See the :ref:`F5® OpenStack Releases and Support Matrix <docs:releases-and-support>`.
 
 Package Contents
 ----------------
+
 -  Release Readme (this document)
 -  SUPPORT.md
 -  build

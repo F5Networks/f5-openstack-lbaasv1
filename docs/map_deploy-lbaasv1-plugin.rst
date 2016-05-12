@@ -10,21 +10,15 @@ Deploying the F5® OpenStack LBaaSv1 Plugin
 Before you begin
 ````````````````
 .. include:: ../release_readme.rst
-    :start-line: 33
-    :end-line: 47
+    :start-line: 35
+    :end-line: 50
 
 .. _downloads:
 
 Downloads
 `````````
-You can download a `release package <https://github.com/F5Networks/f5-openstack-lbaasv1/releases>`_ directly from GitHub using ``curl`` or ``wget``. Then, un-tar the package into the location of your choice.
-
-.. topic:: Example:
-
-    .. code-block:: text
-
-        # curl -L -O https://github.com/F5Networks/f5-openstack-lbaasv1/releases/download/1.0.14final/f5-lbaasv1_1.0.14final.tgz
-        # tar -xf f5-lbaasv1_1.0.14final.tgz
+.. include:: includes/topic_downloads.rst
+    :start-line: 5
 
 .. _installation:
 
@@ -36,24 +30,24 @@ Debian/Ubuntu
 ~~~~~~~~~~~~~
 
 .. include:: ../release_readme.rst
-    :start-line: 53
-    :end-line: 72
+    :start-line: 56
+    :end-line: 75
 
 .. _install-rpm:
 
 RedHat/CentOS
 ~~~~~~~~~~~~~
 .. include:: ../release_readme.rst
-    :start-line: 75
-    :end-line: 94
+    :start-line: 78
+    :end-line: 97
 
 .. _upgrade-package:
 
 Upgrading
 `````````
 .. include:: ../release_readme.rst
-    :start-line: 97
-    :end-line: 137
+    :start-line: 100
+    :end-line: 140
 
 
 .. _configure-lbaasv1-plugin:
@@ -75,4 +69,4 @@ Configuration
 
 .. seealso::
 
-    Once the agent has been installed and configured, you can use the :ref:`Neutron agent commands <neutron-agent-commands>` to manage it.
+    Once the agent has been installed and configured, you can use the :ref:`Neutron agent commands <map_neutron-agent-commands>` to manage it.

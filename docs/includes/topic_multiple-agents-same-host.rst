@@ -60,7 +60,7 @@ Follow the steps below to set up multiple F5® agents on the same host.
 
 .. code-block:: shell
 
-    $ sudoservice f5-oslbaasv1-agent-dsc4 start
+    $ sudo service f5-oslbaasv1-agent-dsc4 start
 
 7. Restart ``neutron-server``.
 

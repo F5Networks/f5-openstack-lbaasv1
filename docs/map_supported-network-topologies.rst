@@ -4,7 +4,7 @@ Supported Network Topologies
 ----------------------------
 
 .. include:: includes/concept_network-topologies.rst
-    :start-line: 3
+    :start-line: 5
 
 .. _global-routed-mode:
 
