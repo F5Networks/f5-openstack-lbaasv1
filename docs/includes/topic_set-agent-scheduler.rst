@@ -1,3 +1,5 @@
+.. _set-agent-scheduler:
+
 Set the agent scheduler (optional)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

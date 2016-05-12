@@ -1,8 +1,7 @@
 Multiple-Arm mode
 `````````````````
 
-In multiple-arm mode, VIP and Members are provisioned from different
-Neutron subnets.
+Multiple-arm mode is, essentially, multiple one-arm deployments. In each arm, VIPs and members are provisioned from a specific Neutron subnet.
 
 .. code-block:: shell
 
@@ -18,7 +17,9 @@ Neutron subnets.
     |                                      | where if n is 0, the virtual server  |
     |                                      | will use AutoMap SNAT. If n is > 0,  |
     |                                      | n number of SNAT addresses will be   |
-    |                                      | allocated from the Member subnet per |
+    |                                      | allocated from the member subnet per |
     |                                      | active traffic group.                |
     +--------------------------------------+--------------------------------------+
+
+
 

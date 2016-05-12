@@ -10,21 +10,15 @@ Deploying the F5® OpenStack LBaaSv1 Plugin
 Before you begin
 ````````````````
 .. include:: ../release_readme.rst
-    :start-line: 40
-    :end-line: 54
+    :start-line: 35
+    :end-line: 50
 
 .. _downloads:
 
 Downloads
 `````````
-You can download a `release package <https://github.com/F5Networks/f5-openstack-lbaasv1/releases>`_ directly from GitHub using ``curl`` or ``wget``. Then, un-tar the package into the location of your choice.
-
-.. topic:: Example:
-
-    .. code-block:: text
-
-        # curl -L -O https://github.com/F5Networks/f5-openstack-lbaasv1/releases/download/1.0.14final/f5-lbaasv1_1.0.14final.tgz
-        # tar -xf f5-lbaasv1_1.0.14final.tgz
+.. include:: includes/topic_downloads.rst
+    :start-line: 5
 
 .. _installation:
 
@@ -34,53 +28,45 @@ Installation
 
 Debian/Ubuntu
 ~~~~~~~~~~~~~
+
 .. include:: ../release_readme.rst
-    :start-line: 64
-    :end-line: 83
+    :start-line: 56
+    :end-line: 75
 
 .. _install-rpm:
 
 RedHat/CentOS
 ~~~~~~~~~~~~~
 .. include:: ../release_readme.rst
-    :start-line: 86
-    :end-line: 105
+    :start-line: 78
+    :end-line: 97
 
 .. _upgrade-package:
 
 Upgrading
 `````````
 .. include:: ../release_readme.rst
-    :start-line: 108
-    :end-line: 148
+    :start-line: 100
+    :end-line: 140
 
 
 .. _configure-lbaasv1-plugin:
 
 Configuration
 `````````````
-.. _configure-lbaasv1-agent:
 
 .. include:: includes/topic_configure-lbaasv1-agent.rst
 
-.. _configure-neutron-service:
-
 .. include:: includes/topic_configure-neutron-service.rst
-
-.. _set-agent-scheduler:
 
 .. include:: includes/topic_set-agent-scheduler.rst
 
-.. _restart-neutron-service:
-
 .. include:: includes/topic_restart-neutron-service.rst
-
-.. _restart-http-service:
 
 .. include:: includes/topic_restart-http-service.rst
 
-.. _start-the-agent:
-
 .. include:: includes/topic_start-the-agent.rst
 
-Once the agent has been installed and configured, you can use the :ref:`Neutron agent commands <neutron-agent-commands>` to manage it.
+.. seealso::
+
+    Once the agent has been installed and configured, you can use the :ref:`Neutron agent commands <map_neutron-agent-commands>` to manage it.

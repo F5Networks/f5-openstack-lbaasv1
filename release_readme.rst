@@ -1,31 +1,22 @@
 Release Information
 ===================
 
-**TIP: Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.org/en/latest/.**
+**TIP:** Don't want to read the raw version of this document? View it online at http://f5-openstack-lbaasv1.readthedocs.io.
 
 Release Version
 ---------------
 
-1.0.14-final
+|release|
+
 
 Compatibility
 -------------
 
-+-------------------------------------+--------------------------+
-| Product                             | Version(s)               |
-+=====================================+==========================+
-| OpenStack LBaaSv1                   | Icehouse - Kilo          |
-+-------------------------------------+--------------------------+
-| BIG-IP®                             | 11.5.x, 11.6.x, 12.0.x   |
-+-------------------------------------+--------------------------+
-| Red Hat Enterprise Linux / CentOS   | 6, 7                     |
-+-------------------------------------+--------------------------+
-| Ubuntu                              | 12.04, 14.04             |
-+-------------------------------------+--------------------------+
-
+See the :ref:`F5® OpenStack Releases and Support Matrix <docs:releases-and-support>`.
 
 Package Contents
 ----------------
+
 -  Release Readme (this document)
 -  SUPPORT.md
 -  build
