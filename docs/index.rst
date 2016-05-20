@@ -26,7 +26,6 @@ Quick Start
     :start-line: 17
     :end-line: 53
 
-
 Site Contents
 -------------
 

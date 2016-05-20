@@ -13,11 +13,11 @@ Before you begin
     :start-line: 34
     :end-line: 49
 
+
 .. _downloads:
 
 Downloads
 `````````
-
 .. include:: includes/topic_downloads.rst
     :start-line: 5
 
@@ -34,6 +34,7 @@ Debian/Ubuntu
     :start-line: 55
     :end-line: 74
 
+
 .. _install-rpm:
 
 RedHat/CentOS
@@ -42,6 +43,7 @@ RedHat/CentOS
     :start-line: 77
     :end-line: 96
 
+
 .. _upgrade-package:
 
 Upgrading
@@ -49,6 +51,7 @@ Upgrading
 .. include:: ../release_readme.rst
     :start-line: 99
     :end-line: 138
+
 
 
 .. _configure-lbaasv1-plugin:
