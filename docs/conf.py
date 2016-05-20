@@ -65,10 +65,10 @@ author = u'F5 Networks'
 # built documents.
 #
 # The short X.Y version.
-version = u'Liberty'
+version = u'Mitaka'
 
 # The full version, including alpha/beta/rc tags.
-release = u'3.0.1'
+release = u'9.0.1'
 
 # OpenStack version
 openstack_release = "Mitaka"
