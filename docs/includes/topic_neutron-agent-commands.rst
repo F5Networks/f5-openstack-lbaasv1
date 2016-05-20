@@ -1,13 +1,19 @@
 .. _neutron-agent-commands:
 
 Neutron Agent Commands
-~~~~~~~~~~~~~~~~~~~~~~
+----------------------
 
 You can use Neutron ``agent`` commands to manage agent processes via the CLI.
 
-.. include:: ../../release_readme.rst
-    :start-line: 37
-    :end-line: 46
+.. note::
+
+    In order to use the Neutron command set, you need source a user file
+    that has admin permissions.
+
+    .. code-block:: text
+
+        $ source keystonerc_admin
+
 
 .. topic:: List all agents
 

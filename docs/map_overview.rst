@@ -3,6 +3,23 @@
 Overview
 --------
 
+Release Version
+```````````````
+
+.. include:: ../release_readme.rst
+    :start-line: 8
+    :end-line: 10
+
+Compatibility
+`````````````
+
+.. include:: ../release_readme.rst
+    :start-line: 14
+    :end-line: 16
+
+Introduction
+````````````
+
 .. include:: includes/concept_overview-full.rst
     :start-line: 3
 
@@ -10,4 +27,4 @@ Overview
     :width: 500
     :alt: Sample OpenStack Environment with F5® LBaaSv1 Plugin
 
-    Figure 1. Sample OpenStack Environment with F5® LBaaSv1 Plugin
+    Sample OpenStack Environment with F5® LBaaSv1 Plugin

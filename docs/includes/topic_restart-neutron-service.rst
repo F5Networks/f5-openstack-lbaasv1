@@ -1,4 +1,6 @@
-Restart the neutron service
+.. _restart-neutron-service:
+
+Restart the Neutron service
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: text

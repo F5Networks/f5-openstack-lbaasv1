@@ -3,59 +3,60 @@
 Supported Network Topologies
 ----------------------------
 
-The F5® iControl® agent driver supports the following network topologies with either BIG-IP® hardware or virtual editions.
+.. include:: includes/concept_network-topologies.rst
+    :start-line: 5
 
 .. _global-routed-mode:
 
 Global routed mode
 ``````````````````
 
-.. figure:: media/global_routed_mode.png
+.. figure:: media/f5-lbaas-global-routed-mode.png
     :alt: Global Routed Mode
 
-    Figure 7. Global Routed Mode
+    Global Routed Mode
 
 .. include:: includes/topic_global-routed-mode.rst
-    :start-line: 5
+    :start-line: 3
 
 .. _l2-adjacent-mode:
 
 L2 Adjacent Mode
 ````````````````
 
-.. figure:: media/l2_adjacent_mode_topology.png
-    :alt: L2 Adjacent Mode Topology
+.. figure:: media/f5-lbaas-l2-3-adjacent-mode.png
+    :alt: L2/L3 Adjacent Mode
 
-    Figure 8. L2 Adjacent Mode Topology
+    L2 Adjacent Mode
 
 .. include:: includes/topic_l2-adjacent-mode.rst
-    :start-line: 5
+    :start-line: 3
 
 .. _one-arm-mode:
 
 One-Arm Mode
 ````````````
 
-.. figure:: media/one_arm.png
+.. figure:: media/f5-lbaas-one-arm-mode.png
     :alt: One-arm Mode
 
-    Figure 9. One-arm Mode
+    One-arm Mode
 
 .. include:: includes/topic_one-arm-mode.rst
-    :start-line: 5
+    :start-line: 3
 
 .. _multi-arm-mode:
 
 Multiple-Arm mode
 `````````````````
 
-.. figure:: media/multiarm_snat.png
+.. figure:: media/f5-lbaas-multiple-arm-mode.png
     :alt: Multiple-arm Mode
 
-    Figure 10. Multiple-arm Mode
+    Multiple-arm Mode
 
 .. include:: includes/topic_multiple-arm-mode.rst
-    :start-line: 5
+    :start-line: 3
 
 .. _gateway-routed-mode:
 
@@ -65,23 +66,24 @@ Gateway Routed Mode
 .. figure:: media/routed_mode.png
     :alt: Gateway Routed Mode
 
-    Figure 11. Gateway Routed Mode
+    Gateway Routed Mode
 
 .. include:: includes/topic_gateway-routed-mode.rst
-    :start-line: 5
+    :start-line: 3
 
 .. _vlans:
 
 VLANs
 `````
 
-.. figure:: media/VE_Multitenant_VLAN_bypass.png
-    :alt: VE Multi-tenant VLAN Bypass
+.. figure:: media/f5-lbaas-device-vlan-to-interface-tag-mapping.png
+    :alt: Device VLAN to interface and tag mapping
 
-    Figure 12. VE Multi-tenant VLAN Bypass
+    Device VLAN to interface and tag mapping
 
 .. include:: includes/topic_vlans-mode.rst
-    :start-line: 5
+    :start-line: 3
+
 
 .. _tunnels:
 
@@ -89,4 +91,4 @@ Tunnels
 ```````
 
 .. include:: includes/topic_tunnels-mode.rst
-    :start-line: 5
+    :start-line: 3
