@@ -23,8 +23,8 @@ Quick Start
 -----------
 
 .. include:: map_deploy-lbaasv1-plugin.rst
-    :start-line: 15
-    :end-line: 48
+    :start-line: 17
+    :end-line: 53
 
 
 Site Contents

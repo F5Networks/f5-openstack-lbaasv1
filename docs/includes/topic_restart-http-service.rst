@@ -1,3 +1,5 @@
+.. _restart-http-service:
+
 Restart the http service
 ~~~~~~~~~~~~~~~~~~~~~~~~
 

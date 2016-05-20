@@ -2,49 +2,35 @@
 
 Differentiated Services and Scale Out
 -------------------------------------
-.. figure:: media/driver_multiple_environments.png
-    :alt: Installing the LBaaSv1 Driver in Multiple Environments
+.. figure:: media/f5-lbaas-differentiated-service-environments.png
+    :alt: F5 LBaaSv1 Plugin in Differentiated Service Environments
 
-    Figure 4. Installing the LBaaSv1 Driver in Multiple Environments
-
-.. figure:: media/agent_multiple_environments.png
-    :alt: F5® LBaaSv1 Agents in Multiple Environments
-
-    Figure 5. F5® LBaaSv1 Agents in Multiple Environments
+    F5® LBaaSv1 Plugin in Differentiated Service Environments
 
 .. include:: includes/topic_differentiated-services-scaleout.rst
-    :start-line: 3
+    :start-line: 5
 
 .. _default-env-options:
 
 Default Environment Options
 ```````````````````````````
 .. include:: includes/topic_default-env-options.rst
-    :start-line: 3
+    :start-line: 5
 
 .. _custom-envs:
 
 Custom Environments
 ```````````````````
 .. include:: includes/topic_custom-env.rst
-    :start-line: 3
+    :start-line: 5
 
 .. _capacity-based-scaleout:
 
 Capacity-Based Scale Out
 ````````````````````````
 
-.. figure:: media/env_group_scale_out.png
-    :alt: Environment Group Scale Out
-
-    Figure 6. Environment Group Scale Out
-
 .. include:: includes/topic_capacity-based-scaleout.rst
-    :start-line: 3
+    :start-line: 5
 
 .. _multiple-agents-same-host:
 
-Running Multiple F5® Agents on the Same Host
-````````````````````````````````````````````
-.. include:: includes/topic_multiple-agents-same-host.rst
-    :start-line: 3

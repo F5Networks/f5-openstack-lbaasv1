@@ -2,10 +2,12 @@
 
 Multiple Controllers and Agent Redundancy
 -----------------------------------------
-.. figure:: media/basic_agent_scheduled_redundancy.png
-    :alt: Basic Agent Scheduled Redundancy
-
-    Figure 3. Basic Agent Scheduled Redundancy
 
 .. include:: includes/topic_multiple-controllers-agent-redundancy.rst
     :start-line: 5
+
+.. figure:: media/f5-lbaas-horizontal-scaleout.png
+    :alt: Horizontal Scale-out with the F5 LBaaSv1 plugin
+
+    Horizontal Scale-out with the F5® LBaaSv1 plugin
+
