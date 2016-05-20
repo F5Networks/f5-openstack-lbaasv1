@@ -3,9 +3,10 @@ VLANs
 
 In order to establish connectivity between a BIG-IP® and VLAN, you need to map an interface on the BIG-IP® to an interface on the physical network. In the example below, the BIG-IP interface 1.1 is mapping to the eth0 interface on the hypervisor on which it's running; in turn, eth0 maps to the bridges that provide connectivity from the compute node to the VLAN. The external bridge (br-ex) should have a corresponding ``provider:physical_network`` attribute.
 
-    .. seealso::
+.. seealso::
 
-        F5 OpenStack Configuration Guide: Configure the Neutron Network > :ref:`Configure the Bridge <docs:os-config-ovs-bridge>`.
+    F5 OpenStack Configuration Guide: Configure the Neutron Network -> `Configure the Bridge <http://f5-openstack-docs.readthedocs.io/en/1.0/guides/map_neutron-network-initial-setup.html#configure-the-ovs-bridge>`_.
+
 
 .. topic:: To create the mapping, edit :file:`/etc/neutron/f5-oslbaasv1-agent.ini`.
 
