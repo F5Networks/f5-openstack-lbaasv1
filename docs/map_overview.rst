@@ -14,8 +14,8 @@ Compatibility
 `````````````
 
 .. include:: ../release_readme.rst
-    :start-line: 14
-    :end-line: 16
+    :start-line: 24
+    :end-line: 26
 
 Introduction
 ````````````

@@ -65,7 +65,7 @@ author = u'F5 Networks'
 # built documents.
 #
 # The short X.Y version.
-version = u'Mitaka'
+version = u'v9.0.1, Mitaka'
 
 # The full version, including alpha/beta/rc tags.
 release = u'9.0.1'
