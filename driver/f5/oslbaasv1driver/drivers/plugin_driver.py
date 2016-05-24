@@ -32,11 +32,11 @@ from neutron.common import rpc as q_rpc
 from neutron.db import agents_db
 from neutron.context import get_admin_context
 from neutron.extensions import portbindings
-from neutron.common import log
 import f5.oslbaasv1driver.drivers.constants as lbaasv1constants
 
 PREJUNO = False
 PREKILO = False
+PREMITAKA = False
 try:
     from neutron.services.loadbalancer.drivers.abstract_driver \
         import LoadBalancerAbstractDriver  # @UnresolvedImport @Reimport
@@ -60,8 +60,9 @@ try:
         PREJUNO = True
     except ImportError:
         from neutron.common import rpc as proxy
+    from neutron.common import log
 except ImportError:
-    # Kilo
+    # Kilo or greater
     from neutron_lbaas.services.loadbalancer.drivers.abstract_driver \
         import LoadBalancerAbstractDriver  # @UnresolvedImport @Reimport
     from neutron_lbaas.extensions \
@@ -78,6 +79,12 @@ except ImportError:
     from neutron_lbaas.extensions.loadbalancer \
         import HealthMonitorNotFound  # @UnresolvedImport @Reimport
     import f5.oslbaasv1driver.drivers.rpc as proxy
+    try:
+        from neutron.common import log
+        PREMITAKA = True
+    except ImportError:
+        from oslo_log import helpers as log
+        log.log = log.log_method_call
 
 LOG = logging.getLogger(__name__)
 

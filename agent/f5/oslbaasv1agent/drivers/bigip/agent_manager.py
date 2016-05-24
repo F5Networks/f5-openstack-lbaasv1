@@ -30,9 +30,15 @@ except ImportError:
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants as neutron_constants
 from neutron import context
-from neutron.common import log
 from neutron.common import topics
 from neutron.common.exceptions import NeutronException
+PREMITAKA = False
+try:
+    from neutron.common import log
+    PREMITAKA = True
+except ImportError:
+    from oslo_log import helpers as log
+    log.log = log.log_method_call
 
 from f5.oslbaasv1agent.drivers.bigip import agent_api
 from f5.oslbaasv1agent.drivers.bigip import constants

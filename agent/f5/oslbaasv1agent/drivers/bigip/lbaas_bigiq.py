@@ -21,7 +21,10 @@ except ImportError:
     from oslo_log import log as logging
 from neutron.common.exceptions import InvalidConfigurationOption
 from neutron.plugins.common import constants as plugin_const
-import novaclient.v1_1.client as nvclient
+try:
+    import novaclient.v2.client as nvclient
+except ImportError:
+    import novaclient.v1_1.client as nvclient
 import neutronclient.v2_0.client as neclient
 
 from f5.bigiq import bigiq as bigiq_interface
