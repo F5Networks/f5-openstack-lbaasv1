@@ -8,6 +8,17 @@ Release Version
 
 |release|
 
+Supported Features
+``````````````````
+
+The following features of OpenStack Neutron `LBaaSv1 <http://docs.openstack.org/admin-guide/networking_introduction.html#load-balancer-as-a-service-lbaas-overview>`_ are supported in this release:
+
+- Load balancing methods: Round robin, Source IP, and Least connections
+- Monitors
+- Management
+- Connection limits
+- Session persistence
+
 Compatibility
 -------------
 
@@ -126,7 +137,7 @@ If you are upgrading from an earlier version, F5® recommends that you uninstall
         $ sudo service f5-oslbaasv1-agent stop
         $ yum remove f5-bigip-common.noarch f5-oslbaasv1-agent.noarch f5-oslbaasv1-driver.noarch
 
-3. Follow the installation instructions in the `previous section <$installation>`_.
+3. Follow the installation instructions in the `previous section <#installation>`_.
 
 4. Restore the F5® agent configuration file.
 

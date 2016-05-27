@@ -10,15 +10,14 @@ Deploying the F5® OpenStack LBaaSv1 Plugin
 Before you begin
 ````````````````
 .. include:: ../release_readme.rst
-    :start-line: 34
-    :end-line: 49
+    :start-line: 45
+    :end-line: 60
 
 
 .. _downloads:
 
 Downloads
 `````````
-
 .. include:: includes/topic_downloads.rst
     :start-line: 5
 
@@ -26,14 +25,15 @@ Downloads
 
 Installation
 ````````````
+
 .. _install-deb:
 
 Debian/Ubuntu
 ~~~~~~~~~~~~~
 
 .. include:: ../release_readme.rst
-    :start-line: 55
-    :end-line: 74
+    :start-line: 66
+    :end-line: 85
 
 
 .. _install-rpm:
@@ -41,8 +41,8 @@ Debian/Ubuntu
 RedHat/CentOS
 ~~~~~~~~~~~~~
 .. include:: ../release_readme.rst
-    :start-line: 77
-    :end-line: 96
+    :start-line: 88
+    :end-line: 107
 
 
 .. _upgrade-package:
@@ -50,8 +50,8 @@ RedHat/CentOS
 Upgrading
 `````````
 .. include:: ../release_readme.rst
-    :start-line: 99
-    :end-line: 138
+    :start-line: 110
+    :end-line: 150
 
 
 

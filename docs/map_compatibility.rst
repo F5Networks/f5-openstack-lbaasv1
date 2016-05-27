@@ -2,6 +2,6 @@ Compatibility
 -------------
 
 .. include:: ../release_readme.rst
-    :start-line: 12
-    :end-line: 15
+    :start-line: 24
+    :end-line: 26
 
