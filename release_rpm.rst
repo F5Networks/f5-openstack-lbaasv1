@@ -4,7 +4,7 @@ Configuration - RHEL
 Version
 -------
 
-F5® OpenStack LBaaSv1 plugin v 8.0.2-final for OpenStack Liberty.
+F5® OpenStack LBaaSv1 plugin v 9.0.1-final for OpenStack Mitaka.
 
 Configure the F5® LBaaSv1 Plugin
 --------------------------------
