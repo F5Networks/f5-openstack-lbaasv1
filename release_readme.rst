@@ -28,8 +28,7 @@ Package Contents
 Overview
 --------
 
-The F5 OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP® Local
-Traffic Manager™ (LTM®) services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
+The F5 OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP® Local Traffic Manager™ (LTM®) services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
 
 Before You Begin
 ----------------
