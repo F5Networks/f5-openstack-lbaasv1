@@ -28,15 +28,16 @@ Package Contents
 Overview
 --------
 
-The F5® OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP® load balancing services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
+The F5 OpenStack LBaaSv1 plugin allows you to orchestrate BIG-IP® Local Traffic Manager™ (LTM®) services – including virtual IPs, pools, device service groups, and health monitoring – in an OpenStack environment.
 
 Before You Begin
 ----------------
 
-You will need the following to use the F5® OpenStack LBaaSv1 plugin.
+You will need the following to use the F5 OpenStack LBaaSv1 plugin.
 
--  Licensed BIG-IP® (hardware or virtual edition)
--  OpenStack Icehouse - Kilo Neutron network deployment
+-  Licensed BIG-IP (hardware or virtual edition)
+-  OpenStack |openstack| Neutron network deployment
+
 
 .. note::
 
@@ -54,7 +55,7 @@ Installation
 Debian / Ubuntu
 ```````````````
 
-1. Install the F5® BIG-IP® common libraries.
+1. Install the F5 BIG-IP common libraries.
 
    .. code-block:: text
 
@@ -98,7 +99,7 @@ Red Hat / CentOS
 Upgrading
 ---------
 
-If you are upgrading from an earlier version, F5® recommends that you uninstall the current version before installing the new version.
+If you are upgrading from an earlier version, F5 recommends that you uninstall the current version before installing the new version.
 
 .. note::
 
