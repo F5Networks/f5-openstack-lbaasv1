@@ -185,6 +185,10 @@ OPTS = [
         'f5_common_external_networks', default=True,
         help=_('Treat external networks as common')
     ),
+    cfg.BoolOpt(
+        'f5_http_rps_throttle', default=False,
+        help=_('Make connections limits enforce HTTP RPS'),
+    ),
     cfg.StrOpt(
         'icontrol_vcmp_hostname',
         help=_('The hostname (name or IP address) to use for vCMP Host '
@@ -297,7 +301,7 @@ class iControlDriver(LBaaSBaseDriver):
                         % self.conf.f5_populate_static_arp))
             f5const.FDB_POPULATE_STATIC_ARP = self.conf.f5_populate_static_arp
 
-        self.agent_configurations['device_drivers'] = [ self.driver_name ]
+        self.agent_configurations['device_drivers'] = [self.driver_name]
 
         self._init_bigip_hostnames()
 
