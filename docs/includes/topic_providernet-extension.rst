@@ -32,5 +32,5 @@ The F5® LBaaSv1 agent uses ``providernet`` attributes to establish an L2 connec
 
 .. seealso::
 
-    - `OpenStack Networking Guide - Provider networks with Open vSwitch <http://docs.openstack.org/kilo/networking-guide/scenario_provider_ovs.html>`_
+    - `OpenStack Networking Guide - Provider networks with Open vSwitch <http://docs.openstack.org/mitaka/networking-guide/scenario-provider-ovs.html>`_
     - `OpenStack Administrator Guide <http://docs.openstack.org/admin-guide/networking_adv-features.html>`_

@@ -24,7 +24,13 @@ except ImportError:
         from f5.oslbaasv1agent.drivers.bigip.rpc import RpcProxy  # @Reimport
 from neutron.agent import rpc as agent_rpc
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
-from neutron.common import log
+PREMITAKA = False
+try:
+    from neutron.common import log
+    PREMITAKA = True
+except ImportError:
+    from oslo_log import helpers as log
+    log.log = log.log_method_call
 
 import logging
 

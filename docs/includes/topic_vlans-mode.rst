@@ -7,6 +7,7 @@ In order to establish connectivity between a BIG-IP® and VLAN, you need to map 
 
     F5 OpenStack Configuration Guide: Configure the Neutron Network -> `Configure the Bridge <http://f5-openstack-docs.readthedocs.io/en/1.0/guides/map_neutron-network-initial-setup.html#configure-the-ovs-bridge>`_.
 
+
 .. topic:: To create the mapping, edit :file:`/etc/neutron/f5-oslbaasv1-agent.ini`.
 
     .. tip::

@@ -17,7 +17,7 @@ This site hosts the documentation for the F5® OpenStack OpenStack Neutron LBaaS
 
 Releases and Versions
 ---------------------
-The F5® OpenStack LBaaSv1 v |release| plugin supports the OpenStack |openstack| releases. See `F5® OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about the LBaaSv1 plugin, BIG-IP®, and OpenStack release compatibility.
+The F5® OpenStack LBaaSv1 v |release| plugin supports the OpenStack |openstack| release. See `F5® OpenStack Releases and Support Matrix <http://f5-openstack-docs.readthedocs.org/en/latest/releases_and_versioning.html>`_ for information about the LBaaSv1 plugin, BIG-IP®, and OpenStack release compatibility.
 
 Quick Start
 -----------
@@ -25,6 +25,7 @@ Quick Start
 .. include:: map_deploy-lbaasv1-plugin.rst
     :start-line: 17
     :end-line: 53
+
 
 Site Contents
 -------------
