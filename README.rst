@@ -3,6 +3,15 @@ f5-openstack-lbaasv1
 
 |Build status| |docs build status| |slack badge|
 
+
+    **End of Software Development for F5 OpenStack LBaaS version 1**
+
+    F5 announces the End of Software Development (EoSD) for the F5 OpenStack LBaaS version 1 integration, effective October 1, 2016. This announcement is in compliance with the OpenStack community deprecation of the OpenStack Neutron LBaaS version 1 plugin. Customers are encouraged to move to OpenStack LBaaS version 2.
+
+    F5 will continue to repair defects and perform maintenance on the F5 OpenStack LBaaS version 1 integration until the Openstack Ocata release in April 2017.
+
+    For additional information, please refer to the :ref:`F5 OpenStack Releases and Support Matrix`.
+
 Introduction
 ------------
 This repo houses the code for the F5 OpenStack LBaaSv1 plugin. Please

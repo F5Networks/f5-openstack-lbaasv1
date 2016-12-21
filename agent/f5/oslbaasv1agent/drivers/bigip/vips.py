@@ -246,7 +246,8 @@ class BigipVipManager(object):
             # and HTTPS, but unless you can decrypt
             # you can't measure HTTP rps for HTTPs
             conn_limit = int(vip['connection_limit'])
-            if vip['protocol'] == 'HTTP':
+            if vip['protocol'] == 'HTTP' and \
+               self.driver.conf.f5_http_rps_throttle:
                 LOG.debug('adding http profile and RPS throttle rule')
                 # add an http profile
                 bigip_vs.add_profile(
@@ -363,34 +364,24 @@ class BigipVipManager(object):
 
     def _create_http_rps_throttle_rule(self, req_limit):
         """ Create http throttle rule """
-        rule_text = "when HTTP_REQUEST {\n"
-        rule_text += " set expiration_time 300\n"
-        rule_text += " set client_ip [IP::client_addr]\n"
-        rule_text += " set req_limit " + str(req_limit) + "\n"
-        rule_text += " set curr_time [clock seconds]\n"
-        rule_text += " set timekey starttime\n"
-        rule_text += " set reqkey reqcount\n"
-        rule_text += " set request_count [session lookup uie $reqkey]\n"
-        rule_text += " if { $request_count eq \"\" } {\n"
-        rule_text += "   set request_count 1\n"
-        rule_text += "   session add uie $reqkey $request_count "
-        rule_text += " $expiration_time\n"
-        rule_text += "   session add uie $timekey [expr {$curr_time - 2}]"
-        rule_text += " [expr {$expiration_time + 2}]\n"
-        rule_text += " } else {\n"
-        rule_text += "   set start_time [session lookup uie $timekey]\n"
-        rule_text += "   incr request_count\n"
-        rule_text += "   session add uie $reqkey $request_count"
-        rule_text += " $expiration_time\n"
-        rule_text += "   set elapsed_time [expr {$curr_time - $start_time}]\n"
-        rule_text += "   if {$elapsed_time < 60} {\n"
-        rule_text += "     set elapsed_time 60\n"
-        rule_text += "   }\n"
-        rule_text += "   set curr_rate [expr {$request_count /"
-        rule_text += "($elapsed_time/60)}]\n"
-        rule_text += "   if {$curr_rate > $req_limit}{\n"
-        rule_text += "     HTTP::respond 503 throttled \"Retry-After\" 60\n"
-        rule_text += "   }\n"
-        rule_text += " }\n"
+        rule_text = "when RULE_INIT {\n"
+        rule_text += "    set static::maxReqs " + req_limit + ";\n"
+        rule_text += "    set static::timeout 1;\n"
+        rule_text += "}\n"
+        rule_text += "\n"
+        rule_text += "when HTTP_REQUEST {\n"
+        rule_text += "    set virtual_indx [virtual name]\n"
+        rule_text += "    set getcount [table lookup -notouch $virtual_indx]\n"
+        rule_text += "    if { $getcount equals \"\" } {\n"
+        rule_text += "        table set $virtual_indx \"1\" "
+        rule_text += "$static::timeout $static::timeout\n"
+        rule_text += "    } else {\n"
+        rule_text += "        if { $getcount < $static::maxReqs } {\n"
+        rule_text += "            table incr -notouch $virtual_indx\n"
+        rule_text += "        } else {\n"
+        rule_text += "            HTTP::respond 503 throttled "
+        rule_text += "\"Retry-After\" 60\n"
+        rule_text += "        }\n"
+        rule_text += "    }\n"
         rule_text += "}\n"
         return rule_text
