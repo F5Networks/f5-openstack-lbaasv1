@@ -16,7 +16,7 @@
 from f5.common import constants as const
 from f5.common.logger import Log
 from f5.bigip import exceptions
-from f5.bigip.interfaces import log
+from f5.bigip.interfaces import log, undecorate_name
 
 import time
 import os
@@ -474,7 +474,7 @@ class Cluster(object):
             response_obj = json.loads(response.text)
             if 'items' in response_obj:
                 for device in response_obj['items']:
-                    return_devices.append(device['name'])
+                    return_devices.append(undecorate_name(device['name']))
             return return_devices
         if response.status_code == 404:
             return []

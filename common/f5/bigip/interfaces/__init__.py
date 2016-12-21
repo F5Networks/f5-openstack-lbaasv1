@@ -192,6 +192,14 @@ def decorate_name(name=None, folder='Common', use_prefix=True):
     return name
 
 
+def undecorate_name(path, folder='Common'):
+    """ Simple removal of folder as prefix to name """
+    folder = '/' + folder + '/'
+    if path.startswith(folder):
+        path = str(path).replace(folder, '')
+    return path
+
+
 def strip_folder_and_prefix(path):
     """ Strip folder and prefix """
     if isinstance(path, list):
