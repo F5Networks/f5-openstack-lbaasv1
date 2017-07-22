@@ -22,14 +22,14 @@ deploy:
       repo: F5Networks/f5-openstack-lbaasv1
       tags: true
   # deploy docs to s3
-  # docs path: /products/openstack/$TRAVIS_BRANCH/lbaasv1
+  # docs path: /products/openstack/lbaasv1/$TRAVIS_BRANCH
   - provider: script
     skip_cleanup: true
     on:
       all_branches: true
       repo: F5Networks/f5-openstack-lbaasv1
     script:
-      - ./scripts/deploy-docs.sh publish-product-docs-to-prod openstack/$TRAVIS_BRANCH lbaasv1
+      - ./scripts/deploy-docs.sh publish-product-docs-to-prod openstack/lbaasv1 $TRAVIS_BRANCH
 
 notifications:
   slack:
