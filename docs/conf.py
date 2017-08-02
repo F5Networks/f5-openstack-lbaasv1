@@ -82,6 +82,14 @@ rst_epilog = """
 # A string of reStructuredText that will be included at the beginning of
 # every source file that is read.
 rst_prolog = """
+.. raw:: html
+
+   <script type="text/javascript">
+    var home = "clouddocs.f5.com";
+    var rtd = "readthedocs.io";
+
+    if (window.location.hostname === rtd) {window.location.assign("http://" + home + "/cloud/openstack/");}
+   </script>
 .. attention::
 
    **End of Technical Support for F5 OpenStack LBaaS version 1**
