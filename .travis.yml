@@ -27,7 +27,7 @@ deploy:
       all_branches: true
       repo: F5Networks/f5-openstack-lbaasv1
     script:
-      - ./scripts/deploy-docs.sh publish-product-docs-to-prod openstack/lbaasv1 $TRAVIS_BRANCH
+      - ./scripts/deploy-docs.sh publish-product-docs-to-prod openstack/lbaasv1 v8.0-eots
 
 notifications:
   slack:
