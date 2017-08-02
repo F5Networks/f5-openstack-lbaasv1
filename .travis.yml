@@ -24,7 +24,7 @@ deploy:
   - provider: script
     skip_cleanup: true
     on:
-      all_branches: true
+      branch: liberty
       repo: F5Networks/f5-openstack-lbaasv1
     script:
       - ./scripts/deploy-docs.sh publish-product-docs-to-prod openstack/lbaasv1 v8.0-eots
