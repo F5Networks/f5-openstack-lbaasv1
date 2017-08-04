@@ -27,7 +27,7 @@ deploy:
       branch: master
       repo: F5Networks/f5-openstack-lbaasv1
     script:
-      - ./scripts/deploy-docs.sh publish-product-docs-to-prod cloud/openstack-lbaasv1 v9.0-eots
+      - ./scripts/deploy-docs.sh publish-product-docs-to-prod cloud/openstack-lbaasv1 latest
 
 notifications:
   slack:
